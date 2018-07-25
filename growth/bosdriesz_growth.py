@@ -51,6 +51,12 @@ Nav = 6.022e23  # Avogadro's number
 Nar = 12307  # AA per ribosome
 Nam = 300  # AA per protein
 
+# indices for concentrations
+aa_indices = range(n_aa)
+ta_indices = range(n_aa, 2 * n_aa)
+ppgpp_index = ta_indices[-1] + 1
+r_index = ppgpp_index + 1
+
 
 # Equations from the paper
 # Note: ti has been changed to tu for uncharged tRNA
@@ -61,12 +67,6 @@ def dcdt(c, t):
 		kaa = 1
 
 	dc = np.zeros_like(c)
-
-	# indices for c and dc arrays
-	aa_indices = range(n_aa)
-	ta_indices = range(n_aa, 2*n_aa)
-	ppgpp_index = 2*n_aa
-	r_index = 2*n_aa + 1
 
 	# concentrations
 	a = c[aa_indices]
@@ -103,11 +103,11 @@ def dcdt(c, t):
 
 	return dc
 
-co = np.zeros(2*n_aa + 2)
-co[:n_aa] = kn  # aa
-co[n_aa:2*n_aa] = kn  # charged tRNA
-co[-1] = 15  # r
-co[-2] = 5  # ppGpp
+co = np.zeros(2*n_aa + 3)
+co[aa_indices] = kn  # aa
+co[ta_indices] = kn  # charged tRNA
+co[ppgpp_index] = 5  # ppGpp
+co[r_index] = 15  # ribosome
 t = range(10000)
 
 sol = odeint(dcdt, co, t)
@@ -121,15 +121,15 @@ sol = odeint(dcdt, co, t)
 # print sol[-1]
 
 plt.subplot(3,1,1)
-plt.plot(t, sol[:,-2])
-plt.plot(t, sol[:,-1])
+plt.plot(t, sol[:,ppgpp_index])
+plt.plot(t, sol[:,r_index])
 
 plt.subplot(3,1,2)
-plt.plot(t, sol[:,:n_aa])
+plt.plot(t, sol[:,aa_indices])
 plt.ylabel('[AA]')
 
 plt.subplot(3,1,3)
-plt.plot(t, sol[:,n_aa:2*n_aa])
+plt.plot(t, sol[:,ta_indices])
 plt.ylabel('[charged tRNA]')
 plt.show()
 

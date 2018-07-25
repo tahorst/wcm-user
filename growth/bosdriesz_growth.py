@@ -15,7 +15,7 @@ rho = 1/20
 
 # Constants from paper
 ## amino acids, TODO - values for each AA
-kn = np.random.lognormal(1, 0.15, 20)  # AA production rate
+kn = np.random.lognormal(1, 0.15, 20)  # AA production rate, from text under S4 equations
 mi = 1/20  # AA fraction
 KI = 100  # uM - inhibition constant for synthesis
 
@@ -75,29 +75,29 @@ def dcdt(c, t):
 	r = c[r_index]
 
 	# derived concentrations
-	ttot = 0.5 * r
-	tu = ttot - ta
+	ttot = 0.5 * r  # table S1
+	tu = ttot - ta  # eq S3c
 
-	rti = r * rho * tu/kt / (1 + ta/kta + tu/kt)
+	rti = r * rho * tu/kt / (1 + ta/kta + tu/kt)  # eq S6b
 	rttot = np.sum(rti)
 
 	# rates
-	va = kaa * kn * mi / (1 + a/KI)
-	vta = kS * Stot * (tu/KMt * a/KMa) / (1 + tu/KMt + a/KMa + tu/KMt*a/KMa) # adjusted
-	vrib = krib * r / (1 + np.sum(f * (kta/ta + tu/kt*kta/ta)))
-	vRelA = kRelA * RelAtot * (rttot / KDRelA) / (1 + rttot/KDRelA)
-	vSpoTdeg = kSpoTdeg * ppGpp
-	vrnn = Vmaxrrn * RNAPf / (KMrrn + RNAPf) / (1 + ppGpp / KippGpp)
-	vr = min(vrnn/(Vcell*Nav), Nar*vrib)
+	va = kaa * kn * mi / (1 + a/KI)  # eq S4a, modified from text in paragraph
+	vta = kS * Stot * (tu/KMt * a/KMa) / (1 + tu/KMt + a/KMa + tu/KMt*a/KMa)  # eq S4b, adjusted
+	vrib = krib * r / (1 + np.sum(f * (kta/ta + tu/kt*kta/ta)))  # eq S4c
+	vRelA = kRelA * RelAtot * (rttot / KDRelA) / (1 + rttot/KDRelA)  # eq S9a
+	vSpoTdeg = kSpoTdeg * ppGpp  # eq S9c
+	vrnn = Vmaxrrn * RNAPf / (KMrrn + RNAPf) / (1 + ppGpp / KippGpp)  # eq S13a
+	vr = min(vrnn/(Vcell*Nav), Nar*vrib)  # eq S12
 
-	mu = vrib / p
+	mu = vrib / p  # eq S2
 	# print mu
 
 	# derivatives
-	dc[aa_indices] = va - vta
-	dc[ta_indices] = vta - f*vrib
-	dc[ppgpp_index] = vRelA + vSpoTsyn - vSpoTdeg
-	dc[r_index] = vr - mu*r
+	dc[aa_indices] = va - vta  # eq S3a
+	dc[ta_indices] = vta - f*vrib  # eq S3b
+	dc[ppgpp_index] = vRelA + vSpoTsyn - vSpoTdeg  # eq S8
+	dc[r_index] = vr - mu*r  # eq S10
 
 	# import ipdb; ipdb.set_trace()
 

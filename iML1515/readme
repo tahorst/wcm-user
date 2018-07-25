@@ -1,0 +1,4 @@
+- genes.json is json dump from raw_data in wcm
+- All_genes_... is downloaded from ecocyc smart tables
+- iML1515.json is from Palsson paper
+- universal_model.json is from BiGG page (http://bigg.ucsd.edu/data_access on 10/24/17)

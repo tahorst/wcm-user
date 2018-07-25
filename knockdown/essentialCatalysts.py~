@@ -1,0 +1,41 @@
+'''
+Script to identify proteins that catalyze reactions (catalysts) and catalysts that have enzyme kinetics (enzymes) and are also identified as essential
+'''
+
+import cPickle
+import os
+import csv
+import numpy as np
+
+home = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+with open(os.path.join(home, 'cached', 'simData_Fit_1.cPickle'), 'r') as f:
+	sim_data = cPickle.load(f)
+
+with open(os.path.join(home, 'cached', 'rawData.cPickle'), 'r') as f:
+	raw_data = cPickle.load(f)
+
+with open(os.path.join(home, 'validation', 'ecoli', 'flat', 'essentialGenes_536.tsv'), 'r') as f:
+	reader = csv.reader(f, delimiter='\t')
+	essentialData = np.array(list(reader))
+
+essentialGenes = np.array([x[2] + '[' + x[3] + ']' for x in essentialData])
+
+catalysts = [x for x in essentialGenes if x in sim_data.process.metabolism.catalystsList]
+enzymes = [x for x in essentialGenes if x in sim_data.process.metabolism.enzymeIdList]
+
+# TODO: add check for complexes from monomers
+
+monomerToGeneSymbol = {x['monomerId'] : x['symbol'] for x in raw_data.genes}
+catalystSymbols = [monomerToGeneSymbol[x[:-3]] for x in catalysts]
+enzymeSymbols = [monomerToGeneSymbol[x[:-3]] for x in enzymes]
+
+print 'Essential catalysts:'
+for p in catalystSymbols:
+	print p
+
+print '\nEssential enzymes:'
+for p in enzymeSymbols:
+	print p
+
+import ipdb; ipdb.set_trace()

@@ -1,0 +1,5 @@
+Created on 2/22/18
+
+Contains scripts to evaluate the choice of objective for metabolism
+
+Main concerns are to pick an objective to match biology with concentration changes and kinetics playing a role.  Two main examples that are targeted are distributing flux between 2 parallel reactions (target fluxes of 1 and 10) when the flux would be limited through the set of reactions to <11.  Secondly, increasing the kinetic targets can decrease the actual flux as it becomes more expensive to meet the target and the expectation would be that the actual flux should never decrease as the target increases.

@@ -15,15 +15,15 @@ rho = 1/20
 
 # Constants from paper
 ## amino acids, TODO - values for each AA
-kn = np.random.lognormal(1, 0.15, 20)  # AA production rate, from text under S4 equations
+kn = 0.2 * np.random.lognormal(np.log(1), 0.2, 20)  # AA production rate, from text under S4 equations and mathematica file
 mi = 1/20  # AA fraction
 KI = 100  # uM - inhibition constant for synthesis
 
 ## tRNA synthetases, TODO - values for each synthetase
 kS = 100  # 1/s - kcat for synthetase
 Stot = 1  # uM - synthetase conc
-KMt = 100  # uM - Michaelis constant for synthetases for AA
-KMa = 1  # uM - Michaelis constant for synthetases for uncharged tRNA
+KMa = 100  # uM - Michaelis constant for synthetases for AA
+KMt = 1  # uM - Michaelis constant for synthetases for uncharged tRNA
 
 ## ribosome, TODO - adjust f for each AA
 krib = 20  # 1/s - protein elongation rate
@@ -50,6 +50,8 @@ Vcell = 2.5e-9  # uL - cell volume
 Nav = 6.022e23  # Avogadro's number
 Nar = 12307  # AA per ribosome
 Nam = 300  # AA per protein
+proteinContent = 15e8
+rmax = proteinContent / (Vcell * Nav / 1e12) / Nar
 
 # indices for concentrations
 aa_indices = range(n_aa)
@@ -98,16 +100,17 @@ def dcdt(c, t):
 	dc[ta_indices] = vta - f*vrib  # eq S3b
 	dc[ppgpp_index] = vRelA + vSpoTsyn - vSpoTdeg  # eq S8
 	dc[r_index] = vr - mu*r  # eq S10
+	# dc[rnapf_index] = vcomplete - vrnn
 
 	# import ipdb; ipdb.set_trace()
 
 	return dc
 
-co = np.zeros(2*n_aa + 3)
-co[aa_indices] = kn  # aa
-co[ta_indices] = kn  # charged tRNA
-co[ppgpp_index] = 5  # ppGpp
-co[r_index] = 15  # ribosome
+co = np.zeros(2*n_aa + 2)
+co[aa_indices] = KI  # aa (100)
+co[ta_indices] = 0.1 * frac_ribosomes * rmax  # charged tRNA (~4.063)
+co[ppgpp_index] = KippGpp  # ppGpp (1)
+co[r_index] = 0.2 * rmax  # ribosome (~16.25)
 t = range(10000)
 
 sol = odeint(dcdt, co, t)
@@ -123,6 +126,7 @@ sol = odeint(dcdt, co, t)
 plt.subplot(3,1,1)
 plt.plot(t, sol[:,ppgpp_index])
 plt.plot(t, sol[:,r_index])
+plt.legend(['ppGpp', 'ribosomes'], fontsize=6)
 
 plt.subplot(3,1,2)
 plt.plot(t, sol[:,aa_indices])

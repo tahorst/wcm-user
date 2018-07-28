@@ -63,7 +63,7 @@ def dcdt(c, t):
 	if t > 2000:
 		shift = 0.5  # nutrient downshift - increase ppGpp, decrease ribosomes
 	if t > 2000:
-		shift = 5  # nutrient upshift - decrease ppGpp, increase ribosomes
+		shift = 2  # nutrient upshift - decrease ppGpp, increase ribosomes
 
 	aa = c[aa_indices]
 	taa = c[ta_indices]
@@ -73,7 +73,7 @@ def dcdt(c, t):
 	tf = tau * r - taa
 
 	vAAsynt = shift * bm * e * kn * (1 - r/rmax) / (nAmet * (1 + aa / kIa))
-	vtRNAchar = ks * sTot * tf * aa / (kMaa * kMtf * (tf / kMtf + aa / kMaa + tf * aa / kMaa / kMtf))
+	vtRNAchar = ks * sTot * tf * aa / (kMaa * kMtf * (1 + tf / kMtf + aa / kMaa + tf * aa / kMaa / kMtf))  # modified with `1 +`
 	numeratorRibosome = 1 + np.sum(f * (krta/taa + tf/taa*krta/krt))
 	vR = krib*r / numeratorRibosome
 	mu = vR / bm

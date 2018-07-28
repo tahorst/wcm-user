@@ -1,5 +1,11 @@
 '''
 Direct port of Bosdriesz from mathematica file
+Uses ppGpp kinetics to model up/down shifts
+
+Working version of the mathematica script supplied in the supplement.
+Shifts in conditions are simulated as a change in AA production rate and produce
+similar results to their paper figure although not explicitly shown in their
+mathematica file.
 '''
 
 from __future__ import division

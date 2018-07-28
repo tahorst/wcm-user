@@ -2,9 +2,12 @@
 Derivation of growth control loosely based on Bosdriesz et al
 Addition of protein, mRNA, and more comprehensive growth rate
 
-TODO - model counts?
 TODO - realistic values for AA (fraction in protein and synthesis rates)
 TODO - dependent on SpoT?
+
+Not working - can't get protein concentrations to be handled properly
+Upshift appears to be close to working
+May need to double check rates to make sure using concentrations
 '''
 
 from __future__ import division

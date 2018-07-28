@@ -1,6 +1,9 @@
 '''
 Recapitulating model in Bosdriesz 2015 FEBS paper
 Uses ppGpp kinetics to model up/down shifts
+
+Not quite working - based on supplement which differs from some things included
+in the actual mathematica script.  See bosdriesz_mathematica.py for working file.
 '''
 
 from __future__ import division

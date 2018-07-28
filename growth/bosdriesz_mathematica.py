@@ -6,7 +6,6 @@ from __future__ import division
 
 from matplotlib import pyplot as plt
 from scipy.integrate import odeint
-from scipy.integrate import ode
 import numpy as np
 
 nAA = 20
@@ -50,19 +49,15 @@ nARib = 7459 * 1.65
 nAmet = 300
 rmax = proteinContent / (cellVolume*nAvogadro/1e6) / (7459*1.65)
 
-def dcdt_ode(t, c):
-	return dcdt(c, t)
-
 def dcdt(c, t):
 	dc = np.zeros_like(c)
 
 	# shift - not in mathematica file
 	shift = 1
-	# if t > 2000:
-	# 	shift = 0.1
-	# shift = 0.5
-	# if t > 2000:
-	# 	shift = 2
+	if t > 2000:
+		shift = 0.5  # nutrient downshift - increase ppGpp, decrease ribosomes
+	if t > 2000:
+		shift = 5  # nutrient upshift - decrease ppGpp, increase ribosomes
 
 	aa = c[aa_indices]
 	taa = c[ta_indices]
@@ -104,17 +99,8 @@ co[aa_indices] = kIa  # aa (100)
 co[ta_indices] = 0.1*tau*rmax  # charged tRNA (4.063)
 co[ppgpp_index] = kIppGpp  # ppGpp (1)
 co[r_index] = 0.2*rmax  # ribosome (16.25)
-t = np.linspace(0,1000,10000)
-
-# ode15s = ode(dcdt_ode)
-# ode15s.set_integrator('vode', method='bdf', order=15)
-# ode15s.set_initial_value(co, t[0])
-#
-# sol = np.zeros((len(t), len(co)))
-# sol[0,:] = co
-# for idx, next_time in enumerate(t[1:]):
-# 	ode15s.integrate(next_time)
-# 	sol[idx + 1, :] = ode15s.y
+tmax = 5000
+t = np.linspace(0,tmax,10*tmax)
 
 sol = odeint(dcdt, co, t)
 

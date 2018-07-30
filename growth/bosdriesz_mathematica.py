@@ -106,6 +106,7 @@ def dcdt(c, t):
 	return dc
 
 
+# initial conditions
 co = np.zeros(2*nAA + 2)
 co[aa_indices] = kIa  # aa (100)
 co[ta_indices] = 0.1*tau*rmax  # charged tRNA (4.063)
@@ -114,23 +115,41 @@ co[r_index] = 0.2*rmax  # ribosome (16.25)
 tmax = 5000
 t = np.linspace(0,tmax,tmax)
 
+# solve ode
 sol = odeint(dcdt, co, t)
 
-n_subplots = 4
+# solution timeseries
+aa = sol[:,aa_indices]
+taa = sol[:,ta_indices]
+ppgpp = sol[:,ppgpp_index]
+r = sol[:,r_index]
+
+# derived timeseries
+tf = tau * r.reshape(-1,1) - taa
+numeratorRibosome = 1 + np.sum(f * (krta / taa + tf / taa * krta / krt), axis=1)
+vElongation = krib / numeratorRibosome
+
+# plot results
+n_subplots = 5
+plt.figure(figsize=(6,9))
 plt.subplot(n_subplots,1,1)
-plt.plot(t, sol[:,ppgpp_index])
+plt.plot(t, ppgpp)
 plt.ylabel('[ppGpp]')
 
 plt.subplot(n_subplots,1,2)
-plt.plot(t, sol[:,r_index])
+plt.plot(t, r)
 plt.ylabel('[ribosomes]')
 
 plt.subplot(n_subplots,1,3)
-plt.plot(t, sol[:,aa_indices])
+plt.plot(t, aa)
 plt.ylabel('[AA]')
 
 plt.subplot(n_subplots,1,4)
-plt.plot(t, sol[:,ta_indices])
+plt.plot(t, taa)
 plt.ylabel('[charged tRNA]')
+
+plt.subplot(n_subplots,1,5)
+plt.plot(t, vElongation)
+plt.ylabel('Elongation Rate (AA/s)')
 
 plt.show()

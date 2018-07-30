@@ -26,6 +26,8 @@ ta_indices = range(nAA, 2 * nAA)
 ppgpp_index = ta_indices[-1] + 1
 r_index = ppgpp_index + 1
 
+np.random.seed(10)
+
 # pars
 e = 0.05
 kn = 0.2 * np.random.lognormal(np.log(1), 0.2, 20)
@@ -59,11 +61,15 @@ def dcdt(c, t):
 	dc = np.zeros_like(c)
 
 	# shift - not in mathematica file
-	shift = 1
+	shift = np.ones(nAA)
 	if t > 2000:
-		shift = 0.5  # nutrient downshift - increase ppGpp, decrease ribosomes
-	if t > 2000:
-		shift = 2  # nutrient upshift - decrease ppGpp, increase ribosomes
+		# downshifts
+		shift = 0.5*np.ones(nAA)  # all downshift - increase ppGpp, decrease ribosomes
+		# shift[-1] = 0.5  # single nutrient downshift
+
+		# upshifts
+		# shift = 2*np.ones(nAA)  # all upshift - decrease ppGpp, increase ribosomes
+		# shift [-1] = 2  # single nutrient upshift
 
 	aa = c[aa_indices]
 	taa = c[ta_indices]
@@ -106,20 +112,25 @@ co[ta_indices] = 0.1*tau*rmax  # charged tRNA (4.063)
 co[ppgpp_index] = kIppGpp  # ppGpp (1)
 co[r_index] = 0.2*rmax  # ribosome (16.25)
 tmax = 5000
-t = np.linspace(0,tmax,10*tmax)
+t = np.linspace(0,tmax,tmax)
 
 sol = odeint(dcdt, co, t)
 
-plt.subplot(3,1,1)
+n_subplots = 4
+plt.subplot(n_subplots,1,1)
 plt.plot(t, sol[:,ppgpp_index])
-plt.plot(t, sol[:,r_index])
-plt.legend(['ppGpp', 'ribosomes'], fontsize=6)
+plt.ylabel('[ppGpp]')
 
-plt.subplot(3,1,2)
+plt.subplot(n_subplots,1,2)
+plt.plot(t, sol[:,r_index])
+plt.ylabel('[ribosomes]')
+
+plt.subplot(n_subplots,1,3)
 plt.plot(t, sol[:,aa_indices])
 plt.ylabel('[AA]')
 
-plt.subplot(3,1,3)
+plt.subplot(n_subplots,1,4)
 plt.plot(t, sol[:,ta_indices])
 plt.ylabel('[charged tRNA]')
+
 plt.show()

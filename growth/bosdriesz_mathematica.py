@@ -12,6 +12,7 @@ from __future__ import division
 
 from matplotlib import pyplot as plt
 from scipy.integrate import odeint
+from scipy.integrate import ode
 import numpy as np
 
 nAA = 20
@@ -56,6 +57,10 @@ bm = proteinContent / (cellVolume*nAvogadro/1e6)
 nARib = 7459 * 1.65
 nAmet = 300
 rmax = proteinContent / (cellVolume*nAvogadro/1e6) / (7459*1.65)
+
+
+def dcdt_ode(t, c):
+	return dcdt(c, t)
 
 def dcdt(c, t):
 	dc = np.zeros_like(c)
@@ -113,10 +118,29 @@ co[ta_indices] = 0.1*tau*rmax  # charged tRNA (4.063)
 co[ppgpp_index] = kIppGpp  # ppGpp (1)
 co[r_index] = 0.2*rmax  # ribosome (16.25)
 tmax = 5000
-t = np.linspace(0,tmax,tmax)
+to = 0
+t = np.linspace(to,tmax,tmax)
 
-# solve ode
-sol = odeint(dcdt, co, t)
+## solve ode with odeint (lsoda)
+# sol = odeint(dcdt, co, t)
+
+## solve ode with ode (vode, forward or backward)
+sol = np.zeros((tmax, len(co)))
+solver = ode(dcdt_ode)
+solver.set_integrator('vode', method='adams', order=2)  # forward
+# solver.set_integrator('vode', method='bdf', order=2)  # backward
+solver.set_initial_value(co, to)
+
+sol = [co]
+t = [to]
+dt = 1
+while solver.successful() and solver.t < tmax:
+	solver.integrate(solver.t + dt)
+	sol.append(solver.y)
+	t.append(solver.t)
+
+t = np.array(t)
+sol = np.array(sol)
 
 # solution timeseries
 aa = sol[:,aa_indices]

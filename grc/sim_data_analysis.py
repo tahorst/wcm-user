@@ -80,6 +80,59 @@ def get_ribosome_counts(sim_data, bulk_container, doubling_time):
 
 	return ribosome_counts
 
+def get_concentrations(sim_data, bulk_container, doubling_time):
+	'''
+	Gets concentrations for relevant molecules
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		bulk_container (BulkMoleculesContainer object): counts for each molecule
+		doubling_time (float with time units): expected cell doubling time
+
+	Returns (in units of uM):
+		float: concentration of RelA
+		ndarray[float]: concentration of total tRNA for each amino acid
+		float: concentration of active ribosomes
+		ndarray[float]: concentration of synthetases for each amino acid
+		ndarray[float]: concentration of each amino acid
+	'''
+
+	transcription = sim_data.process.transcription
+	molecule_ids = sim_data.moleculeIds
+	molecule_groups = sim_data.moleculeGroups
+	n_avogadro = sim_data.constants.nAvogadro
+
+	# Data structures for charging
+	aa_from_synthetase = transcription.aa_from_synthetase
+	aa_from_trna = transcription.aa_from_trna
+
+	# Names of molecules associated with tRNA charging
+	rela_name = molecule_ids.RelA
+	uncharged_trna_names = transcription.rnaData['id'][transcription.rnaData['isTRna']]
+	synthetase_names = transcription.synthetase_names
+	aa_names = molecule_groups.aaIDs
+
+	volume = get_volume(sim_data, bulk_container)
+	counts_to_micromolar = 1 / n_avogadro.asNumber(1 / units.umol) / volume
+
+	# Concentrations for tRNA charging molecules
+	rela_counts = bulk_container.count(rela_name)
+	total_trna_counts = aa_from_trna.dot(
+		bulk_container.counts(uncharged_trna_names))
+	ribosome_counts = get_ribosome_counts(sim_data, bulk_container,
+		doubling_time)
+	synthetase_counts = aa_from_synthetase.dot(
+		bulk_container.counts(synthetase_names))
+	aa_counts = bulk_container.counts(aa_names)
+
+	rela_conc = rela_counts * counts_to_micromolar
+	total_trna_conc = total_trna_counts * counts_to_micromolar
+	ribosome_conc = ribosome_counts * counts_to_micromolar
+	synthetase_conc = synthetase_counts * counts_to_micromolar
+	aa_conc = aa_counts * counts_to_micromolar
+
+	return rela_conc, total_trna_conc, ribosome_conc, synthetase_conc, aa_conc
+
 def get_aa_fraction(sim_data, bulk_container):
 	'''
 	Gets the fraction of amino acids that would be expected to be translated
@@ -193,6 +246,36 @@ def calc_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc,
 
 	return ppgpp_conc
 
+def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, ppgpp):
+	'''
+	Prints a summary of the state (concentrations) of the cell to stdout
+
+	Args:
+		condition (str): cell condition
+		rela (float): concentration of RelA
+		charged_trna (ndarray[float]): concentrations of charged tRNA for each amino acid
+		uncharged_trna (ndarray[float]): concentrations of uncharged tRNA for each amino acid
+		ribosomes (float): concentration of active ribosomes
+		synthetases (ndarray[float]): concentration of synthetases for each amino acid
+		ppgpp (float): concentration of ppGpp
+	'''
+
+	def print_conc(label, conc):
+		if isinstance(conc, float):
+			print('\t{}: {:.2f}'.format(label, conc))
+		else:
+			print('\t{}: {}'.format(label, conc))
+
+	np.set_printoptions(precision=1, suppress=True, linewidth=120)
+	print('\nSummary for {} condition:'.format(condition))
+	print_conc('RelA', rela)
+	print_conc('Charged tRNA', charged_trna)
+	print_conc('Uncharged tRNA', uncharged_trna)
+	print_conc('Ribosomes', ribosomes)
+	print_conc('Synthetases', synthetases)
+	print_conc('ppGpp', ppgpp)
+	np.set_printoptions(precision=8, suppress=False, linewidth=75)  # reset to defaults
+
 def main(sim_data, cell_specs):
 	'''
 	Main function to perform analysis.
@@ -202,20 +285,7 @@ def main(sim_data, cell_specs):
 		cell_specs (dict): information about each condition that was fit
 	'''
 
-	transcription = sim_data.process.transcription
-	molecule_ids = sim_data.moleculeIds
-	molecule_groups = sim_data.moleculeGroups
 	constants = sim_data.constants
-	n_avogadro = constants.nAvogadro
-
-	# Data structures for charging
-	aa_from_synthetase = transcription.aa_from_synthetase
-	aa_from_trna = transcription.aa_from_trna
-
-	# Names of molecules associated with tRNA charging
-	uncharged_trna_names = transcription.rnaData['id'][transcription.rnaData['isTRna']]
-	synthetase_names = transcription.synthetase_names
-	aa_names = molecule_groups.aaIDs
 
 	# charging_stoich_matrix = transcription.charging_stoich_matrix()
 	# charging_molecule_names = transcription.charging_molecules
@@ -226,30 +296,17 @@ def main(sim_data, cell_specs):
 		bulk_container = cell_specs[condition]['bulkContainer']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
 
-		volume = get_volume(sim_data, bulk_container)
-		counts_to_micromolar = 1 / n_avogadro.asNumber(1 / units.umol) / volume
-
-		# Concentrations for tRNA charging molecules
-		rela_counts = bulk_container.count(molecule_ids.RelA)
-		total_trna_counts = aa_from_trna.dot(bulk_container.counts(uncharged_trna_names))
-		ribosome_counts = get_ribosome_counts(sim_data, bulk_container, doubling_time)
-		synthetase_counts = aa_from_synthetase.dot(bulk_container.counts(synthetase_names))
-		aa_counts = bulk_container.counts(aa_names)
-
-		rela_conc = rela_counts * counts_to_micromolar
-		total_trna_conc = total_trna_counts * counts_to_micromolar
-		ribosome_conc = ribosome_counts * counts_to_micromolar
-		synthetase_conc = synthetase_counts * counts_to_micromolar
-		aa_conc = aa_counts * counts_to_micromolar
-
+		rela, total_trnas, ribosomes, synthetases, aas = get_concentrations(
+			sim_data, bulk_container, doubling_time
+			)
 		f = get_aa_fraction(sim_data, bulk_container)
 
-		charged_trna_conc, uncharged_trna_conc = charge_trna(
-			total_trna_conc, synthetase_conc, aa_conc, ribosome_conc, f, constants)
-		ppgpp_conc = calc_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc, f, constants)
+		charged_trna, uncharged_trna = charge_trna(
+			total_trnas, synthetases, aas, ribosomes, f, constants
+			)
+		ppgpp = calc_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 
-		import ipdb; ipdb.set_trace()
-		print('ppGpp conc in {}: {:.1f}'.format(condition, ppgpp_conc))
+		summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, ppgpp)
 
 def parse_args():
 	'''

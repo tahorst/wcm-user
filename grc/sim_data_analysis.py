@@ -48,8 +48,7 @@ def get_volume(sim_data, bulk_container):
 
 def get_ribosome_counts(sim_data, bulk_container, doubling_time):
 	'''
-	Gets the counts of active ribosomes based on subunits, stoichiometry and
-	fraction active.
+	Gets the counts of active ribosomes based on fraction active and subunits.
 
 	Args:
 		sim_data (SimulationData object): knowledgebase for a simulation
@@ -60,21 +59,11 @@ def get_ribosome_counts(sim_data, bulk_container, doubling_time):
 		float: number of active ribosomes
 	'''
 
-	complexation = sim_data.process.complexation
 	molecule_ids = sim_data.moleculeIds
 	active_fraction = sim_data.growthRateParameters.getFractionActiveRibosome(doubling_time)
 
-	info_30s = complexation.getMonomers(molecule_ids.s30_fullComplex)
-	info_50s = complexation.getMonomers(molecule_ids.s50_fullComplex)
-
-	subunits_30s = info_30s['subunitIds']
-	subunits_50s = info_50s['subunitIds']
-	stoich_30s = info_30s['subunitStoich']
-	stoich_50s = info_50s['subunitStoich']
-
-	# Counts of each subunit limited by stoichiometry
-	count_30s = (bulk_container.counts(subunits_30s) / stoich_30s).min()
-	count_50s = (bulk_container.counts(subunits_50s) / stoich_50s).min()
+	count_30s = bulk_container.count(molecule_ids.s30_fullComplex)
+	count_50s = bulk_container.count(molecule_ids.s50_fullComplex)
 
 	ribosome_counts = min(count_30s, count_50s) * active_fraction
 
@@ -293,7 +282,7 @@ def main(sim_data, cell_specs):
 
 	# Calculate ppGpp concentrations for each condition
 	for condition in ['basal', 'with_aa', 'no_oxygen']:
-		bulk_container = cell_specs[condition]['bulkContainer']
+		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
 
 		rela, total_trnas, ribosomes, synthetases, aas = get_concentrations(

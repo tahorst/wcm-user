@@ -108,8 +108,7 @@ def get_concentrations(sim_data, bulk_container, doubling_time):
 	rela_counts = bulk_container.count(rela_name)
 	total_trna_counts = aa_from_trna.dot(
 		bulk_container.counts(uncharged_trna_names))
-	ribosome_counts = get_ribosome_counts(sim_data, bulk_container,
-		doubling_time)
+	ribosome_counts = get_ribosome_counts(sim_data, bulk_container, doubling_time)
 	synthetase_counts = aa_from_synthetase.dot(
 		bulk_container.counts(synthetase_names))
 	aa_counts = bulk_container.counts(aa_names)
@@ -143,7 +142,7 @@ def get_aa_fraction(sim_data, bulk_container):
 	aa_content = translation.monomerData['aaCounts'].asNumber()
 
 	rna_names = transcription.rnaData['id'][mapping]
-	rna_counts = bulk_container.counts(rna_names)
+	rna_counts = bulk_container.counts(rna_names) + 1  # +1 for smoothing int counts
 
 	total_aa = (rna_counts * translation_efficiencies).dot(aa_content)
 
@@ -175,12 +174,12 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	rib_elong_rate = 22
 
 	# Initialize to approximate charged levels to avoid dividing by 0
-	charged_fraction = 0.95
+	charged_fraction = 0
 	charged_trna_conc = total_trna * charged_fraction
 	uncharged_trna_conc = total_trna * (1 - charged_fraction)
 
 	# Solve to steady state with short time steps
-	dt = 0.0001
+	dt = 0.001
 	diff = 1
 	while diff > 1e-3:
 		v_charging = (k_s * synthetase_conc * uncharged_trna_conc * aa_conc / (KM_aa * KM_tf *
@@ -235,7 +234,7 @@ def calc_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc,
 
 	return ppgpp_conc
 
-def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, ppgpp):
+def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f):
 	'''
 	Prints a summary of the state (concentrations) of the cell to stdout
 
@@ -246,7 +245,9 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 		uncharged_trna (ndarray[float]): concentrations of uncharged tRNA for each amino acid
 		ribosomes (float): concentration of active ribosomes
 		synthetases (ndarray[float]): concentration of synthetases for each amino acid
+		aas (ndarray[float]): concentration for each amino acid
 		ppgpp (float): concentration of ppGpp
+		f (ndarray[float]): fraction of expected elongations for each amino acid
 	'''
 
 	def print_conc(label, conc):
@@ -262,7 +263,10 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 	print_conc('Uncharged tRNA', uncharged_trna)
 	print_conc('Ribosomes', ribosomes)
 	print_conc('Synthetases', synthetases)
+	print_conc('Amino acids', aas)
 	print_conc('ppGpp', ppgpp)
+	np.set_printoptions(precision=2)
+	print_conc('f', f)
 	np.set_printoptions(precision=8, suppress=False, linewidth=75)  # reset to defaults
 
 def main(sim_data, cell_specs):
@@ -276,26 +280,25 @@ def main(sim_data, cell_specs):
 
 	constants = sim_data.constants
 
-	# charging_stoich_matrix = transcription.charging_stoich_matrix()
-	# charging_molecule_names = transcription.charging_molecules
-	# charging_molecule_counts = bulk_container.counts(charging_molecule_names)
-
 	# Calculate ppGpp concentrations for each condition
 	for condition in ['basal', 'with_aa', 'no_oxygen']:
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
 
+		# Get current state
 		rela, total_trnas, ribosomes, synthetases, aas = get_concentrations(
 			sim_data, bulk_container, doubling_time
 			)
 		f = get_aa_fraction(sim_data, bulk_container)
 
+		# Calculate values from current state
 		charged_trna, uncharged_trna = charge_trna(
 			total_trnas, synthetases, aas, ribosomes, f, constants
 			)
 		ppgpp = calc_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 
-		summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, ppgpp)
+		# Print current state
+		summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f)
 
 def parse_args():
 	'''

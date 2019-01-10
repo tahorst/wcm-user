@@ -1,2 +1,4 @@
 *.cp
 *.pyc
+*.pickle
+*.pkl

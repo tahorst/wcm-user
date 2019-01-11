@@ -270,13 +270,15 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	Calculates the concentration of charged and uncharged tRNA from the composition of the cell.
 
 	Args:
-		total_trna (ndarray[float]): concentration of all tRNA for each amino acid (in units of uM)
-		synthetase_conc (ndarray[float]): concentration of synthetases for each amino acid (in units of uM)
+		total_trna (ndarray[float]): concentration of all tRNA for each amino acid
+			(in units of uM)
+		synthetase_conc (ndarray[float]): concentration of synthetases for each amino acid
+			(in units of uM)
 		aa_conc (ndarray[float]): concentration of amino acids (in units of uM)
 		ribosome_conc (float): concentration of active ribosomes
 		f (ndarray[float]): fraction of each amino acid in sequences to be translated
 		constants (class): constants from sim_data
-		t_limit (float): time limit for charging to prevent infinite loop or long computation times
+		t_limit (float): time limit for charging to prevent long computation times
 
 	Returns:
 		ndarray[float]: concentration of charged tRNA for each amino acid (in units of uM)
@@ -301,9 +303,11 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	dt = 0.001
 	diff = 1
 	while diff > 1e-3:
-		v_charging = (k_s * synthetase_conc * uncharged_trna_conc * aa_conc / (KM_aa * KM_tf *
-			(1 + uncharged_trna_conc / KM_tf + aa_conc / KM_aa + uncharged_trna_conc * aa_conc / KM_tf / KM_aa)))
-		numerator_ribosome = 1 + np.sum(f * (k_rta / charged_trna_conc + uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf))
+		v_charging = (k_s * synthetase_conc * uncharged_trna_conc * aa_conc / (KM_aa * KM_tf
+			* (1 + uncharged_trna_conc / KM_tf + aa_conc / KM_aa
+			+ uncharged_trna_conc * aa_conc / KM_tf / KM_aa)))
+		numerator_ribosome = 1 + np.sum(f * (k_rta / charged_trna_conc
+			+ uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf))
 		v_rib = rib_elong_rate * ribosome_conc / numerator_ribosome
 
 		# Handle case when f is 0 and charged_trna_conc is 0
@@ -347,8 +351,10 @@ def create_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_con
 	k_rta = constants.Kdissociation_charged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
 	k_rtf = constants.Kdissociation_uncharged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
 
-	numerator_ribosome = 1 + np.sum(f * (k_rta / charged_trna_conc + uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf))
-	ribosome_bound_uncharged = ribosome_conc * (f * uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf) / numerator_ribosome
+	numerator_ribosome = 1 + np.sum(f * (k_rta / charged_trna_conc
+		+ uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf))
+	ribosome_bound_uncharged = ribosome_conc * (f * uncharged_trna_conc / charged_trna_conc
+		* k_rta / k_rtf) / numerator_ribosome
 	frac_rela = 1 / (1 + KD_rela / ribosome_bound_uncharged.sum())
 
 	v_rela = k_rela * rela_conc * frac_rela
@@ -450,8 +456,10 @@ def error_analysis(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgp
 
 	if display:
 		print('')
-	total_error += calc_error('rRNA probability', regulated_rrna_prob, expected_rrna_prob, ':.3f', display)
-	total_error += calc_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f', display)
+	total_error += calc_error('rRNA probability', regulated_rrna_prob, expected_rrna_prob,
+		':.3f', display)
+	total_error += calc_error('ppGpp concentration', ppgpp, expected_ppgpp,
+		':.1f', display)
 
 	return total_error
 
@@ -462,7 +470,8 @@ def sensitivity(sim_data, cell_specs, conditions):
 	Args:
 		sim_data (SimulationData object): knowledgebase for a simulation
 		cell_specs (dict): information about each condition that was fit
-		conditions (list[str]): set of conditions to test (eg. ['basal', 'with_aa', 'no_oxygen'])
+		conditions (list[str]): set of conditions to test
+			(eg. ['basal', 'with_aa', 'no_oxygen'])
 	'''
 
 	for param in PARAMS:
@@ -471,7 +480,8 @@ def sensitivity(sim_data, cell_specs, conditions):
 
 		for magnitude in [0.1, 0.2, 0.5, 0.75, 0.9, 1.1, 1.5, 2, 5, 10]:
 			setattr(sim_data.constants, param, original_value * magnitude)
-			error = [main(sim_data, cell_specs, [condition], verbose=False)
+			error = [
+				main(sim_data, cell_specs, [condition], verbose=False)
 				for condition in conditions
 				]
 
@@ -487,7 +497,8 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 	Args:
 		sim_data (SimulationData object): knowledgebase for a simulation
 		cell_specs (dict): information about each condition that was fit
-		conditions (list[str]): set of conditions to test (eg. ['basal', 'with_aa', 'no_oxygen'])
+		conditions (list[str]): set of conditions to test
+			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		verbose (bool): if True, prints to command line
 
 	Returns:
@@ -507,24 +518,25 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 
 		# Get current state
 		rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
-			sim_data, bulk_container, doubling_time
-			)
+			sim_data, bulk_container, doubling_time)
 		f = get_aa_fraction(sim_data, bulk_container)
-		rnap_activation_rate = get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob)
+		rnap_activation_rate = get_rnap_activation(
+			sim_data, bulk_container, doubling_time, synth_prob)
 		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
 
 		# Calculate values from current state
 		charged_trna, uncharged_trna = charge_trna(
-			total_trnas, synthetases, aas, ribosomes, f, constants
-			)
+			total_trnas, synthetases, aas, ribosomes, f, constants)
 		ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 		rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
 
 		# Print current state
 		if verbose:
-			summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f)
+			summarize_state(condition, rela, charged_trna, uncharged_trna,
+				ribosomes, synthetases, aas, ppgpp, f)
 
-		error += error_analysis(rrna_synth_prob, synth_prob[is_rrna], ppgpp, expected_ppgpp, verbose)
+		error += error_analysis(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
+			expected_ppgpp, verbose)
 
 	return error
 

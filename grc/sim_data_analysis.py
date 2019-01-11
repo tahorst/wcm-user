@@ -123,13 +123,32 @@ def get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob):
 
 	Returns:
 		float: number of RNAP activations/terminations per second
+
+	Math:
+		B = bound RNAP
+		U = unbound RNAP
+		R = rate of binding (1/s)
+		f = fraction of total RNAP bound (f = B / (U + B))
+
+		Want to solve for U*R (activation_rate - the rate of RNAP activations)
+
+		For steady state, the amount of bound RNAP will not change:
+			dB/dt = synth_prob * U * R - elong_rate / rna_lengths * B = 0
+
+		Using the fraction bound relationship:
+			f = B / (U + B)
+			R = f / (1 - f) * 1 / (synth_prob * rna_lengths / elong_rate)
+
+		Solving for U*R (with U = (1 - f) (U + B)):
+			U*R = U * f / (1 - f) * 1 / (synth_prob * rna_lengths / elong_rate)
+			    = B / (synth_prob * rna_lengths / elong_rate)
 	'''
 
 	rnap = get_bound_rnap_counts(sim_data, bulk_container, doubling_time)
 	rna_lengths = sim_data.process.transcription.rnaData['length'].asNumber()
 	elong_rate = sim_data.growthRateParameters.rnaPolymeraseElongationRate.asNumber()
 
-	activation_rate = rnap * (elong_rate / rna_lengths).dot(synth_prob)
+	activation_rate = rnap / (rna_lengths / elong_rate).dot(synth_prob)
 
 	return activation_rate
 

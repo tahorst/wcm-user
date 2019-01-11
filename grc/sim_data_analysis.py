@@ -22,6 +22,20 @@ from wholecell.utils import units
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 MICROMOLAR_UNITS = units.umol / units.L
+PARAMS = [
+	'synthetase_charging_rate',
+	'Km_synthetase_amino_acid',
+	'Km_synthetase_uncharged_trna',
+	'Kdissociation_charged_trna_ribosome',
+	'Kdissociation_uncharged_trna_ribosome',
+	'k_RelA_ppGpp_synthesis',
+	'KD_RelA_ribosome',
+	'k_SpoT_ppGpp_synthesis',
+	'k_SpoT_ppGpp_degradation',
+	'rrn_vmax',
+	'KI_ppgpp_rnap',
+	'KM_rrn_rnap',
+	]
 
 
 def get_volume(sim_data, bulk_container):
@@ -251,7 +265,7 @@ def get_aa_fraction(sim_data, bulk_container):
 
 	return total_aa / total_aa.sum()
 
-def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants):
+def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants, t_limit=10):
 	'''
 	Calculates the concentration of charged and uncharged tRNA from the composition of the cell.
 
@@ -262,6 +276,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 		ribosome_conc (float): concentration of active ribosomes
 		f (ndarray[float]): fraction of each amino acid in sequences to be translated
 		constants (class): constants from sim_data
+		t_limit (float): time limit for charging to prevent infinite loop or long computation times
 
 	Returns:
 		ndarray[float]: concentration of charged tRNA for each amino acid (in units of uM)
@@ -282,6 +297,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	uncharged_trna_conc = total_trna * (1 - charged_fraction)
 
 	# Solve to steady state with short time steps
+	t = 0
 	dt = 0.001
 	diff = 1
 	while diff > 1e-3:
@@ -298,6 +314,12 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 		uncharged_trna_conc -= delta_conc
 		charged_trna_conc += delta_conc
 		diff = np.linalg.norm(delta_conc)
+
+		t += dt
+
+		if t > t_limit:
+			print('** Time limit reached, diff: {} **'.format(diff))
+			break
 
 	return charged_trna_conc, uncharged_trna_conc
 
@@ -395,7 +417,7 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 	print_conc('f', f)
 	np.set_printoptions(precision=8, suppress=False, linewidth=75)  # reset to defaults
 
-def error_report(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp):
+def error_analysis(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, display):
 	'''
 	Calculate and report the error between rRNA regulation from ppGpp and rRNA
 	synthesis probabilities without regulation.
@@ -406,40 +428,79 @@ def error_report(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp)
 			from the fitter
 		ppgpp (float): concentration of ppGpp from state of the cell (in units of uM)
 		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
+		display (bool): if True, prints to command line
+
+	Returns:
+		float: total error associated with condition
 
 	TODO: add growth rate
 	'''
 
-	def print_error(label, actual, expected, format):
-		error = np.abs(actual - expected) / expected * 100
-		display = '\t{{}} error: {{:.1f}}% ({{{}}} vs {{{}}})'.format(format, format)
-		print(display.format(label, error, actual, expected))
+	def calc_error(label, actual, expected, format, display):
+		error = np.abs(actual - expected) / expected
+		if display:
+			display_str = '\t{{}} error: {{:.1f}}% ({{{}}} vs {{{}}})'.format(format, format)
+			print(display_str.format(label, error*100, actual, expected))
+
+		return error
+
+	total_error = 0
 
 	expected_rrna_prob = np.mean(expected_rrna_prob[expected_rrna_prob > 0])
 
-	print('')
-	print_error('rRNA probability', regulated_rrna_prob, expected_rrna_prob, ':.3f')
-	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
+	if display:
+		print('')
+	total_error += calc_error('rRNA probability', regulated_rrna_prob, expected_rrna_prob, ':.3f', display)
+	total_error += calc_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f', display)
 
-def main(sim_data, cell_specs):
+	return total_error
+
+def sensitivity(sim_data, cell_specs, conditions):
+	'''
+	Performs sensitivity analysis for each of the parameters.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		cell_specs (dict): information about each condition that was fit
+		conditions (list[str]): set of conditions to test (eg. ['basal', 'with_aa', 'no_oxygen'])
+	'''
+
+	for param in PARAMS:
+		print('For {}:'.format(param))
+		original_value = getattr(sim_data.constants, param)
+
+		for magnitude in [0.1, 0.2, 0.5, 0.75, 0.9, 1.1, 1.5, 2, 5, 10]:
+			setattr(sim_data.constants, param, original_value * magnitude)
+			error = [main(sim_data, cell_specs, [condition], verbose=False)
+				for condition in conditions
+				]
+
+			error_str = '  '.join(format(e, '.2f') for e in error)
+			print('\t x{} error: {}'.format(magnitude, error_str))
+
+		setattr(sim_data.constants, param, original_value)
+
+def main(sim_data, cell_specs, conditions, verbose=True):
 	'''
 	Main function to perform analysis.
 
 	Args:
 		sim_data (SimulationData object): knowledgebase for a simulation
 		cell_specs (dict): information about each condition that was fit
+		conditions (list[str]): set of conditions to test (eg. ['basal', 'with_aa', 'no_oxygen'])
+		verbose (bool): if True, prints to command line
+
+	Returns:
+		float: total error for all conditions
 	'''
+
+	error = 0
 
 	constants = sim_data.constants
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
 
-	# TODO: add to sim_data.constants in a flat file
-	constants.rrn_vmax = 2000  # 1/s, Bosdriesz
-	constants.KI_ppgpp_rnap = 1  # uM, Bosdriesz
-	constants.KM_rrn_rnap = 20  # uM, Bosdriesz
-
 	# Calculate ppGpp concentrations for each condition
-	for condition in ['basal', 'with_aa', 'no_oxygen']:
+	for condition in conditions:
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		synth_prob = cell_specs[condition]['synthProb']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
@@ -460,8 +521,12 @@ def main(sim_data, cell_specs):
 		rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
 
 		# Print current state
-		summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f)
-		error_report(rrna_synth_prob, synth_prob[is_rrna], ppgpp, expected_ppgpp)
+		if verbose:
+			summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f)
+
+		error += error_analysis(rrna_synth_prob, synth_prob[is_rrna], ppgpp, expected_ppgpp, verbose)
+
+	return error
 
 def parse_args():
 	'''
@@ -478,6 +543,13 @@ def parse_args():
 	parser.add_argument('-c', '--cell-specs',
 		help='Path to cell_specs object',
 		default=os.path.join(FILE_LOCATION, 'cell_specs.cp'))
+	parser.add_argument('--sensitivity',
+		action='store_true',
+		help='Perform parameter sensitivity analysis if set')
+	parser.add_argument('--condition',
+		type=int,
+		default=None,
+		help='Only runs for specified condition if set (values: 0-2)')
 
 	return parser.parse_args()
 
@@ -485,10 +557,26 @@ def parse_args():
 if __name__ == '__main__':
 	args = parse_args()
 
+	# Load necessary files
 	with open(args.sim_data) as f:
 		sim_data = cPickle.load(f)
-
 	with open(args.cell_specs) as f:
 		cell_specs = cPickle.load(f)
 
-	main(sim_data, cell_specs)
+	# Specify conditions
+	conditions = ['basal', 'with_aa', 'no_oxygen']
+	if args.condition is not None:
+		conditions = [conditions[args.condition]]
+
+	# Update constants that are not yet in sim_data
+	# TODO: add to sim_data.constants in a flat file
+	constants = sim_data.constants
+	constants.rrn_vmax = 2000  # 1/s, Bosdriesz
+	constants.KI_ppgpp_rnap = 1  # uM, Bosdriesz
+	constants.KM_rrn_rnap = 20  # uM, Bosdriesz
+
+	# Perform desired analysis
+	if args.sensitivity:
+		sensitivity(sim_data, cell_specs, conditions)
+	else:
+		main(sim_data, cell_specs, conditions)

@@ -183,6 +183,24 @@ def get_expected_ppgpp(sim_data, doubling_time):
 
 	return ppgpp.asNumber(MICROMOLAR_UNITS)
 
+def get_expected_v_rib(sim_data, doubling_time, nutrients):
+	'''
+	Gets the expected ribosome elongation rate for a given doubling time.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		doubling_time (float with time units): expected cell doubling time
+		nutrients (str): nutrient label
+
+	Returns:
+		float: rate of ribosome elongation (in units of uM/s)
+	'''
+
+	rate = sim_data.translationSupplyRate[nutrients]
+	rate = rate * sim_data.constants.cellDensity * sim_data.mass.cellDryMassFraction
+
+	return rate.asNumber(MICROMOLAR_UNITS / units.s).sum()
+
 def get_concentrations(sim_data, bulk_container, doubling_time):
 	'''
 	Gets concentrations for relevant molecules
@@ -283,6 +301,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	Returns:
 		ndarray[float]: concentration of charged tRNA for each amino acid (in units of uM)
 		ndarray[float]: concentration of uncharged tRNA for each amino acid (in units of uM)
+		float: ribosome elongation rate (in units of uM/s)
 	'''
 
 	# Parameters from Bosdriesz et al
@@ -325,7 +344,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 			print('** Time limit reached, diff: {} **'.format(diff))
 			break
 
-	return charged_trna_conc, uncharged_trna_conc
+	return charged_trna_conc, uncharged_trna_conc, v_rib
 
 def create_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc, f, constants):
 	'''
@@ -423,23 +442,24 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 	print_conc('f', f)
 	np.set_printoptions(precision=8, suppress=False, linewidth=75)  # reset to defaults
 
-def error_analysis(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, display):
+def error_analysis(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp,
+		v_rib, expected_v_rib, display):
 	'''
 	Calculate and report the error between rRNA regulation from ppGpp and rRNA
 	synthesis probabilities without regulation.
 
 	Args:
-		rrna_synth_prob (float): synthesis probability of rRNA based on ppGpp regulation
+		rrna_prob (float): synthesis probability of rRNA based on ppGpp regulation
 		expected_rrna_prob (ndarray[float]): synthesis probabilities of each rRNA
 			from the fitter
 		ppgpp (float): concentration of ppGpp from state of the cell (in units of uM)
 		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
+		v_rib (float): ribosome elongation rate from state of the cell (in units of uM/s)
+		expected_v_rib (float): expected ribosome elongation rate (in units of uM/s)
 		display (bool): if True, prints to command line
 
 	Returns:
 		float: total error associated with condition
-
-	TODO: add growth rate
 	'''
 
 	def calc_error(label, actual, expected, format, display):
@@ -456,9 +476,11 @@ def error_analysis(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgp
 
 	if display:
 		print('')
-	total_error += calc_error('rRNA probability', regulated_rrna_prob, expected_rrna_prob,
+	total_error += calc_error('rRNA probability', rrna_prob, expected_rrna_prob,
 		':.3f', display)
 	total_error += calc_error('ppGpp concentration', ppgpp, expected_ppgpp,
+		':.1f', display)
+	total_error += calc_error('Ribosome elongation rate', v_rib, expected_v_rib,
 		':.1f', display)
 
 	return total_error
@@ -512,9 +534,11 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 
 	# Calculate ppGpp concentrations for each condition
 	for condition in conditions:
+		# Get condition specific values
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		synth_prob = cell_specs[condition]['synthProb']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
+		nutrients = sim_data.conditions[condition]['nutrients']
 
 		# Get current state
 		rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
@@ -523,9 +547,10 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 		rnap_activation_rate = get_rnap_activation(
 			sim_data, bulk_container, doubling_time, synth_prob)
 		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
+		expected_v_rib = get_expected_v_rib(sim_data, doubling_time, nutrients)
 
 		# Calculate values from current state
-		charged_trna, uncharged_trna = charge_trna(
+		charged_trna, uncharged_trna, v_rib = charge_trna(
 			total_trnas, synthetases, aas, ribosomes, f, constants)
 		ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 		rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
@@ -536,7 +561,7 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 				ribosomes, synthetases, aas, ppgpp, f)
 
 		error += error_analysis(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
-			expected_ppgpp, verbose)
+			expected_ppgpp, v_rib, expected_v_rib, verbose)
 
 	return error
 

@@ -133,6 +133,23 @@ def get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob):
 
 	return activation_rate
 
+def get_expected_ppgpp(sim_data, doubling_time):
+	'''
+	Gets the expected ppGpp concentration for a given doubling time.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		doubling_time (float with time units): expected cell doubling time
+
+	Returns:
+		float: concentration of ppGpp (in units of uM)
+	'''
+
+	ppgpp = sim_data.growthRateParameters.getppGppConc(doubling_time)
+	ppgpp = ppgpp * sim_data.constants.cellDensity * sim_data.mass.cellDryMassFraction
+
+	return ppgpp.asNumber(MICROMOLAR_UNITS)
+
 def get_concentrations(sim_data, bulk_container, doubling_time):
 	'''
 	Gets concentrations for relevant molecules
@@ -217,7 +234,7 @@ def get_aa_fraction(sim_data, bulk_container):
 
 def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants):
 	'''
-	Charges tRNA from the composition of the cell.
+	Calculates the concentration of charged and uncharged tRNA from the composition of the cell.
 
 	Args:
 		total_trna (ndarray[float]): concentration of all tRNA for each amino acid (in units of uM)
@@ -265,7 +282,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 
 	return charged_trna_conc, uncharged_trna_conc
 
-def calc_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc, f, constants):
+def create_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc, f, constants):
 	'''
 	Calculates the concentration of ppGpp in a cell.
 
@@ -301,7 +318,7 @@ def calc_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc,
 
 	return ppgpp_conc
 
-def calc_ppgpp_regulation(ppgpp, rnap_free, new_rna_rate, constants):
+def regulate_rrna_expression(ppgpp, rnap_free, new_rna_rate, constants):
 	'''
 	Calculates the expression of rRNA based on regulation from ppGpp.
 
@@ -315,10 +332,9 @@ def calc_ppgpp_regulation(ppgpp, rnap_free, new_rna_rate, constants):
 		float: synthesis probability for rRNA
 	'''
 
-	# TODO: add to sim_data.constants and get from constants
-	vmax = 2000  # 1/s, Bosdriesz
-	KI_ppgpp = 1  # uM, Bosdriesz
-	KM_rrn = 20  # uM, Bosdriesz
+	vmax = constants.rrn_vmax
+	KI_ppgpp = constants.KI_ppgpp_rnap
+	KM_rrn = constants.KM_rrn_rnap
 
 	new_rrna_rate = vmax * rnap_free / (KM_rrn + rnap_free) / (1 + ppgpp / KI_ppgpp)
 	synth_prob = new_rrna_rate / new_rna_rate
@@ -360,6 +376,32 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 	print_conc('f', f)
 	np.set_printoptions(precision=8, suppress=False, linewidth=75)  # reset to defaults
 
+def error_report(regulated_rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp):
+	'''
+	Calculate and report the error between rRNA regulation from ppGpp and rRNA
+	synthesis probabilities without regulation.
+
+	Args:
+		rrna_synth_prob (float): synthesis probability of rRNA based on ppGpp regulation
+		expected_rrna_prob (ndarray[float]): synthesis probabilities of each rRNA
+			from the fitter
+		ppgpp (float): concentration of ppGpp from state of the cell (in units of uM)
+		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
+
+	TODO: add growth rate
+	'''
+
+	def print_error(label, actual, expected, format):
+		error = np.abs(actual - expected) / expected * 100
+		display = '\t{{}} error: {{:.1f}}% ({{{}}} vs {{{}}})'.format(format, format)
+		print(display.format(label, error, actual, expected))
+
+	expected_rrna_prob = np.mean(expected_rrna_prob[expected_rrna_prob > 0])
+
+	print('')
+	print_error('rRNA probability', regulated_rrna_prob, expected_rrna_prob, ':.3f')
+	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
+
 def main(sim_data, cell_specs):
 	'''
 	Main function to perform analysis.
@@ -370,6 +412,12 @@ def main(sim_data, cell_specs):
 	'''
 
 	constants = sim_data.constants
+	is_rrna = sim_data.process.transcription.rnaData['isRRna']
+
+	# TODO: add to sim_data.constants in a flat file
+	constants.rrn_vmax = 2000  # 1/s, Bosdriesz
+	constants.KI_ppgpp_rnap = 1  # uM, Bosdriesz
+	constants.KM_rrn_rnap = 20  # uM, Bosdriesz
 
 	# Calculate ppGpp concentrations for each condition
 	for condition in ['basal', 'with_aa', 'no_oxygen']:
@@ -383,16 +431,18 @@ def main(sim_data, cell_specs):
 			)
 		f = get_aa_fraction(sim_data, bulk_container)
 		rnap_activation_rate = get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob)
+		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
 
 		# Calculate values from current state
 		charged_trna, uncharged_trna = charge_trna(
 			total_trnas, synthetases, aas, ribosomes, f, constants
 			)
-		ppgpp = calc_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
-		rrna_rate = calc_ppgpp_regulation(ppgpp, rnaps, rnap_activation_rate, constants)
+		ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
+		rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
 
 		# Print current state
 		summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f)
+		error_report(rrna_synth_prob, synth_prob[is_rrna], ppgpp, expected_ppgpp)
 
 def parse_args():
 	'''

@@ -14,6 +14,7 @@ from __future__ import division
 import argparse
 import cPickle
 import os
+import time
 
 import numpy as np
 
@@ -592,6 +593,8 @@ def parse_args():
 
 
 if __name__ == '__main__':
+	start = time.time()
+
 	args = parse_args()
 
 	# Load necessary files
@@ -617,3 +620,5 @@ if __name__ == '__main__':
 		sensitivity(sim_data, cell_specs, conditions)
 	else:
 		main(sim_data, cell_specs, conditions)
+
+	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

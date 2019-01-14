@@ -513,6 +513,71 @@ def sensitivity(sim_data, cell_specs, conditions):
 
 		setattr(sim_data.constants, param, original_value)
 
+def coordinate_descent(sim_data, cell_specs, conditions):
+	'''
+	Stochastic coordinate descent to determine optimal parameters.  Updates one
+	parameter at a time to minimize error for a given number of iterations or
+	until the error does not change.  Displays the set of parameters and results
+	in each condition after convergence.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		cell_specs (dict): information about each condition that was fit
+		conditions (list[str]): set of conditions to test
+			(eg. ['basal', 'with_aa', 'no_oxygen'])
+	'''
+
+	max_it = 1000
+	max_constants = 15
+	it = 0
+	n_params = len(PARAMS)
+	error = 10000000
+	n_constants = 0
+
+	while it < max_it:
+		if it % 20 == 0:
+			print('Iteration {}'.format(it))
+
+		idx = np.random.randint(0, n_params)
+		param = PARAMS[idx]
+		delta = 0.05
+
+		original_value = getattr(sim_data.constants, param)
+
+		# Change high
+		setattr(sim_data.constants, param, original_value * (1 + delta))
+		high_error = main(sim_data, cell_specs, conditions, verbose=False)
+
+		# Change low
+		setattr(sim_data.constants, param, original_value * (1 - delta))
+		low_error = main(sim_data, cell_specs, conditions, verbose=False)
+
+		# Update to new parameter value based on lowest error
+		if low_error < error and low_error < high_error:
+			error = low_error
+			status = 'decreased'
+			n_constants = 0
+		elif high_error < error:
+			error = high_error
+			setattr(sim_data.constants, param, original_value * (1 + delta))
+			status = 'increased'
+			n_constants = 0
+		else:
+			setattr(sim_data.constants, param, original_value)
+			status = 'held constant'
+			n_constants += 1
+
+		it += 1
+		print('{} {}: {:.3f}'.format(param, status, error))
+
+		# Early break condition if nothing changing
+		if n_constants > max_constants:
+			break
+
+	for param in PARAMS:
+		print('{}: {}'.format(param, getattr(sim_data.constants, param)))
+	main(sim_data, cell_specs, conditions)
+
 def main(sim_data, cell_specs, conditions, verbose=True):
 	'''
 	Main function to perform analysis.
@@ -584,6 +649,9 @@ def parse_args():
 	parser.add_argument('--sensitivity',
 		action='store_true',
 		help='Perform parameter sensitivity analysis if set')
+	parser.add_argument('--sgd',
+		action='store_true',
+		help='Perform stochastic gradient descent to find parameters')
 	parser.add_argument('--condition',
 		type=int,
 		default=None,
@@ -596,6 +664,11 @@ if __name__ == '__main__':
 	start = time.time()
 
 	args = parse_args()
+
+	# Check args
+	if args.sensitivity and args.sgd:
+		raise Exception('Cannot do both sensitivity (--sensitivity) and'
+			' stochastic gradient descent (--sgd) at the same time.')
 
 	# Load necessary files
 	with open(args.sim_data) as f:
@@ -618,6 +691,11 @@ if __name__ == '__main__':
 	# Perform desired analysis
 	if args.sensitivity:
 		sensitivity(sim_data, cell_specs, conditions)
+	elif args.sgd:
+		seed = np.random.randint(0, 10000)
+		print('Seed: {}'.format(seed))
+		np.random.seed(seed)
+		coordinate_descent(sim_data, cell_specs, conditions)
 	else:
 		main(sim_data, cell_specs, conditions)
 

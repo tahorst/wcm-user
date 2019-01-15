@@ -284,6 +284,38 @@ def get_aa_fraction(sim_data, bulk_container):
 
 	return total_aa / total_aa.sum()
 
+def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, expected_v_rib):
+	'''
+	Calculate an objective value for the difference between calculated values and expected
+	values for rRNA synthesis probability, ppGpp concentration and ribosome elongation rate.
+
+	Args:
+		rrna_prob (float): synthesis probability of rRNA based on ppGpp regulation
+		expected_rrna_prob (ndarray[float]): synthesis probabilities of each rRNA
+			from the fitter
+		ppgpp (float): concentration of ppGpp from state of the cell (in units of uM)
+		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
+		v_rib (float): ribosome elongation rate from state of the cell (in units of uM/s)
+		expected_v_rib (float): expected ribosome elongation rate (in units of uM/s)
+
+	Returns:
+		float: objective value
+
+	TODO: allow for different objectives selected with an argument
+	'''
+
+	def objective_function(actual, expected):
+		return (actual - expected)**2
+
+	expected_rrna_prob = np.mean(expected_rrna_prob[expected_rrna_prob > 0])
+
+	objective = 0
+	objective += objective_function(rrna_prob, expected_rrna_prob)
+	objective += objective_function(ppgpp, expected_ppgpp)
+	objective += objective_function(v_rib, expected_v_rib)
+
+	return objective
+
 def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants, t_limit=10):
 	'''
 	Calculates the concentration of charged and uncharged tRNA from the composition of the cell.
@@ -443,11 +475,10 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 	print_conc('f', f)
 	np.set_printoptions(precision=8, suppress=False, linewidth=75)  # reset to defaults
 
-def error_analysis(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp,
-		v_rib, expected_v_rib, display):
+def error_summary(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, expected_v_rib):
 	'''
-	Calculate and report the error between rRNA regulation from ppGpp and rRNA
-	synthesis probabilities without regulation.
+	Report the error between expected state and calculated state for rRNA synthesis
+	probability, ppGpp concentration and ribosome elongation rate.
 
 	Args:
 		rrna_prob (float): synthesis probability of rRNA based on ppGpp regulation
@@ -457,34 +488,19 @@ def error_analysis(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp,
 		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
 		v_rib (float): ribosome elongation rate from state of the cell (in units of uM/s)
 		expected_v_rib (float): expected ribosome elongation rate (in units of uM/s)
-		display (bool): if True, prints to command line
-
-	Returns:
-		float: total error associated with condition
 	'''
 
-	def calc_error(label, actual, expected, format, display):
+	def print_error(label, actual, expected, format):
 		error = np.abs(actual - expected) / expected
-		if display:
-			display_str = '\t{{}} error: {{:.1f}}% ({{{}}} vs {{{}}})'.format(format, format)
-			print(display_str.format(label, error*100, actual, expected))
-
-		return error
-
-	total_error = 0
+		display_str = '\t{{}} error: {{:.1f}}% ({{{}}} vs {{{}}})'.format(format, format)
+		print(display_str.format(label, error*100, actual, expected))
 
 	expected_rrna_prob = np.mean(expected_rrna_prob[expected_rrna_prob > 0])
 
-	if display:
-		print('')
-	total_error += calc_error('rRNA probability', rrna_prob, expected_rrna_prob,
-		':.3f', display)
-	total_error += calc_error('ppGpp concentration', ppgpp, expected_ppgpp,
-		':.1f', display)
-	total_error += calc_error('Ribosome elongation rate', v_rib, expected_v_rib,
-		':.1f', display)
-
-	return total_error
+	print('')
+	print_error('rRNA probability', rrna_prob, expected_rrna_prob, ':.3f')
+	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
+	print_error('Ribosome elongation rate', v_rib, expected_v_rib, ':.1f')
 
 def sensitivity(sim_data, cell_specs, conditions):
 	'''
@@ -604,10 +620,10 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 		verbose (bool): if True, prints to command line
 
 	Returns:
-		float: total error for all conditions
+		float: objective value for all conditions
 	'''
 
-	error = 0
+	objective = 0
 
 	constants = sim_data.constants
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
@@ -639,11 +655,13 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 		if verbose:
 			summarize_state(condition, rela, charged_trna, uncharged_trna,
 				ribosomes, synthetases, aas, ppgpp, f)
+			error_summary(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
+				expected_ppgpp, v_rib, expected_v_rib)
 
-		error += error_analysis(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
-			expected_ppgpp, v_rib, expected_v_rib, verbose)
+		objective += get_objective_value(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
+			expected_ppgpp, v_rib, expected_v_rib)
 
-	return error
+	return objective
 
 def parse_args():
 	'''

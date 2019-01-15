@@ -529,50 +529,64 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 
 	max_it = 1000
 	max_constants = 15
-	it = 0
+	it = 1
 	n_params = len(PARAMS)
-	error = 10000000
-	n_constants = 0
+	propensity = np.ones(n_params)
+	error = 10000000  # high starting value
+	n_constants = 0  # variable for tracking how many steps have been held constant
+	delta = 0.1  # rate of change at each step
+	decay = 0.9  # rate of decay of delta
 
-	while it < max_it:
-		if it % 20 == 0:
-			print('Iteration {}'.format(it))
+	try:
+		while it < max_it:
+			idx = np.where(np.random.multinomial(1, propensity / propensity.sum()))[0][0]
+			param = PARAMS[idx]
 
-		idx = np.random.randint(0, n_params)
-		param = PARAMS[idx]
-		delta = 0.05
+			if it % 20 == 0:
+				delta *= decay
+				print('Iteration {} (delta = {:.5f})'.format(it, delta))
 
-		original_value = getattr(sim_data.constants, param)
+			original_value = getattr(sim_data.constants, param)
 
-		# Change high
-		setattr(sim_data.constants, param, original_value * (1 + delta))
-		high_error = main(sim_data, cell_specs, conditions, verbose=False)
-
-		# Change low
-		setattr(sim_data.constants, param, original_value * (1 - delta))
-		low_error = main(sim_data, cell_specs, conditions, verbose=False)
-
-		# Update to new parameter value based on lowest error
-		if low_error < error and low_error < high_error:
-			error = low_error
-			status = 'decreased'
-			n_constants = 0
-		elif high_error < error:
-			error = high_error
+			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			status = 'increased'
-			n_constants = 0
-		else:
-			setattr(sim_data.constants, param, original_value)
-			status = 'held constant'
-			n_constants += 1
+			high_error = main(sim_data, cell_specs, conditions, verbose=False)
 
-		it += 1
-		print('{} {}: {:.3f}'.format(param, status, error))
+			# Change low
+			setattr(sim_data.constants, param, original_value * (1 - delta))
+			low_error = main(sim_data, cell_specs, conditions, verbose=False)
 
-		# Early break condition if nothing changing
-		if n_constants > max_constants:
-			break
+			# Update to new parameter value based on lowest error
+			if low_error < error and low_error < high_error:
+				propensity[idx] = max(error - low_error, propensity.min())
+				error = low_error
+				status = 'decreased'
+				n_constants = 0
+			elif high_error < error:
+				propensity[idx] = max(error - high_error, propensity.min())
+				error = high_error
+				setattr(sim_data.constants, param, original_value * (1 + delta))
+				status = 'increased'
+				n_constants = 0
+			else:
+				propensity[idx] = max(propensity.min() * 0.5, propensity.max() * 0.01)
+				setattr(sim_data.constants, param, original_value)
+				status = 'held constant'
+				n_constants += 1
+
+			# Initialize to equal propensities
+			if it == 1:
+				propensity[:] = error
+
+			it += 1
+			print('{} {}: {:.3f}'.format(param, status, error))
+
+			# Early break condition if nothing changing
+			if n_constants > max_constants:
+				break
+	# Allow early interrupt
+	except KeyboardInterrupt:
+		pass
 
 	for param in PARAMS:
 		print('{}: {}'.format(param, getattr(sim_data.constants, param)))

@@ -13,6 +13,7 @@ from __future__ import division
 
 import argparse
 import cPickle
+import csv
 import os
 import time
 
@@ -22,6 +23,7 @@ from wholecell.utils import units
 
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
+OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
 MICROMOLAR_UNITS = units.umol / units.L
 PARAMS = [
 	'synthetase_charging_rate',
@@ -316,6 +318,30 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 
 	return objective
 
+def get_growth_constants(constants, no_units=True):
+	'''
+	Gets a list of growth constants of interest from sim_data constants
+
+	Args:
+		constants (class): constants from sim_data
+		no_units (bool): strips units from constants if True
+
+	Returns:
+		list[float]: constant values from PARAMS
+	'''
+
+	if no_units:
+		constants_list = []
+		for param in PARAMS:
+			try:
+				constants_list += [getattr(constants, param).asNumber()]
+			except AttributeError:
+				constants_list += [getattr(constants, param)]
+	else:
+		constants_list = [getattr(constants, param) for param in PARAMS]
+
+	return constants_list
+
 def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants, t_limit=10):
 	'''
 	Calculates the concentration of charged and uncharged tRNA from the composition of the cell.
@@ -541,6 +567,10 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 		cell_specs (dict): information about each condition that was fit
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
+
+	Returns:
+		Constants object: class of all constants values from sim_data
+		float: objective value reached
 	'''
 
 	max_it = 1000
@@ -613,6 +643,8 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 		print('{}: {}'.format(param, getattr(sim_data.constants, param)))
 	main(sim_data, cell_specs, conditions)
 
+	return sim_data.constants, objective
+
 def main(sim_data, cell_specs, conditions, verbose=True):
 	'''
 	Main function to perform analysis.
@@ -676,23 +708,41 @@ def parse_args():
 		ArgumentParser namespace: values of variables parsed from the command line
 	'''
 
+	default_sim_data = os.path.join(FILE_LOCATION, 'sim_data.cp')
+	default_cell_specs = os.path.join(FILE_LOCATION, 'cell_specs.cp')
+	default_seeds = 1
+	default_output = os.path.join(OUTPUT_DIR, 'sgd.tsv')
+
 	parser = argparse.ArgumentParser()
+
+	# General arguments
 	parser.add_argument('-s', '--sim-data',
-		help='Path to sim_data object',
-		default=os.path.join(FILE_LOCATION, 'sim_data.cp'))
+		default=default_sim_data,
+		help='Path to sim_data object (default: {})'.format(default_sim_data))
 	parser.add_argument('-c', '--cell-specs',
-		help='Path to cell_specs object',
-		default=os.path.join(FILE_LOCATION, 'cell_specs.cp'))
-	parser.add_argument('--sensitivity',
-		action='store_true',
-		help='Perform parameter sensitivity analysis if set')
-	parser.add_argument('--sgd',
-		action='store_true',
-		help='Perform stochastic gradient descent to find parameters')
+		default=default_cell_specs,
+		help='Path to cell_specs object (default: {})'.format(default_cell_specs))
 	parser.add_argument('--condition',
 		type=int,
 		default=None,
 		help='Only runs for specified condition if set (values: 0-2)')
+
+	# Sensitivity arguments
+	parser.add_argument('--sensitivity',
+		action='store_true',
+		help='Perform parameter sensitivity analysis if set')
+
+	# Coordinate descent arguments
+	parser.add_argument('--sgd',
+		action='store_true',
+		help='Perform stochastic gradient descent to find parameters')
+	parser.add_argument('--seeds',
+		type=int,
+		default=default_seeds,
+		help='Number of seeds to perform sgd for (default: {})'.format(default_seeds))
+	parser.add_argument('-o', '--output',
+		default=default_output,
+		help='Output file name for sgd, (default: {})'.format(default_output))
 
 	return parser.parse_args()
 
@@ -729,10 +779,22 @@ if __name__ == '__main__':
 	if args.sensitivity:
 		sensitivity(sim_data, cell_specs, conditions)
 	elif args.sgd:
-		seed = np.random.randint(0, 10000)
-		print('Seed: {}'.format(seed))
-		np.random.seed(seed)
-		coordinate_descent(sim_data, cell_specs, conditions)
+		with open(args.output, 'w') as f:
+			csv_writer = csv.writer(f, delimiter='\t')
+			csv_writer.writerow(['Seed', 'Objective'] + PARAMS)
+			csv_writer.writerow(['Original', ''] + get_growth_constants(sim_data.constants))
+
+			original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
+
+			for seed in np.random.randint(0, 10000, args.seeds):
+				print('Seed: {}'.format(seed))
+				np.random.seed(seed)
+				constants, objective = coordinate_descent(sim_data, cell_specs, conditions)
+				csv_writer.writerow([seed, objective] + get_growth_constants(constants))
+
+				# Reset constants to original values
+				for param, value in original_constants.items():
+					setattr(sim_data.constants, param, value)
 	else:
 		main(sim_data, cell_specs, conditions)
 

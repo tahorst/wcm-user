@@ -7,6 +7,9 @@ Requires (cPickle files, defaults to files in script directory):
 		for a simulation, saved after running fitter
 	cell_specs (dict): information about each condition that was fit, not saved
 		after running fitter but can save during execution
+
+Output:
+	For the --sgd option, an output tsv will be saved by default in out/sgd.tsv
 '''
 
 from __future__ import division
@@ -711,7 +714,7 @@ def parse_args():
 	default_sim_data = os.path.join(FILE_LOCATION, 'sim_data.cp')
 	default_cell_specs = os.path.join(FILE_LOCATION, 'cell_specs.cp')
 	default_seeds = 1
-	default_output = os.path.join(OUTPUT_DIR, 'sgd.tsv')
+	default_output = 'sgd.tsv'
 
 	parser = argparse.ArgumentParser()
 
@@ -742,7 +745,7 @@ def parse_args():
 		help='Number of seeds to perform sgd for (default: {})'.format(default_seeds))
 	parser.add_argument('-o', '--output',
 		default=default_output,
-		help='Output file name for sgd, (default: {})'.format(default_output))
+		help='Output file name for sgd saved in out/, (default: {})'.format(default_output))
 
 	return parser.parse_args()
 
@@ -779,18 +782,20 @@ if __name__ == '__main__':
 	if args.sensitivity:
 		sensitivity(sim_data, cell_specs, conditions)
 	elif args.sgd:
-		with open(args.output, 'w') as f:
+		with open(os.path.join(OUTPUT_DIR, args.output), 'w') as f:
 			csv_writer = csv.writer(f, delimiter='\t')
 			csv_writer.writerow(['Seed', 'Objective'] + PARAMS)
 			csv_writer.writerow(['Original', ''] + get_growth_constants(sim_data.constants))
+			f.flush()
 
 			original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
 
-			for seed in np.random.randint(0, 10000, args.seeds):
+			for seed in np.random.randint(0, 100000, args.seeds):
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, objective = coordinate_descent(sim_data, cell_specs, conditions)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants))
+				f.flush()
 
 				# Reset constants to original values
 				for param, value in original_constants.items():

@@ -548,8 +548,9 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 	it = 1
 	n_params = len(PARAMS)
 	propensity = np.ones(n_params)
-	error = 10000000  # high starting value
+	objective = 10000000  # high starting value
 	n_constants = 0  # variable for tracking how many steps have been held constant
+	objective_limit = 0.001  # below limit, change is assumed constant
 	delta = 0.1  # rate of change at each step
 	decay = 0.9  # rate of decay of delta
 
@@ -566,36 +567,40 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_error = main(sim_data, cell_specs, conditions, verbose=False)
+			high_objective = main(sim_data, cell_specs, conditions, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_error = main(sim_data, cell_specs, conditions, verbose=False)
+			low_objective = main(sim_data, cell_specs, conditions, verbose=False)
 
 			# Update to new parameter value based on lowest error
-			if low_error < error and low_error < high_error:
-				propensity[idx] = max(error - low_error, propensity.min())
-				error = low_error
+			if low_objective < objective and low_objective < high_objective:
+				delta_objective = objective - low_objective
+				propensity[idx] = max(delta_objective, propensity.min())
+				objective = low_objective
 				status = 'decreased'
-				n_constants = 0
-			elif high_error < error:
-				propensity[idx] = max(error - high_error, propensity.min())
-				error = high_error
+			elif high_objective < objective:
+				delta_objective = objective - high_objective
+				propensity[idx] = max(delta_objective, propensity.min())
+				objective = high_objective
 				setattr(sim_data.constants, param, original_value * (1 + delta))
 				status = 'increased'
-				n_constants = 0
 			else:
 				propensity[idx] = max(propensity.min() * 0.5, propensity.max() * 0.01)
 				setattr(sim_data.constants, param, original_value)
 				status = 'held constant'
+
+			if delta_objective < objective_limit:
 				n_constants += 1
+			else:
+				n_constants = 0
 
 			# Initialize to equal propensities
 			if it == 1:
-				propensity[:] = error
+				propensity[:] = objective
 
 			it += 1
-			print('{} {}: {:.3f}'.format(param, status, error))
+			print('{} {}: {:.3f}'.format(param, status, objective))
 
 			# Early break condition if nothing changing
 			if n_constants > max_constants:

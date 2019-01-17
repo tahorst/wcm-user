@@ -1,8 +1,9 @@
+#! /usr/bin/env python
 '''
 Works with output from the fitter to determine parameters and feasibility
 of using ppGpp for growth rate control.
 
-Requires (cPickle files, defaults to files in script directory):
+Requires (cPickle files, defaults to .cp files in data directory):
 	sim_data (SimulationData object): output from fitter and knowledgebase
 		for a simulation, saved after running fitter
 	cell_specs (dict): information about each condition that was fit, not saved
@@ -26,7 +27,13 @@ from wholecell.utils import units
 
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
+DATA_DIR = os.path.join(FILE_LOCATION, 'data')
+if not os.path.exists(DATA_DIR):
+	os.makedirs(DATA_DIR)
 OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
+if not os.path.exists(OUTPUT_DIR):
+	os.makedirs(OUTPUT_DIR)
+
 MICROMOLAR_UNITS = units.umol / units.L
 PARAMS = [
 	'synthetase_charging_rate',
@@ -711,8 +718,8 @@ def parse_args():
 		ArgumentParser namespace: values of variables parsed from the command line
 	'''
 
-	default_sim_data = os.path.join(FILE_LOCATION, 'sim_data.cp')
-	default_cell_specs = os.path.join(FILE_LOCATION, 'cell_specs.cp')
+	default_sim_data = os.path.join(DATA_DIR, 'sim_data.cp')
+	default_cell_specs = os.path.join(DATA_DIR, 'cell_specs.cp')
 	default_seeds = 1
 	default_output = 'sgd.tsv'
 

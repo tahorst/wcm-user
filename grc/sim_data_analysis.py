@@ -50,6 +50,20 @@ PARAMS = [
 	'KM_rrn_rnap',
 	]
 
+# Concentrations for each AA from proteomics from Schmidt et al. 2015
+SCHMIDT_BASAL = np.array([
+	0.570, 0.550, 1.616, 0.664, 0.322, 1.497, 0.584, 0.485, 0.552, 1.267, 1.080,
+	0.894, 0.609, 1.469, 1.264, 0.739, 0.275, 0.531, 0.666, 0.011, 1.005
+	])
+SCHMIDT_AA = np.array([
+	0.631, 0.564, 1.127, 0.844, 0.332, 1.680, 0.663, 0.713, 0.551, 1.118, 1.043,
+	1.396, 0.498, 1.275, 1.248, 1.125, 0.375, 0.387, 0.651, 0.005, 1.204
+	])
+SCHMIDT_ANAEROBIC = np.array([
+	0.661, 0.422, 1.655, 0.890, 0.246, 1.201, 0.598, 0.461, 0.445, 1.258, 1.250,
+	1.035, 0.562, 1.532, 1.371, 0.783, 0.522, 0.407, 0.585, 0.015, 0.948
+	])
+
 
 def get_volume(sim_data, bulk_container):
 	'''
@@ -214,7 +228,7 @@ def get_expected_v_rib(sim_data, doubling_time, nutrients):
 
 	return rate.asNumber(MICROMOLAR_UNITS / units.s).sum()
 
-def get_concentrations(sim_data, bulk_container, doubling_time):
+def get_concentrations(sim_data, bulk_container, doubling_time, schmidt):
 	'''
 	Gets concentrations for relevant molecules
 
@@ -222,6 +236,8 @@ def get_concentrations(sim_data, bulk_container, doubling_time):
 		sim_data (SimulationData object): knowledgebase for a simulation
 		bulk_container (BulkMoleculesContainer object): counts for each molecule
 		doubling_time (float with time units): expected cell doubling time
+		schmidt (bool): if True, uses synthetase concentrations from proteomics
+			from Schmidt et al. 2015
 
 	Returns (in units of uM):
 		float: concentration of RelA
@@ -266,6 +282,15 @@ def get_concentrations(sim_data, bulk_container, doubling_time):
 	synthetase_conc = synthetase_counts * counts_to_micromolar
 	aa_conc = aa_counts * counts_to_micromolar
 	rnap_conc = rnap_counts * counts_to_micromolar
+
+	# Make adjustments to synthetase concentrations to match proteomics data
+	if schmidt:
+		if doubling_time.asNumber() < 40:
+			synthetase_conc = SCHMIDT_AA
+		elif doubling_time.asNumber() > 50:
+			synthetase_conc = SCHMIDT_ANAEROBIC
+		else:
+			synthetase_conc = SCHMIDT_BASAL
 
 	return rela_conc, total_trna_conc, ribosome_conc, synthetase_conc, aa_conc, rnap_conc
 
@@ -538,7 +563,7 @@ def error_summary(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, e
 	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
 	print_error('Ribosome elongation rate', v_rib, expected_v_rib, ':.1f')
 
-def sensitivity(sim_data, cell_specs, conditions):
+def sensitivity(sim_data, cell_specs, conditions, schmidt):
 	'''
 	Performs sensitivity analysis for each of the parameters.
 
@@ -547,6 +572,8 @@ def sensitivity(sim_data, cell_specs, conditions):
 		cell_specs (dict): information about each condition that was fit
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
+		schmidt (bool): if True, uses synthetase concentrations from proteomics
+			from Schmidt et al. 2015
 	'''
 
 	for param in PARAMS:
@@ -556,7 +583,7 @@ def sensitivity(sim_data, cell_specs, conditions):
 		for magnitude in [0.1, 0.2, 0.5, 0.75, 0.9, 1.1, 1.5, 2, 5, 10]:
 			setattr(sim_data.constants, param, original_value * magnitude)
 			error = [
-				main(sim_data, cell_specs, [condition], verbose=False)
+				main(sim_data, cell_specs, [condition], schmidt, verbose=False)
 				for condition in conditions
 				]
 
@@ -565,7 +592,7 @@ def sensitivity(sim_data, cell_specs, conditions):
 
 		setattr(sim_data.constants, param, original_value)
 
-def coordinate_descent(sim_data, cell_specs, conditions):
+def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 	'''
 	Stochastic coordinate descent to determine optimal parameters.  Updates one
 	parameter at a time to minimize error for a given number of iterations or
@@ -577,6 +604,8 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 		cell_specs (dict): information about each condition that was fit
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
+		schmidt (bool): if True, uses synthetase concentrations from proteomics
+			from Schmidt et al. 2015
 
 	Returns:
 		Constants object: class of all constants values from sim_data
@@ -607,11 +636,11 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_objective = main(sim_data, cell_specs, conditions, verbose=False)
+			high_objective = main(sim_data, cell_specs, conditions, schmidt, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_objective = main(sim_data, cell_specs, conditions, verbose=False)
+			low_objective = main(sim_data, cell_specs, conditions, schmidt, verbose=False)
 
 			# Update to new parameter value based on lowest error
 			if low_objective < objective and low_objective < high_objective:
@@ -651,11 +680,11 @@ def coordinate_descent(sim_data, cell_specs, conditions):
 
 	for param in PARAMS:
 		print('{}: {}'.format(param, getattr(sim_data.constants, param)))
-	main(sim_data, cell_specs, conditions)
+	main(sim_data, cell_specs, conditions, schmidt)
 
 	return sim_data.constants, objective
 
-def main(sim_data, cell_specs, conditions, verbose=True):
+def main(sim_data, cell_specs, conditions, schmidt, verbose=True):
 	'''
 	Main function to perform analysis.
 
@@ -664,6 +693,8 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 		cell_specs (dict): information about each condition that was fit
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
+		schmidt (bool): if True, uses synthetase concentrations from proteomics
+			from Schmidt et al. 2015
 		verbose (bool): if True, prints to command line
 
 	Returns:
@@ -685,7 +716,7 @@ def main(sim_data, cell_specs, conditions, verbose=True):
 
 		# Get current state
 		rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
-			sim_data, bulk_container, doubling_time)
+			sim_data, bulk_container, doubling_time, schmidt)
 		f = get_aa_fraction(sim_data, bulk_container)
 		rnap_activation_rate = get_rnap_activation(
 			sim_data, bulk_container, doubling_time, synth_prob)
@@ -736,6 +767,9 @@ def parse_args():
 		type=int,
 		default=None,
 		help='Only runs for specified condition if set (values: 0-2)')
+	parser.add_argument('--schmidt',
+		action='store_true',
+		help='Uses synthetase concentrations from proteomics from Schmidt et al 2015 if set')
 
 	# Sensitivity arguments
 	parser.add_argument('--sensitivity',
@@ -787,7 +821,7 @@ if __name__ == '__main__':
 
 	# Perform desired analysis
 	if args.sensitivity:
-		sensitivity(sim_data, cell_specs, conditions)
+		sensitivity(sim_data, cell_specs, conditions, args.schmidt)
 	elif args.sgd:
 		with open(os.path.join(OUTPUT_DIR, args.output), 'w') as f:
 			csv_writer = csv.writer(f, delimiter='\t')
@@ -800,7 +834,8 @@ if __name__ == '__main__':
 			for seed in np.random.randint(0, 100000, args.seeds):
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
-				constants, objective = coordinate_descent(sim_data, cell_specs, conditions)
+				constants, objective = coordinate_descent(
+					sim_data, cell_specs, conditions, args.schmidt)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants))
 				f.flush()
 

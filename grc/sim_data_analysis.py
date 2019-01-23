@@ -706,6 +706,69 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 
 	return sim_data.constants, objective
 
+def find_synthetases(sim_data, cell_specs, conditions, schmidt):
+	'''
+	Use gradient descent to determine optimal synthetase concentrations.
+	Updates synthetases in one condition at a time to minimize error until
+	convergence. Displays the concentrations for each condition after convergence.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		cell_specs (dict): information about each condition that was fit
+		conditions (list[str]): set of conditions to test
+			(eg. ['basal', 'with_aa', 'no_oxygen'])
+		schmidt (bool): if True, uses synthetase concentrations from proteomics
+			from Schmidt et al. 2015 as the starting point
+
+	Returns:
+		ndarray[float]: factors to adjust synthetases by in each condition
+	'''
+
+	delta = 0.01  # rate of change at each step
+	eps = 0.1
+	factors = np.ones(len(conditions))
+
+	for idx, condition in enumerate(conditions):
+		factor = 1
+
+		# Change high
+		high_factor = factor * (1 + delta)
+		high_objective = main(sim_data, cell_specs, [condition], schmidt,
+			synthetase_change=high_factor, verbose=False)
+
+		# Change low
+		low_factor = factor * (1 - delta)
+		low_objective = main(sim_data, cell_specs, [condition], schmidt,
+			synthetase_change=low_factor, verbose=False)
+
+		if high_objective < low_objective:
+			direction = 1
+			objective = high_objective
+			factor = high_factor
+		else:
+			direction = -1
+			objective = low_objective
+			factor = low_factor
+
+		old_objective = objective + eps
+
+		# Update in direction of decreasing objective until objective converges
+		while old_objective >= objective + eps:
+			old_objective = objective
+			old_factor = factor
+			factor *= 1 + direction * delta
+			objective = main(sim_data, cell_specs, [condition], schmidt,
+				synthetase_change=factor, verbose=False)
+			print(objective, factor)
+
+		factors[idx] = old_factor
+
+	# Summarize results
+	for condition, factor in zip(conditions, factors):
+		main(sim_data, cell_specs, [condition], schmidt, synthetase_change=factor)
+
+	return factors
+
 def plot_synthetases(sim_data, cell_specs, conditions, path):
 	'''
 	Plot synthetase concentrations in the different conditions comparing model
@@ -755,7 +818,7 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 	# Save output
 	plt.savefig(path)
 
-def main(sim_data, cell_specs, conditions, schmidt, verbose=True):
+def main(sim_data, cell_specs, conditions, schmidt, synthetase_change=1, verbose=True):
 	'''
 	Main function to perform analysis.
 
@@ -766,6 +829,7 @@ def main(sim_data, cell_specs, conditions, schmidt, verbose=True):
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
+		synthetase_change (float): factor to multiply synthetase concentrations by
 		verbose (bool): if True, prints to command line
 
 	Returns:
@@ -793,6 +857,7 @@ def main(sim_data, cell_specs, conditions, schmidt, verbose=True):
 			sim_data, bulk_container, doubling_time, synth_prob)
 		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
 		expected_v_rib = get_expected_v_rib(sim_data, doubling_time, nutrients)
+		synthetases = synthetases * synthetase_change
 
 		# Calculate values from current state
 		charged_trna, uncharged_trna, v_rib = charge_trna(
@@ -858,6 +923,11 @@ def parse_args():
 		default=default_seeds,
 		help='Number of seeds to perform sgd for (default: {})'.format(default_seeds))
 
+	# Synthetase concentration search
+	parser.add_argument('--synthetases',
+		action='store_true',
+		help='Search for optimal synthetase concentrations')
+
 	# Plotting
 	parser.add_argument('-p', '--plot',
 		action='store_true',
@@ -871,9 +941,11 @@ if __name__ == '__main__':
 
 	args = parse_args()
 
-	# Check args
-	if (args.sensitivity and args.sgd) or (args.sensitivity and args.plot) or (args.sgd and args.plot):
-		raise Exception('Cannot have multiple options selected (--sensitivity, --sgd, --plot) at the same time.')
+	# Check args for conditions that do not run together
+	single_args = ['sensitivity', 'sgd', 'plot', 'synthetases']
+	if sum([1 for a in single_args if getattr(args, a)]) > 1:
+		raise Exception('Cannot have multiple options selected {} at the same time.'.format(
+			tuple(('--' + a for a in single_args))))
 
 	# Load necessary files
 	with open(args.sim_data) as f:
@@ -918,6 +990,8 @@ if __name__ == '__main__':
 				# Reset constants to original values
 				for param, value in original_constants.items():
 					setattr(sim_data.constants, param, value)
+	elif args.synthetases:
+		find_synthetases(sim_data, cell_specs, conditions, args.schmidt)
 	elif args.plot:
 		out = output_location(args.out, OUTPUT_DIR, PLOT_OUT)
 

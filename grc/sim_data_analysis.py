@@ -11,6 +11,7 @@ Requires (cPickle files, defaults to .cp files in data directory):
 
 Output:
 	For the --sgd option, an output tsv will be saved by default in out/sgd.tsv
+	For the --plot option, an output plot will be saved by default in out/analysis.png
 '''
 
 from __future__ import division
@@ -21,6 +22,7 @@ import csv
 import os
 import time
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from wholecell.utils import units
@@ -33,6 +35,9 @@ if not os.path.exists(DATA_DIR):
 OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
 if not os.path.exists(OUTPUT_DIR):
 	os.makedirs(OUTPUT_DIR)
+
+SGD_OUT = 'sgd.tsv'
+PLOT_OUT = 'analysis.png'
 
 MICROMOLAR_UNITS = units.umol / units.L
 PARAMS = [
@@ -51,19 +56,36 @@ PARAMS = [
 	]
 
 # Concentrations for each AA from proteomics from Schmidt et al. 2015
-SCHMIDT_BASAL = np.array([
-	0.570, 0.550, 1.616, 0.664, 0.322, 1.497, 0.584, 0.485, 0.552, 1.267, 1.080,
-	0.894, 0.609, 1.469, 1.264, 0.739, 0.275, 0.531, 0.666, 0.011, 1.005
-	])
-SCHMIDT_AA = np.array([
-	0.631, 0.564, 1.127, 0.844, 0.332, 1.680, 0.663, 0.713, 0.551, 1.118, 1.043,
-	1.396, 0.498, 1.275, 1.248, 1.125, 0.375, 0.387, 0.651, 0.005, 1.204
-	])
-SCHMIDT_ANAEROBIC = np.array([
-	0.661, 0.422, 1.655, 0.890, 0.246, 1.201, 0.598, 0.461, 0.445, 1.258, 1.250,
-	1.035, 0.562, 1.532, 1.371, 0.783, 0.522, 0.407, 0.585, 0.015, 0.948
-	])
+SCHMIDT_CONC = {
+	'basal': np.array([
+		0.570, 0.550, 1.616, 0.664, 0.322, 1.497, 0.584, 0.485, 0.552, 1.267, 1.080,
+		0.894, 0.609, 1.469, 1.264, 0.739, 0.275, 0.531, 0.666, 0.011, 1.005
+		]),
+	'with_aa': np.array([
+		0.631, 0.564, 1.127, 0.844, 0.332, 1.680, 0.663, 0.713, 0.551, 1.118, 1.043,
+		1.396, 0.498, 1.275, 1.248, 1.125, 0.375, 0.387, 0.651, 0.005, 1.204
+		]),
+	'no_oxygen': np.array([
+		0.661, 0.422, 1.655, 0.890, 0.246, 1.201, 0.598, 0.461, 0.445, 1.258, 1.250,
+		1.035, 0.562, 1.532, 1.371, 0.783, 0.522, 0.407, 0.585, 0.015, 0.948
+		]),
+	}
 
+
+def output_location(arg, parent, default):
+	'''
+	Assembles the path to the output file from command line argument.
+
+	Args:
+		arg (str): filename parsed from command line, if None uses default
+		parent (str): path to the parent directory
+		default (str): filename to use if arg is None
+	'''
+
+	if arg is None:
+		arg = default
+
+	return os.path.join(parent, arg)
 
 def get_volume(sim_data, bulk_container):
 	'''
@@ -286,11 +308,11 @@ def get_concentrations(sim_data, bulk_container, doubling_time, schmidt):
 	# Make adjustments to synthetase concentrations to match proteomics data
 	if schmidt:
 		if doubling_time.asNumber() < 40:
-			synthetase_conc = SCHMIDT_AA
+			synthetase_conc = SCHMIDT_CONC['with_aa']
 		elif doubling_time.asNumber() > 50:
-			synthetase_conc = SCHMIDT_ANAEROBIC
+			synthetase_conc = SCHMIDT_CONC['no_oxygen']
 		else:
-			synthetase_conc = SCHMIDT_BASAL
+			synthetase_conc = SCHMIDT_CONC['basal']
 
 	return rela_conc, total_trna_conc, ribosome_conc, synthetase_conc, aa_conc, rnap_conc
 
@@ -684,6 +706,55 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 
 	return sim_data.constants, objective
 
+def plot_synthetases(sim_data, cell_specs, conditions, path):
+	'''
+	Plot synthetase concentrations in the different conditions comparing model
+	and proteomics data from Schmidt et al. 2015.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		cell_specs (dict): information about each condition that was fit
+		conditions (list[str]): set of conditions to test
+			(eg. ['basal', 'with_aa', 'no_oxygen'])
+		path (str): path to output file
+	'''
+
+	def format_axes(ax, title, ticks):
+		ax.set_ylim(0, 5)
+		ax.set_title(title, fontsize=10)
+		ax.set_ylabel('Synthetase Concentration', fontsize=8)
+		ax.set_xticks(ticks)
+
+	# Setup plot
+	plt.figure()
+	bar_width = 0.3
+	ax_model = plt.subplot(2, 1, 1)
+	ax_schmidt = plt.subplot(2, 1, 2)
+
+	# Get and plot concentrations for each condition
+	for i, condition in enumerate(conditions):
+		bulk_container = cell_specs[condition]['bulkAverageContainer']
+		doubling_time = sim_data.conditionToDoublingTime[condition]
+
+		_, _, _, model_synthetases, _, _ = get_concentrations(
+			sim_data, bulk_container, doubling_time, False)
+		schmidt_synthetases = SCHMIDT_CONC[condition]
+
+		x = np.arange(len(model_synthetases))
+		ax_model.bar(x + i*bar_width, model_synthetases, bar_width)
+		ax_schmidt.bar(x + i*bar_width, schmidt_synthetases, bar_width)
+
+	# Format plot
+	format_axes(ax_model, 'Model Concentrations', x + bar_width)
+	format_axes(ax_schmidt, 'Proteomics Concentrations', x + bar_width)
+	ax_model.legend(conditions, fontsize=8)
+	ax_model.tick_params(labelbottom=False)
+	ax_schmidt.set_xticklabels(sim_data.moleculeGroups.aaIDs, rotation=40, ha='right', fontsize=8)
+	plt.tight_layout()
+
+	# Save output
+	plt.savefig(path)
+
 def main(sim_data, cell_specs, conditions, schmidt, verbose=True):
 	'''
 	Main function to perform analysis.
@@ -752,7 +823,6 @@ def parse_args():
 	default_sim_data = os.path.join(DATA_DIR, 'sim_data.cp')
 	default_cell_specs = os.path.join(DATA_DIR, 'cell_specs.cp')
 	default_seeds = 1
-	default_output = 'sgd.tsv'
 
 	parser = argparse.ArgumentParser()
 
@@ -770,6 +840,9 @@ def parse_args():
 	parser.add_argument('--schmidt',
 		action='store_true',
 		help='Uses synthetase concentrations from proteomics from Schmidt et al 2015 if set')
+	parser.add_argument('-o', '--out',
+		default=None,
+		help='Output file name saved in out/, (default: varies depending on what is saved)')
 
 	# Sensitivity arguments
 	parser.add_argument('--sensitivity',
@@ -784,9 +857,11 @@ def parse_args():
 		type=int,
 		default=default_seeds,
 		help='Number of seeds to perform sgd for (default: {})'.format(default_seeds))
-	parser.add_argument('-o', '--output',
-		default=default_output,
-		help='Output file name for sgd saved in out/, (default: {})'.format(default_output))
+
+	# Plotting
+	parser.add_argument('-p', '--plot',
+		action='store_true',
+		help='Plot analysis of problem if set')
 
 	return parser.parse_args()
 
@@ -797,9 +872,8 @@ if __name__ == '__main__':
 	args = parse_args()
 
 	# Check args
-	if args.sensitivity and args.sgd:
-		raise Exception('Cannot do both sensitivity (--sensitivity) and'
-			' stochastic gradient descent (--sgd) at the same time.')
+	if (args.sensitivity and args.sgd) or (args.sensitivity and args.plot) or (args.sgd and args.plot):
+		raise Exception('Cannot have multiple options selected (--sensitivity, --sgd, --plot) at the same time.')
 
 	# Load necessary files
 	with open(args.sim_data) as f:
@@ -808,7 +882,7 @@ if __name__ == '__main__':
 		cell_specs = cPickle.load(f)
 
 	# Specify conditions
-	conditions = ['basal', 'with_aa', 'no_oxygen']
+	conditions = ['with_aa', 'basal', 'no_oxygen']
 	if args.condition is not None:
 		conditions = [conditions[args.condition]]
 
@@ -823,7 +897,9 @@ if __name__ == '__main__':
 	if args.sensitivity:
 		sensitivity(sim_data, cell_specs, conditions, args.schmidt)
 	elif args.sgd:
-		with open(os.path.join(OUTPUT_DIR, args.output), 'w') as f:
+		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
+
+		with open(out, 'w') as f:
 			csv_writer = csv.writer(f, delimiter='\t')
 			csv_writer.writerow(['Seed', 'Objective'] + PARAMS)
 			csv_writer.writerow(['Original', ''] + get_growth_constants(sim_data.constants))
@@ -842,6 +918,10 @@ if __name__ == '__main__':
 				# Reset constants to original values
 				for param, value in original_constants.items():
 					setattr(sim_data.constants, param, value)
+	elif args.plot:
+		out = output_location(args.out, OUTPUT_DIR, PLOT_OUT)
+
+		plot_synthetases(sim_data, cell_specs, conditions, out)
 	else:
 		main(sim_data, cell_specs, conditions)
 

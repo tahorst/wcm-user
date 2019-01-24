@@ -614,7 +614,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt):
 
 		setattr(sim_data.constants, param, original_value)
 
-def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
+def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthetases=0):
 	'''
 	Stochastic coordinate descent to determine optimal parameters.  Updates one
 	parameter at a time to minimize error for a given number of iterations or
@@ -628,6 +628,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
+		update_synthetases (int): if a positive value, synthetases concentrations
+			will be updated every update_synthetases time steps
 
 	Returns:
 		Constants object: class of all constants values from sim_data
@@ -644,6 +646,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 	objective_limit = 0.001  # below limit, change is assumed constant
 	delta = 0.1  # rate of change at each step
 	decay = 0.9  # rate of decay of delta
+	synthetase_changes = np.ones(len(conditions))
 
 	try:
 		while it < max_it:
@@ -658,11 +661,13 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_objective = main(sim_data, cell_specs, conditions, schmidt, verbose=False)
+			high_objective = main(sim_data, cell_specs, conditions, schmidt,
+				synthetase_changes=synthetase_changes, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_objective = main(sim_data, cell_specs, conditions, schmidt, verbose=False)
+			low_objective = main(sim_data, cell_specs, conditions, schmidt,
+				synthetase_changes=synthetase_changes, verbose=False)
 
 			# Update to new parameter value based on lowest error
 			if low_objective < objective and low_objective < high_objective:
@@ -677,6 +682,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 				setattr(sim_data.constants, param, original_value * (1 + delta))
 				status = 'increased'
 			else:
+				delta_objective = 0
 				propensity[idx] = max(propensity.min() * 0.5, propensity.max() * 0.01)
 				setattr(sim_data.constants, param, original_value)
 				status = 'held constant'
@@ -690,6 +696,18 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 			if it == 1:
 				propensity[:] = objective
 
+			# Update synthetase concentrations to improve objective if set
+			if update_synthetases > 0 and it % update_synthetases == 0:
+				new_synthetase_changes, new_objective = find_synthetases(
+					sim_data, cell_specs, conditions, schmidt,
+					factors=synthetase_changes, max_it=1, verbose=False)
+
+				if new_objective < objective:
+					if objective - new_objective > objective_limit:
+						n_constants = 0
+					synthetase_changes = new_synthetase_changes
+					objective = new_objective
+
 			it += 1
 			print('{} {}: {:.3f}'.format(param, status, objective))
 
@@ -700,13 +718,17 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt):
 	except KeyboardInterrupt:
 		pass
 
+	# Summarize results
 	for param in PARAMS:
 		print('{}: {}'.format(param, getattr(sim_data.constants, param)))
-	main(sim_data, cell_specs, conditions, schmidt)
+	for factor, condition in zip(synthetase_changes, conditions):
+		print('Synthetase change in {}: {:.3f}'.format(condition, factor))
+	main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=synthetase_changes)
 
 	return sim_data.constants, objective
 
-def find_synthetases(sim_data, cell_specs, conditions, schmidt):
+def find_synthetases(sim_data, cell_specs, conditions, schmidt,
+		factors=None, max_it=None, verbose=True):
 	'''
 	Use gradient descent to determine optimal synthetase concentrations.
 	Updates synthetases in one condition at a time to minimize error until
@@ -719,28 +741,37 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt):
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015 as the starting point
+		factors (ndarray[float]): factor to multiply synthetase concentration by
+			for each condition
+		max_it (int): maximum number of iterations to update before returning
+		verbose (bool): if True, prints function specific information
 
 	Returns:
 		ndarray[float]: factors to adjust synthetases by in each condition
+		float: objective value reached
 	'''
 
+	total_objective = 0
 	delta = 0.01  # rate of change at each step
 	eps = 1
-	factors = np.ones(len(conditions))
+	if factors is None:
+		factors = np.ones(len(conditions))
+	it = 0
 
 	for idx, condition in enumerate(conditions):
-		factor = 1
+		factor = factors[idx]
 
 		# Change high
 		high_factor = factor * (1 + delta)
 		high_objective = main(sim_data, cell_specs, [condition], schmidt,
-			synthetase_change=high_factor, verbose=False)
+			synthetase_changes=[high_factor], verbose=False)
 
 		# Change low
 		low_factor = factor * (1 - delta)
 		low_objective = main(sim_data, cell_specs, [condition], schmidt,
-			synthetase_change=low_factor, verbose=False)
+			synthetase_changes=[low_factor], verbose=False)
 
+		# Move in direction of decreasing objective
 		if high_objective < low_objective:
 			direction = 1
 			objective = high_objective
@@ -750,24 +781,32 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt):
 			objective = low_objective
 			factor = low_factor
 
+		# Set old_objective to enter the while loop
 		old_objective = objective + eps
 
 		# Update in direction of decreasing objective until objective converges
 		while old_objective >= objective + eps:
 			old_objective = objective
 			old_factor = factor
+			it += 1
+
+			if max_it and it >= max_it:
+				break
+
 			factor *= 1 + direction * delta
 			objective = main(sim_data, cell_specs, [condition], schmidt,
-				synthetase_change=factor, verbose=False)
-			print(objective, factor)
+				synthetase_changes=[factor], verbose=False)
+			if verbose:
+				print(objective, factor)
 
 		factors[idx] = old_factor
+		total_objective += old_objective
 
 	# Summarize results
-	for condition, factor in zip(conditions, factors):
-		main(sim_data, cell_specs, [condition], schmidt, synthetase_change=factor)
+	if verbose:
+		main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=factors)
 
-	return factors
+	return factors, total_objective
 
 def plot_synthetases(sim_data, cell_specs, conditions, path):
 	'''
@@ -828,7 +867,7 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 	# Save output
 	plt.savefig(path)
 
-def main(sim_data, cell_specs, conditions, schmidt, synthetase_change=1, verbose=True):
+def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, verbose=True):
 	'''
 	Main function to perform analysis.
 
@@ -839,7 +878,8 @@ def main(sim_data, cell_specs, conditions, schmidt, synthetase_change=1, verbose
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
-		synthetase_change (float): factor to multiply synthetase concentrations by
+		synthetase_changes (ndarray[float]): factor to multiply synthetase
+			concentrations by in each condition. if None, defaults to a factor of 1
 		verbose (bool): if True, prints to command line
 
 	Returns:
@@ -850,9 +890,11 @@ def main(sim_data, cell_specs, conditions, schmidt, synthetase_change=1, verbose
 
 	constants = sim_data.constants
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
+	if synthetase_changes is None:
+		synthetase_changes = np.ones(len(conditions))
 
 	# Calculate ppGpp concentrations for each condition
-	for condition in conditions:
+	for condition, synthetase_change in zip(conditions, synthetase_changes):
 		# Get condition specific values
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		synth_prob = cell_specs[condition]['synthProb']
@@ -898,6 +940,7 @@ def parse_args():
 	default_sim_data = os.path.join(DATA_DIR, 'sim_data.cp')
 	default_cell_specs = os.path.join(DATA_DIR, 'cell_specs.cp')
 	default_seeds = 1
+	default_update_synthetases = 0
 
 	parser = argparse.ArgumentParser()
 
@@ -932,6 +975,11 @@ def parse_args():
 		type=int,
 		default=default_seeds,
 		help='Number of seeds to perform sgd for (default: {})'.format(default_seeds))
+	parser.add_argument('--update-synthetases',
+		type=int,
+		default=default_update_synthetases,
+		help='Number of time steps to update synthetases during sgd (default: {})'
+			.format(default_update_synthetases))
 
 	# Synthetase concentration search
 	parser.add_argument('--synthetases',
@@ -993,7 +1041,8 @@ if __name__ == '__main__':
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, objective = coordinate_descent(
-					sim_data, cell_specs, conditions, args.schmidt)
+					sim_data, cell_specs, conditions, args.schmidt,
+					update_synthetases=args.update_synthetases)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants))
 				f.flush()
 

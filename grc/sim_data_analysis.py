@@ -725,7 +725,7 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt):
 	'''
 
 	delta = 0.01  # rate of change at each step
-	eps = 0.1
+	eps = 1
 	factors = np.ones(len(conditions))
 
 	for idx, condition in enumerate(conditions):
@@ -782,17 +782,24 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		path (str): path to output file
 	'''
 
-	def format_axes(ax, title, ticks):
+	def format_axes(ax, title, ticks, x_labeled=False):
 		ax.set_ylim(0, 5)
 		ax.set_title(title, fontsize=10)
-		ax.set_ylabel('Synthetase Concentration', fontsize=8)
+		ax.set_ylabel('Conc (uM)', fontsize=8)
 		ax.set_xticks(ticks)
+		ax.tick_params(labelbottom=x_labeled)
+
+	model_factors = find_synthetases(sim_data, cell_specs, conditions, False)
+	schmidt_factors = find_synthetases(sim_data, cell_specs, conditions, True)
 
 	# Setup plot
-	plt.figure()
+	plt.figure(figsize=(8.5, 11))
+	n_subplots = 4
 	bar_width = 0.3
-	ax_model = plt.subplot(2, 1, 1)
-	ax_schmidt = plt.subplot(2, 1, 2)
+	ax_model = plt.subplot(n_subplots, 1, 1)
+	ax_schmidt = plt.subplot(n_subplots, 1, 2)
+	ax_model_adj = plt.subplot(n_subplots, 1, 3)
+	ax_schmidt_adj = plt.subplot(n_subplots, 1, 4)
 
 	# Get and plot concentrations for each condition
 	for i, condition in enumerate(conditions):
@@ -806,13 +813,16 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		x = np.arange(len(model_synthetases))
 		ax_model.bar(x + i*bar_width, model_synthetases, bar_width)
 		ax_schmidt.bar(x + i*bar_width, schmidt_synthetases, bar_width)
+		ax_model_adj.bar(x + i*bar_width, model_synthetases * model_factors[i], bar_width)
+		ax_schmidt_adj.bar(x + i*bar_width, schmidt_synthetases * schmidt_factors[i], bar_width)
 
 	# Format plot
 	format_axes(ax_model, 'Model Concentrations', x + bar_width)
 	format_axes(ax_schmidt, 'Proteomics Concentrations', x + bar_width)
-	ax_model.legend(conditions, fontsize=8)
-	ax_model.tick_params(labelbottom=False)
-	ax_schmidt.set_xticklabels(sim_data.moleculeGroups.aaIDs, rotation=40, ha='right', fontsize=8)
+	format_axes(ax_model_adj, 'Adjusted Model Concentrations', x + bar_width)
+	format_axes(ax_schmidt_adj, 'Adjusted Proteomics Concentrations', x + bar_width, x_labeled=True)
+	ax_schmidt_adj.legend(conditions, fontsize=8)
+	ax_schmidt_adj.set_xticklabels(sim_data.moleculeGroups.aaIDs, rotation=40, ha='right', fontsize=8)
 	plt.tight_layout()
 
 	# Save output

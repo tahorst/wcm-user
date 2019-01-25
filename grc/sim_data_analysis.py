@@ -690,6 +690,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthet
 
 	Returns:
 		Constants object: class of all constants values from sim_data
+		list[float]: factors to multiply synthetase concentrations by in each condition
 		float: objective value reached
 	'''
 
@@ -782,7 +783,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthet
 		print('Synthetase change in {}: {:.3f}'.format(condition, factor))
 	main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=synthetase_changes)
 
-	return sim_data.constants, objective
+	return sim_data.constants, list(synthetase_changes), objective
 
 def find_synthetases(sim_data, cell_specs, conditions, schmidt,
 		factors=None, max_it=None, verbose=True):
@@ -1144,8 +1145,10 @@ if __name__ == '__main__':
 
 		with open(out, 'w') as f:
 			csv_writer = csv.writer(f, delimiter='\t')
-			csv_writer.writerow(['Seed', 'Objective'] + PARAMS)
-			csv_writer.writerow(['Original', ''] + get_growth_constants(sim_data.constants))
+			csv_writer.writerow(['Seed', 'Objective'] + PARAMS
+				+ ['Synthetases in {}'.format(c) for c in conditions])
+			csv_writer.writerow(['Original', ''] + get_growth_constants(sim_data.constants)
+				+ [1 for c in conditions])
 			f.flush()
 
 			original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
@@ -1153,10 +1156,11 @@ if __name__ == '__main__':
 			for seed in np.random.randint(0, 100000, args.seeds):
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
-				constants, objective = coordinate_descent(
+				constants, synthetase_changes, objective = coordinate_descent(
 					sim_data, cell_specs, conditions, args.schmidt,
 					update_synthetases=args.update_synthetases)
-				csv_writer.writerow([seed, objective] + get_growth_constants(constants))
+				csv_writer.writerow([seed, objective] + get_growth_constants(constants)
+					+ synthetase_changes)
 				f.flush()
 
 				# Reset constants to original values

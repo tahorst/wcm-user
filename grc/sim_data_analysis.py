@@ -1056,6 +1056,6 @@ if __name__ == '__main__':
 
 		plot_synthetases(sim_data, cell_specs, conditions, out)
 	else:
-		main(sim_data, cell_specs, conditions)
+		main(sim_data, cell_specs, conditions, args.schmidt)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

@@ -98,6 +98,9 @@ def get_volume(sim_data, bulk_container):
 
 	Returns:
 		float: volume of the cell (in units of L)
+
+	Note:
+		Can be time intensive so get_counts_to_micromolar may be a better option.
 	'''
 
 	mol_names = list(bulk_container.objectNames())
@@ -109,7 +112,55 @@ def get_volume(sim_data, bulk_container):
 
 	return volume.asNumber(units.L)
 
-def get_active_ribosome_counts(sim_data, bulk_container, doubling_time):
+def get_counts_to_micromolar(doubling_time):
+	'''
+	Estimate of cell size in different conditions to convert counts to concentration.
+
+	Args:
+		doubling_time (float with time units): doubling time of the condition
+			to get the conversion factor for
+
+	Returns:
+		float: conversion from counts of a molecule to uM
+
+	Note:
+		More accurate to use get_volume and convert with Avogadro's number
+		but it can be time intensive.
+	'''
+
+	if doubling_time.asNumber() > 50:
+		conversion = 0.0040315516
+	elif doubling_time.asNumber() < 40:
+		conversion = 0.0006922573
+	else:
+		conversion = 0.0015064190
+
+	return conversion
+
+def get_rrna_counts(sim_data, doubling_time, rnap_activation_rate, synth_prob):
+	'''
+	Gets the counts for rRNA based on RNAP activation rate and synthesis probability
+	of rRNA, which can be calculated from ppGpp concentration for a feedback loop.
+
+	Args:
+		sim_data (SimulationData object): knowledgebase for a simulation
+		doubling_time (float with time units): expected cell doubling time
+		rnap_activation_rate (float): number of RNAP activations/terminations per second
+		synth_prob (float): synthesis probability for rRNA
+
+	Returns:
+		float: counts of rRNA at steady state
+	'''
+
+	rna_data = sim_data.process.transcription.rnaData
+	rrna_deg_rate = np.mean(rna_data['degRate'][rna_data['isRRna']]).asNumber(1 / units.s)  # currently all equal
+	dilution_rate = np.log(2) / doubling_time.asNumber(units.s)
+
+	counts = rnap_activation_rate * synth_prob / (rrna_deg_rate + dilution_rate)
+
+	return counts
+
+def get_active_ribosome_counts(sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob):
 	'''
 	Gets the counts of active ribosomes based on fraction active and subunits.
 
@@ -117,18 +168,22 @@ def get_active_ribosome_counts(sim_data, bulk_container, doubling_time):
 		sim_data (SimulationData object): knowledgebase for a simulation
 		bulk_container (BulkMoleculesContainer object): counts for each molecule
 		doubling_time (float with time units): expected cell doubling time
+		rnap_activation_rate (float): number of RNAP activations/terminations per second
+		rrna_synth_prob (float): synthesis probability for rRNA
 
 	Returns:
 		float: number of active ribosomes
 	'''
 
-	molecule_ids = sim_data.moleculeIds
+	# molecule_ids = sim_data.moleculeIds
 	active_fraction = sim_data.growthRateParameters.getFractionActiveRibosome(doubling_time)
 
-	count_30s = bulk_container.count(molecule_ids.s30_fullComplex)
-	count_50s = bulk_container.count(molecule_ids.s50_fullComplex)
+	# count_30s = bulk_container.count(molecule_ids.s30_fullComplex)
+	# count_50s = bulk_container.count(molecule_ids.s50_fullComplex)
+	count_rrna = get_rrna_counts(sim_data, doubling_time, rnap_activation_rate, rrna_synth_prob)
 
-	ribosome_counts = min(count_30s, count_50s) * active_fraction
+	# ribosome_counts = min(count_30s, count_50s, count_rrna) * active_fraction
+	ribosome_counts = count_rrna * active_fraction
 
 	return ribosome_counts
 
@@ -250,7 +305,7 @@ def get_expected_v_rib(sim_data, doubling_time, nutrients):
 
 	return rate.asNumber(MICROMOLAR_UNITS / units.s).sum()
 
-def get_concentrations(sim_data, bulk_container, doubling_time, schmidt):
+def get_concentrations(sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, schmidt):
 	'''
 	Gets concentrations for relevant molecules
 
@@ -258,6 +313,8 @@ def get_concentrations(sim_data, bulk_container, doubling_time, schmidt):
 		sim_data (SimulationData object): knowledgebase for a simulation
 		bulk_container (BulkMoleculesContainer object): counts for each molecule
 		doubling_time (float with time units): expected cell doubling time
+		rnap_activation_rate (float): number of RNAP activations/terminations per second
+		rrna_synth_prob (float): synthesis probability for rRNA
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
 
@@ -273,7 +330,6 @@ def get_concentrations(sim_data, bulk_container, doubling_time, schmidt):
 	transcription = sim_data.process.transcription
 	molecule_ids = sim_data.moleculeIds
 	molecule_groups = sim_data.moleculeGroups
-	n_avogadro = sim_data.constants.nAvogadro
 
 	# Data structures for charging
 	aa_from_synthetase = transcription.aa_from_synthetase
@@ -285,14 +341,14 @@ def get_concentrations(sim_data, bulk_container, doubling_time, schmidt):
 	synthetase_names = transcription.synthetase_names
 	aa_names = molecule_groups.aaIDs
 
-	volume = get_volume(sim_data, bulk_container)
-	counts_to_micromolar = 1 / n_avogadro.asNumber(1 / units.umol) / volume
+	counts_to_micromolar = get_counts_to_micromolar(doubling_time)
 
 	# Concentrations for tRNA charging molecules
 	rela_counts = bulk_container.count(rela_name)
 	total_trna_counts = aa_from_trna.dot(
 		bulk_container.counts(uncharged_trna_names))
-	ribosome_counts = get_active_ribosome_counts(sim_data, bulk_container, doubling_time)
+	ribosome_counts = get_active_ribosome_counts(
+		sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob)
 	synthetase_counts = aa_from_synthetase.dot(
 		bulk_container.counts(synthetase_names))
 	aa_counts = bulk_container.counts(aa_names)
@@ -828,6 +884,7 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		ax.set_xticks(ticks)
 		ax.tick_params(labelbottom=x_labeled)
 
+	is_rrna = sim_data.process.transcription.rnaData['isRRna']
 	model_factors = find_synthetases(sim_data, cell_specs, conditions, False)
 	schmidt_factors = find_synthetases(sim_data, cell_specs, conditions, True)
 
@@ -844,9 +901,14 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 	for i, condition in enumerate(conditions):
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
+		synth_prob = cell_specs[condition]['synthProb']
 
+		rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
+
+		rnap_activation_rate = get_rnap_activation(
+			sim_data, bulk_container, doubling_time, synth_prob)
 		_, _, _, model_synthetases, _, _ = get_concentrations(
-			sim_data, bulk_container, doubling_time, False)
+			sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, False)
 		schmidt_synthetases = SCHMIDT_CONC[condition]
 
 		x = np.arange(len(model_synthetases))
@@ -901,21 +963,26 @@ def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, ver
 		doubling_time = sim_data.conditionToDoublingTime[condition]
 		nutrients = sim_data.conditions[condition]['nutrients']
 
-		# Get current state
-		rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
-			sim_data, bulk_container, doubling_time, schmidt)
-		f = get_aa_fraction(sim_data, bulk_container)
-		rnap_activation_rate = get_rnap_activation(
-			sim_data, bulk_container, doubling_time, synth_prob)
-		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
-		expected_v_rib = get_expected_v_rib(sim_data, doubling_time, nutrients)
-		synthetases = synthetases * synthetase_change
+		rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
 
-		# Calculate values from current state
-		charged_trna, uncharged_trna, v_rib = charge_trna(
-			total_trnas, synthetases, aas, ribosomes, f, constants)
-		ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
-		rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
+		for i in range(10):
+			rnap_activation_rate = get_rnap_activation(
+				sim_data, bulk_container, doubling_time, synth_prob)
+			rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
+				sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, schmidt)
+			f = get_aa_fraction(sim_data, bulk_container)
+			expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
+			expected_v_rib = get_expected_v_rib(sim_data, doubling_time, nutrients)
+			synthetases = synthetases * synthetase_change
+
+			# Calculate values from current state
+			charged_trna, uncharged_trna, v_rib = charge_trna(
+				total_trnas, synthetases, aas, ribosomes, f, constants)
+			ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
+			new_rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
+
+			# print rrna_synth_prob, ppgpp, v_rib
+			rrna_synth_prob += (new_rrna_synth_prob - rrna_synth_prob) * 0.1  # 0.1 for stability
 
 		# Print current state
 		if verbose:

@@ -37,7 +37,8 @@ if not os.path.exists(OUTPUT_DIR):
 	os.makedirs(OUTPUT_DIR)
 
 SGD_OUT = 'sgd.tsv'
-PLOT_OUT = 'analysis.png'
+SYNTHETASE_PLOT_OUT = 'synthetases.png'
+PARAMETER_PLOT_OUT = 'parameters.png'
 
 MICROMOLAR_UNITS = units.umol / units.L
 PARAMS = [
@@ -875,6 +876,9 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		path (str): path to output file
+
+	Output:
+		.png file specified by path containing the plot
 	'''
 
 	def format_axes(ax, title, ticks, x_labeled=False):
@@ -927,6 +931,45 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 	plt.tight_layout()
 
 	# Save output
+	plt.savefig(path)
+
+def plot_parameters(data, path):
+	'''
+	Plot histograms of parameter distributions for a set of coordinate descent runs.
+
+	Args:
+		data (ndarray[str]): 2D array of data loaded from .tsv file
+		path (str): path to output file
+
+	Output:
+		.png file specified by path containing the plot
+	'''
+
+	# Parse data
+	header = data[0, :]
+	objective_col = np.where(header == 'Objective')[0]
+	start_parameter_col = int(objective_col + 1)
+	params = header[start_parameter_col:]
+	n_params = len(params)
+
+	reference_parameters = np.array(data[1, start_parameter_col:], float)
+	modified_parameters = np.array(data[2:, start_parameter_col:], float)
+
+	# Plot distributions
+	plt.figure()
+	n_rows = np.ceil(np.sqrt(n_params))
+	n_cols = np.floor(n_params / n_rows)
+
+	## Subplot for each parameter
+	for idx, param in enumerate(params):
+		ax = plt.subplot(n_rows, n_cols, idx + 1)
+
+		ax.hist(modified_parameters[:, idx])
+		ax.axvline(reference_parameters[idx], color='r', linestyle='--')
+		ax.set_title(param, fontsize=8)
+		ax.tick_params(labelsize=7)
+
+	plt.tight_layout()
 	plt.savefig(path)
 
 def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, verbose=True):
@@ -1054,9 +1097,12 @@ def parse_args():
 		help='Search for optimal synthetase concentrations')
 
 	# Plotting
-	parser.add_argument('-p', '--plot',
+	parser.add_argument('--plot-synthetases',
 		action='store_true',
 		help='Plot analysis of problem if set')
+	parser.add_argument('--plot-parameters',
+		default=None,
+		help='Specify input .tsv file in out/ for plotting parameter distribution')
 
 	return parser.parse_args()
 
@@ -1067,10 +1113,10 @@ if __name__ == '__main__':
 	args = parse_args()
 
 	# Check args for conditions that do not run together
-	single_args = ['sensitivity', 'sgd', 'plot', 'synthetases']
+	single_args = ['sensitivity', 'sgd', 'synthetases', 'plot_synthetases', 'plot_parameters']
 	if sum([1 for a in single_args if getattr(args, a)]) > 1:
 		raise Exception('Cannot have multiple options selected {} at the same time.'.format(
-			tuple(('--' + a for a in single_args))))
+			tuple(('--' + a.replace('_', '-') for a in single_args))))
 
 	# Load necessary files
 	with open(args.sim_data) as f:
@@ -1118,10 +1164,18 @@ if __name__ == '__main__':
 					setattr(sim_data.constants, param, value)
 	elif args.synthetases:
 		find_synthetases(sim_data, cell_specs, conditions, args.schmidt)
-	elif args.plot:
-		out = output_location(args.out, OUTPUT_DIR, PLOT_OUT)
+	elif args.plot_synthetases:
+		out = output_location(args.out, OUTPUT_DIR, SYNTHETASE_PLOT_OUT)
 
 		plot_synthetases(sim_data, cell_specs, conditions, out)
+	elif args.plot_parameters:
+		out = output_location(args.out, OUTPUT_DIR, PARAMETER_PLOT_OUT)
+
+		with open(os.path.join(OUTPUT_DIR, args.plot_parameters)) as f:
+			reader = csv.reader(f, delimiter='\t')
+			data = np.array(list(reader))
+
+		plot_parameters(data, out)
 	else:
 		main(sim_data, cell_specs, conditions, args.schmidt)
 

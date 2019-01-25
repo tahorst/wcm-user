@@ -24,6 +24,8 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+import plotly
+import plotly.graph_objs as go
 
 from wholecell.utils import units
 
@@ -38,7 +40,6 @@ if not os.path.exists(OUTPUT_DIR):
 
 SGD_OUT = 'sgd.tsv'
 SYNTHETASE_PLOT_OUT = 'synthetases.png'
-PARAMETER_PLOT_OUT = 'parameters.png'
 
 MICROMOLAR_UNITS = units.umol / units.L
 PARAMS = [
@@ -940,10 +941,10 @@ def plot_parameters(data, path):
 
 	Args:
 		data (ndarray[str]): 2D array of data loaded from .tsv file
-		path (str): path to output file
+		path (str): path to output file (without extension)
 
 	Output:
-		.png file specified by path containing the plot
+		Two .png files (<path>_hist.png and <path>_splom.png) containing the plots
 	'''
 
 	# Parse data
@@ -955,6 +956,7 @@ def plot_parameters(data, path):
 
 	reference_parameters = np.array(data[1, start_parameter_col:], float)
 	modified_parameters = np.array(data[2:, start_parameter_col:], float)
+	objective = np.array(data[2:, objective_col], float).squeeze()
 
 	# Plot distributions
 	plt.figure()
@@ -970,8 +972,80 @@ def plot_parameters(data, path):
 		ax.set_title(param, fontsize=8)
 		ax.tick_params(labelsize=7)
 
+	## Save histogram output
 	plt.tight_layout()
-	plt.savefig(path)
+	plt.savefig(path + '_hist.png')
+
+	# Plot splom
+	reference_trace = go.Splom(
+		name='Reference',
+		dimensions=[
+			dict(label=param, values=[v])
+			for param, v in zip(params, reference_parameters)
+			],
+		showupperhalf=False,
+		marker=dict(
+			color='rgb(100,180,100)',
+			line=dict(
+				width=0.5,
+				color='rgb(150,150,150)',
+				),
+			),
+		)
+	modified_trace = go.Splom(
+		dimensions=[
+			dict(label=param, values=v)
+			for param, v in zip(params, modified_parameters.T)
+			],
+		showupperhalf=False,
+		showlegend=False,
+		marker=dict(
+			color=np.log(objective),
+			colorscale='RdBu',
+			line=dict(
+				width=0.5,
+				color='rgb(150,150,150)',
+				),
+			colorbar=dict(
+				title='ln(Objective)',
+				ypad=50,
+				),
+			),
+		)
+
+	## Formatting
+	axis_format = dict(
+		showline=True,
+		zeroline=False,
+		gridcolor='#fff',
+		ticklen=4,
+		title=dict(
+			font=dict(
+				size=8,
+				),
+			),
+		tickfont=dict(
+			size=6,
+			),
+		)
+	layout = go.Layout(
+		title='Parameters values and objective',
+		width=1600,
+		height=1600,
+		plot_bgcolor='rgba(240,240,240,0.95)',
+		)
+	layout.update({
+		'xaxis{}'.format(idx + 1): axis_format
+		for idx in range(n_params)
+		})
+	layout.update({
+		'yaxis{}'.format(idx + 1): axis_format
+		for idx in range(n_params)
+		})
+
+	## Save splom output
+	fig = dict(data=[reference_trace, modified_trace], layout=layout)
+	plotly.io.write_image(fig, path + '_splom.png')
 
 def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, verbose=True):
 	'''
@@ -1119,23 +1193,24 @@ if __name__ == '__main__':
 		raise Exception('Cannot have multiple options selected {} at the same time.'.format(
 			tuple(('--' + a.replace('_', '-') for a in single_args))))
 
-	# Load necessary files
-	with open(args.sim_data) as f:
-		sim_data = cPickle.load(f)
-	with open(args.cell_specs) as f:
-		cell_specs = cPickle.load(f)
-
 	# Specify conditions
 	conditions = ['with_aa', 'basal', 'no_oxygen']
 	if args.condition is not None:
 		conditions = [conditions[args.condition]]
 
-	# Update constants that are not yet in sim_data
-	# TODO: add to sim_data.constants in a flat file
-	constants = sim_data.constants
-	constants.rrn_vmax = 2000  # 1/s, Bosdriesz
-	constants.KI_ppgpp_rnap = 1  # uM, Bosdriesz
-	constants.KM_rrn_rnap = 20  # uM, Bosdriesz
+	# Load necessary files
+	if not args.plot_parameters:
+		with open(args.sim_data) as f:
+			sim_data = cPickle.load(f)
+		with open(args.cell_specs) as f:
+			cell_specs = cPickle.load(f)
+
+		# Update constants that are not yet in sim_data
+		# TODO: add to sim_data.constants in a flat file
+		constants = sim_data.constants
+		constants.rrn_vmax = 2000  # 1/s, Bosdriesz
+		constants.KI_ppgpp_rnap = 1  # uM, Bosdriesz
+		constants.KM_rrn_rnap = 20  # uM, Bosdriesz
 
 	# Perform desired analysis
 	if args.sensitivity:
@@ -1173,7 +1248,7 @@ if __name__ == '__main__':
 
 		plot_synthetases(sim_data, cell_specs, conditions, out)
 	elif args.plot_parameters:
-		out = output_location(args.out, OUTPUT_DIR, PARAMETER_PLOT_OUT)
+		out = output_location(args.out, OUTPUT_DIR, args.plot_parameters.split('.')[0])
 
 		with open(os.path.join(OUTPUT_DIR, args.plot_parameters)) as f:
 			reader = csv.reader(f, delimiter='\t')

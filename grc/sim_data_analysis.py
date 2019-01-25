@@ -885,8 +885,8 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		ax.tick_params(labelbottom=x_labeled)
 
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
-	model_factors = find_synthetases(sim_data, cell_specs, conditions, False)
-	schmidt_factors = find_synthetases(sim_data, cell_specs, conditions, True)
+	model_factors, _ = find_synthetases(sim_data, cell_specs, conditions, False)
+	schmidt_factors, _ = find_synthetases(sim_data, cell_specs, conditions, True)
 
 	# Setup plot
 	plt.figure(figsize=(8.5, 11))

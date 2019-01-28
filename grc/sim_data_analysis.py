@@ -961,7 +961,7 @@ def plot_parameters(data, path):
 	# Plot distributions
 	plt.figure()
 	n_rows = np.ceil(np.sqrt(n_params))
-	n_cols = np.floor(n_params / n_rows)
+	n_cols = np.ceil(n_params / n_rows)
 
 	## Subplot for each parameter
 	for idx, param in enumerate(params):

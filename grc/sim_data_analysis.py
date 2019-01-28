@@ -947,11 +947,29 @@ def plot_parameters(data, path):
 		Two .png files (<path>_hist.png and <path>_splom.png) containing the plots
 	'''
 
+	def display_param(param, length=20):
+		display = ''
+		line = ''
+		for term in param.split('_'):
+			if len(line):
+				if len(line) + len(term) > length:
+					display += line + '\n'
+					line = term
+				else:
+					line += ' ' + term
+			else:
+				line = term
+		display += line
+
+		return display
+
 	# Parse data
 	header = data[0, :]
 	objective_col = np.where(header == 'Objective')[0]
 	start_parameter_col = int(objective_col + 1)
 	params = header[start_parameter_col:]
+	params = [display_param(param) for param in params]
+	params_plotly = [param.replace('\n', '<br>') for param in params]
 	n_params = len(params)
 
 	reference_parameters = np.array(data[1, start_parameter_col:], float)
@@ -959,7 +977,7 @@ def plot_parameters(data, path):
 	objective = np.array(data[2:, objective_col], float).squeeze()
 
 	# Plot distributions
-	plt.figure()
+	plt.figure(figsize=(8.5, 11))
 	n_rows = np.ceil(np.sqrt(n_params))
 	n_cols = np.ceil(n_params / n_rows)
 
@@ -981,7 +999,7 @@ def plot_parameters(data, path):
 		name='Reference',
 		dimensions=[
 			dict(label=param, values=[v])
-			for param, v in zip(params, reference_parameters)
+			for param, v in zip(params_plotly, reference_parameters)
 			],
 		showupperhalf=False,
 		marker=dict(
@@ -995,7 +1013,7 @@ def plot_parameters(data, path):
 	modified_trace = go.Splom(
 		dimensions=[
 			dict(label=param, values=v)
-			for param, v in zip(params, modified_parameters.T)
+			for param, v in zip(params_plotly, modified_parameters.T)
 			],
 		showupperhalf=False,
 		showlegend=False,

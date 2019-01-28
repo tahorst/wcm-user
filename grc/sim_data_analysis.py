@@ -401,7 +401,8 @@ def get_aa_fraction(sim_data, bulk_container):
 
 	return total_aa / total_aa.sum()
 
-def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, expected_v_rib):
+def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib,
+		expected_v_rib, weights):
 	'''
 	Calculate an objective value for the difference between calculated values and expected
 	values for rRNA synthesis probability, ppGpp concentration and ribosome elongation rate.
@@ -414,6 +415,8 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
 		v_rib (float): ribosome elongation rate from state of the cell (in units of uM/s)
 		expected_v_rib (float): expected ribosome elongation rate (in units of uM/s)
+		weights (ndarray[float]): objective weights for each component,
+			if None, all weights will be 1
 
 	Returns:
 		float: objective value
@@ -424,12 +427,18 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 	def objective_function(actual, expected):
 		return (actual - expected)**2
 
+	def get_weight(weights, idx):
+		if weights is not None and idx < len(weights):
+			return weights[idx]
+		else:
+			return 1.
+
 	expected_rrna_prob = np.mean(expected_rrna_prob[expected_rrna_prob > 0])
 
 	objective = 0
-	objective += objective_function(rrna_prob, expected_rrna_prob)
-	objective += objective_function(ppgpp, expected_ppgpp)
-	objective += objective_function(v_rib, expected_v_rib)
+	objective += get_weight(weights, 0) * objective_function(rrna_prob, expected_rrna_prob)
+	objective += get_weight(weights, 1) * objective_function(ppgpp, expected_ppgpp)
+	objective += get_weight(weights, 2) * objective_function(v_rib, expected_v_rib)
 
 	return objective
 
@@ -643,7 +652,7 @@ def error_summary(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, e
 	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
 	print_error('Ribosome elongation rate', v_rib, expected_v_rib, ':.1f')
 
-def sensitivity(sim_data, cell_specs, conditions, schmidt):
+def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights):
 	'''
 	Performs sensitivity analysis for each of the parameters.
 
@@ -654,6 +663,8 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt):
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
+		objective_weights (ndarray[float]): objective weights for each component,
+			if None, all weights will be 1
 	'''
 
 	for param in PARAMS:
@@ -663,7 +674,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt):
 		for magnitude in [0.1, 0.2, 0.5, 0.75, 0.9, 1.1, 1.5, 2, 5, 10]:
 			setattr(sim_data.constants, param, original_value * magnitude)
 			error = [
-				main(sim_data, cell_specs, [condition], schmidt, verbose=False)
+				main(sim_data, cell_specs, [condition], schmidt, objective_weights, verbose=False)
 				for condition in conditions
 				]
 
@@ -672,7 +683,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt):
 
 		setattr(sim_data.constants, param, original_value)
 
-def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthetases=0):
+def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weights, update_synthetases=0):
 	'''
 	Stochastic coordinate descent to determine optimal parameters.  Updates one
 	parameter at a time to minimize error for a given number of iterations or
@@ -686,6 +697,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthet
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
+		objective_weights (ndarray[float]): objective weights for each component,
+			if None, all weights will be 1
 		update_synthetases (int): if a positive value, synthetases concentrations
 			will be updated every update_synthetases time steps
 
@@ -721,12 +734,12 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthet
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
 			high_objective = main(sim_data, cell_specs, conditions, schmidt,
-				synthetase_changes=synthetase_changes, verbose=False)
+				objective_weights, synthetase_changes=synthetase_changes, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
 			low_objective = main(sim_data, cell_specs, conditions, schmidt,
-				synthetase_changes=synthetase_changes, verbose=False)
+				objective_weights, synthetase_changes=synthetase_changes, verbose=False)
 
 			# Update to new parameter value based on lowest error
 			if low_objective < objective and low_objective < high_objective:
@@ -782,11 +795,11 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, update_synthet
 		print('{}: {}'.format(param, getattr(sim_data.constants, param)))
 	for factor, condition in zip(synthetase_changes, conditions):
 		print('Synthetase change in {}: {:.3f}'.format(condition, factor))
-	main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=synthetase_changes)
+	main(sim_data, cell_specs, conditions, schmidt, objective_weights, synthetase_changes=synthetase_changes)
 
 	return sim_data.constants, list(synthetase_changes), objective
 
-def find_synthetases(sim_data, cell_specs, conditions, schmidt,
+def find_synthetases(sim_data, cell_specs, conditions, schmidt, objective_weights,
 		factors=None, max_it=None, verbose=True):
 	'''
 	Use gradient descent to determine optimal synthetase concentrations.
@@ -800,6 +813,8 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt,
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015 as the starting point
+		objective_weights (ndarray[float]): objective weights for each component,
+			if None, all weights will be 1
 		factors (ndarray[float]): factor to multiply synthetase concentration by
 			for each condition
 		max_it (int): maximum number of iterations to update before returning
@@ -823,12 +838,12 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt,
 		# Change high
 		high_factor = factor * (1 + delta)
 		high_objective = main(sim_data, cell_specs, [condition], schmidt,
-			synthetase_changes=[high_factor], verbose=False)
+			objective_weights, synthetase_changes=[high_factor], verbose=False)
 
 		# Change low
 		low_factor = factor * (1 - delta)
 		low_objective = main(sim_data, cell_specs, [condition], schmidt,
-			synthetase_changes=[low_factor], verbose=False)
+			objective_weights, synthetase_changes=[low_factor], verbose=False)
 
 		# Move in direction of decreasing objective
 		if high_objective < low_objective:
@@ -854,7 +869,7 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt,
 
 			factor *= 1 + direction * delta
 			objective = main(sim_data, cell_specs, [condition], schmidt,
-				synthetase_changes=[factor], verbose=False)
+				objective_weights, synthetase_changes=[factor], verbose=False)
 			if verbose:
 				print(objective, factor)
 
@@ -863,11 +878,11 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt,
 
 	# Summarize results
 	if verbose:
-		main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=factors)
+		main(sim_data, cell_specs, conditions, schmidt, objective_weights, synthetase_changes=factors)
 
 	return factors, total_objective
 
-def plot_synthetases(sim_data, cell_specs, conditions, path):
+def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, path):
 	'''
 	Plot synthetase concentrations in the different conditions comparing model
 	and proteomics data from Schmidt et al. 2015.
@@ -877,6 +892,8 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		cell_specs (dict): information about each condition that was fit
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
+		objective_weights (ndarray[float]): objective weights for each component,
+			if None, all weights will be 1
 		path (str): path to output file
 
 	Output:
@@ -891,8 +908,8 @@ def plot_synthetases(sim_data, cell_specs, conditions, path):
 		ax.tick_params(labelbottom=x_labeled)
 
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
-	model_factors, _ = find_synthetases(sim_data, cell_specs, conditions, False)
-	schmidt_factors, _ = find_synthetases(sim_data, cell_specs, conditions, True)
+	model_factors, _ = find_synthetases(sim_data, cell_specs, conditions, False, objective_weights)
+	schmidt_factors, _ = find_synthetases(sim_data, cell_specs, conditions, True, objective_weights)
 
 	# Setup plot
 	plt.figure(figsize=(8.5, 11))
@@ -1065,7 +1082,8 @@ def plot_parameters(data, path):
 	fig = dict(data=[reference_trace, modified_trace], layout=layout)
 	plotly.io.write_image(fig, path + '_splom.png')
 
-def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, verbose=True):
+def main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+		synthetase_changes=None, verbose=True):
 	'''
 	Main function to perform analysis.
 
@@ -1076,6 +1094,8 @@ def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, ver
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
+		objective_weights (ndarray[float]): objective weights for each component,
+			if None, all weights will be 1
 		synthetase_changes (ndarray[float]): factor to multiply synthetase
 			concentrations by in each condition. if None, defaults to a factor of 1
 		verbose (bool): if True, prints to command line
@@ -1128,7 +1148,7 @@ def main(sim_data, cell_specs, conditions, schmidt, synthetase_changes=None, ver
 				expected_ppgpp, v_rib, expected_v_rib)
 
 		objective += get_objective_value(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
-			expected_ppgpp, v_rib, expected_v_rib)
+			expected_ppgpp, v_rib, expected_v_rib, objective_weights)
 
 	return objective
 
@@ -1164,6 +1184,9 @@ def parse_args():
 	parser.add_argument('-o', '--out',
 		default=None,
 		help='Output file name saved in out/, (default: varies depending on what is saved)')
+	parser.add_argument('--objective',
+		nargs='+',
+		help='Objective function weights')
 
 	# Sensitivity arguments
 	parser.add_argument('--sensitivity',
@@ -1216,6 +1239,12 @@ if __name__ == '__main__':
 	if args.condition is not None:
 		conditions = [conditions[args.condition]]
 
+	# Convert objective to float if provided
+	if args.objective:
+		objective = np.array(args.objective, float)
+	else:
+		objective = None
+
 	# Load necessary files
 	if not args.plot_parameters:
 		with open(args.sim_data) as f:
@@ -1232,7 +1261,7 @@ if __name__ == '__main__':
 
 	# Perform desired analysis
 	if args.sensitivity:
-		sensitivity(sim_data, cell_specs, conditions, args.schmidt)
+		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective)
 	elif args.sgd:
 		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
 
@@ -1250,7 +1279,7 @@ if __name__ == '__main__':
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, synthetase_changes, objective = coordinate_descent(
-					sim_data, cell_specs, conditions, args.schmidt,
+					sim_data, cell_specs, conditions, args.schmidt, objective,
 					update_synthetases=args.update_synthetases)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants)
 					+ synthetase_changes)
@@ -1260,11 +1289,11 @@ if __name__ == '__main__':
 				for param, value in original_constants.items():
 					setattr(sim_data.constants, param, value)
 	elif args.synthetases:
-		find_synthetases(sim_data, cell_specs, conditions, args.schmidt)
+		find_synthetases(sim_data, cell_specs, conditions, args.schmidt, objective)
 	elif args.plot_synthetases:
 		out = output_location(args.out, OUTPUT_DIR, SYNTHETASE_PLOT_OUT)
 
-		plot_synthetases(sim_data, cell_specs, conditions, out)
+		plot_synthetases(sim_data, cell_specs, conditions, objective, out)
 	elif args.plot_parameters:
 		out = output_location(args.out, OUTPUT_DIR, args.plot_parameters.split('.')[0])
 
@@ -1274,6 +1303,6 @@ if __name__ == '__main__':
 
 		plot_parameters(data, out)
 	else:
-		main(sim_data, cell_specs, conditions, args.schmidt)
+		main(sim_data, cell_specs, conditions, args.schmidt, objective)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

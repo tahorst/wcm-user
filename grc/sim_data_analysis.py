@@ -162,7 +162,8 @@ def get_rrna_counts(sim_data, doubling_time, rnap_activation_rate, synth_prob):
 
 	return counts
 
-def get_active_ribosome_counts(sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob):
+def get_active_ribosome_counts(sim_data, bulk_container, doubling_time, rnap_activation_rate,
+		rrna_synth_prob, ribosome_control):
 	'''
 	Gets the counts of active ribosomes based on fraction active and subunits.
 
@@ -172,22 +173,25 @@ def get_active_ribosome_counts(sim_data, bulk_container, doubling_time, rnap_act
 		doubling_time (float with time units): expected cell doubling time
 		rnap_activation_rate (float): number of RNAP activations/terminations per second
 		rrna_synth_prob (float): synthesis probability for rRNA
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 
 	Returns:
 		float: number of active ribosomes
 	'''
 
-	# molecule_ids = sim_data.moleculeIds
 	active_fraction = sim_data.growthRateParameters.getFractionActiveRibosome(doubling_time)
 
-	# count_30s = bulk_container.count(molecule_ids.s30_fullComplex)
-	# count_50s = bulk_container.count(molecule_ids.s50_fullComplex)
-	count_rrna = get_rrna_counts(sim_data, doubling_time, rnap_activation_rate, rrna_synth_prob)
+	if ribosome_control:
+		count_rrna = get_rrna_counts(sim_data, doubling_time, rnap_activation_rate, rrna_synth_prob)
+		ribosome_counts = count_rrna
+	else:
+		molecule_ids = sim_data.moleculeIds
+		count_30s = bulk_container.count(molecule_ids.s30_fullComplex)
+		count_50s = bulk_container.count(molecule_ids.s50_fullComplex)
+		ribosome_counts = min(count_30s, count_50s)
 
-	# ribosome_counts = min(count_30s, count_50s, count_rrna) * active_fraction
-	ribosome_counts = count_rrna * active_fraction
-
-	return ribosome_counts
+	return ribosome_counts * active_fraction
 
 def get_free_rnap_counts(sim_data, bulk_container, doubling_time):
 	'''
@@ -307,7 +311,8 @@ def get_expected_v_rib(sim_data, doubling_time, nutrients):
 
 	return rate.asNumber(MICROMOLAR_UNITS / units.s).sum()
 
-def get_concentrations(sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, schmidt):
+def get_concentrations(sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
+		schmidt, ribosome_control):
 	'''
 	Gets concentrations for relevant molecules
 
@@ -319,6 +324,8 @@ def get_concentrations(sim_data, bulk_container, doubling_time, rnap_activation_
 		rrna_synth_prob (float): synthesis probability for rRNA
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 
 	Returns (in units of uM):
 		float: concentration of RelA
@@ -350,7 +357,7 @@ def get_concentrations(sim_data, bulk_container, doubling_time, rnap_activation_
 	total_trna_counts = aa_from_trna.dot(
 		bulk_container.counts(uncharged_trna_names))
 	ribosome_counts = get_active_ribosome_counts(
-		sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob)
+		sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, ribosome_control)
 	synthetase_counts = aa_from_synthetase.dot(
 		bulk_container.counts(synthetase_names))
 	aa_counts = bulk_container.counts(aa_names)
@@ -652,7 +659,7 @@ def error_summary(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, e
 	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
 	print_error('Ribosome elongation rate', v_rib, expected_v_rib, ':.1f')
 
-def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights):
+def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control):
 	'''
 	Performs sensitivity analysis for each of the parameters.
 
@@ -665,6 +672,8 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights):
 			from Schmidt et al. 2015
 		objective_weights (ndarray[float]): objective weights for each component,
 			if None, all weights will be 1
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 	'''
 
 	for param in PARAMS:
@@ -674,7 +683,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights):
 		for magnitude in [0.1, 0.2, 0.5, 0.75, 0.9, 1.1, 1.5, 2, 5, 10]:
 			setattr(sim_data.constants, param, original_value * magnitude)
 			error = [
-				main(sim_data, cell_specs, [condition], schmidt, objective_weights, verbose=False)
+				main(sim_data, cell_specs, [condition], schmidt, objective_weights, ribosome_control, verbose=False)
 				for condition in conditions
 				]
 
@@ -683,7 +692,8 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights):
 
 		setattr(sim_data.constants, param, original_value)
 
-def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weights, update_synthetases=0):
+def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weights,
+		ribosome_control, update_synthetases=0):
 	'''
 	Stochastic coordinate descent to determine optimal parameters.  Updates one
 	parameter at a time to minimize error for a given number of iterations or
@@ -699,6 +709,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 			from Schmidt et al. 2015
 		objective_weights (ndarray[float]): objective weights for each component,
 			if None, all weights will be 1
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 		update_synthetases (int): if a positive value, synthetases concentrations
 			will be updated every update_synthetases time steps
 
@@ -733,13 +745,13 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_objective = main(sim_data, cell_specs, conditions, schmidt,
-				objective_weights, synthetase_changes=synthetase_changes, verbose=False)
+			high_objective = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+				ribosome_control, synthetase_changes=synthetase_changes, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_objective = main(sim_data, cell_specs, conditions, schmidt,
-				objective_weights, synthetase_changes=synthetase_changes, verbose=False)
+			low_objective = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+				ribosome_control, synthetase_changes=synthetase_changes, verbose=False)
 
 			# Update to new parameter value based on lowest error
 			if low_objective < objective and low_objective < high_objective:
@@ -771,7 +783,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 			# Update synthetase concentrations to improve objective if set
 			if update_synthetases > 0 and it % update_synthetases == 0:
 				new_synthetase_changes, new_objective = find_synthetases(
-					sim_data, cell_specs, conditions, schmidt,
+					sim_data, cell_specs, conditions, schmidt, ribosome_control,
 					factors=synthetase_changes, max_it=1, verbose=False)
 
 				if new_objective < objective:
@@ -795,12 +807,13 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 		print('{}: {}'.format(param, getattr(sim_data.constants, param)))
 	for factor, condition in zip(synthetase_changes, conditions):
 		print('Synthetase change in {}: {:.3f}'.format(condition, factor))
-	main(sim_data, cell_specs, conditions, schmidt, objective_weights, synthetase_changes=synthetase_changes)
+	main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+		ribosome_control, synthetase_changes=synthetase_changes)
 
 	return sim_data.constants, list(synthetase_changes), objective
 
 def find_synthetases(sim_data, cell_specs, conditions, schmidt, objective_weights,
-		factors=None, max_it=None, verbose=True):
+		ribosome_control, factors=None, max_it=None, verbose=True):
 	'''
 	Use gradient descent to determine optimal synthetase concentrations.
 	Updates synthetases in one condition at a time to minimize error until
@@ -815,6 +828,8 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt, objective_weight
 			from Schmidt et al. 2015 as the starting point
 		objective_weights (ndarray[float]): objective weights for each component,
 			if None, all weights will be 1
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 		factors (ndarray[float]): factor to multiply synthetase concentration by
 			for each condition
 		max_it (int): maximum number of iterations to update before returning
@@ -837,13 +852,13 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt, objective_weight
 
 		# Change high
 		high_factor = factor * (1 + delta)
-		high_objective = main(sim_data, cell_specs, [condition], schmidt,
-			objective_weights, synthetase_changes=[high_factor], verbose=False)
+		high_objective = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+			ribosome_control, synthetase_changes=[high_factor], verbose=False)
 
 		# Change low
 		low_factor = factor * (1 - delta)
-		low_objective = main(sim_data, cell_specs, [condition], schmidt,
-			objective_weights, synthetase_changes=[low_factor], verbose=False)
+		low_objective = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+			ribosome_control, synthetase_changes=[low_factor], verbose=False)
 
 		# Move in direction of decreasing objective
 		if high_objective < low_objective:
@@ -868,8 +883,8 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt, objective_weight
 				break
 
 			factor *= 1 + direction * delta
-			objective = main(sim_data, cell_specs, [condition], schmidt,
-				objective_weights, synthetase_changes=[factor], verbose=False)
+			objective = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+				ribosome_control, synthetase_changes=[factor], verbose=False)
 			if verbose:
 				print(objective, factor)
 
@@ -878,11 +893,12 @@ def find_synthetases(sim_data, cell_specs, conditions, schmidt, objective_weight
 
 	# Summarize results
 	if verbose:
-		main(sim_data, cell_specs, conditions, schmidt, objective_weights, synthetase_changes=factors)
+		main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+			ribosome_control, synthetase_changes=factors)
 
 	return factors, total_objective
 
-def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, path):
+def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, ribosome_control, path):
 	'''
 	Plot synthetase concentrations in the different conditions comparing model
 	and proteomics data from Schmidt et al. 2015.
@@ -894,6 +910,8 @@ def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, path):
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		objective_weights (ndarray[float]): objective weights for each component,
 			if None, all weights will be 1
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 		path (str): path to output file
 
 	Output:
@@ -908,8 +926,10 @@ def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, path):
 		ax.tick_params(labelbottom=x_labeled)
 
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
-	model_factors, _ = find_synthetases(sim_data, cell_specs, conditions, False, objective_weights)
-	schmidt_factors, _ = find_synthetases(sim_data, cell_specs, conditions, True, objective_weights)
+	model_factors, _ = find_synthetases(sim_data, cell_specs, conditions, False,
+		objective_weights, ribosome_control)
+	schmidt_factors, _ = find_synthetases(sim_data, cell_specs, conditions, True,
+		objective_weights, ribosome_control)
 
 	# Setup plot
 	plt.figure(figsize=(8.5, 11))
@@ -931,7 +951,8 @@ def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, path):
 		rnap_activation_rate = get_rnap_activation(
 			sim_data, bulk_container, doubling_time, synth_prob)
 		_, _, _, model_synthetases, _, _ = get_concentrations(
-			sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, False)
+			sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
+			False, ribosome_control)
 		schmidt_synthetases = SCHMIDT_CONC[condition]
 
 		x = np.arange(len(model_synthetases))
@@ -1083,7 +1104,7 @@ def plot_parameters(data, path):
 	plotly.io.write_image(fig, path + '_splom.png')
 
 def main(sim_data, cell_specs, conditions, schmidt, objective_weights,
-		synthetase_changes=None, verbose=True):
+		ribosome_control, synthetase_changes=None, verbose=True):
 	'''
 	Main function to perform analysis.
 
@@ -1096,6 +1117,8 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights,
 			from Schmidt et al. 2015
 		objective_weights (ndarray[float]): objective weights for each component,
 			if None, all weights will be 1
+		ribosome_control (bool): if True, updates ribosome concentration based on
+			ppGpp regulation, otherwise uses bulk container counts
 		synthetase_changes (ndarray[float]): factor to multiply synthetase
 			concentrations by in each condition. if None, defaults to a factor of 1
 		verbose (bool): if True, prints to command line
@@ -1105,6 +1128,11 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights,
 	'''
 
 	objective = 0
+
+	if ribosome_control:
+		iter = 10
+	else:
+		iter = 1
 
 	constants = sim_data.constants
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
@@ -1121,11 +1149,12 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights,
 
 		rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
 
-		for i in range(10):
+		for i in range(iter):
 			rnap_activation_rate = get_rnap_activation(
 				sim_data, bulk_container, doubling_time, synth_prob)
 			rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
-				sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob, schmidt)
+				sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
+				schmidt, ribosome_control)
 			f = get_aa_fraction(sim_data, bulk_container)
 			expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
 			expected_v_rib = get_expected_v_rib(sim_data, doubling_time, nutrients)
@@ -1137,8 +1166,10 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights,
 			ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 			new_rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
 
-			# print rrna_synth_prob, ppgpp, v_rib
-			rrna_synth_prob += (new_rrna_synth_prob - rrna_synth_prob) * 0.1  # 0.1 for stability
+			if ribosome_control:
+				rrna_synth_prob += (new_rrna_synth_prob - rrna_synth_prob) * 0.1  # 0.1 for stability
+			else:
+				rrna_synth_prob = new_rrna_synth_prob
 
 		# Print current state
 		if verbose:
@@ -1181,6 +1212,10 @@ def parse_args():
 	parser.add_argument('--schmidt',
 		action='store_true',
 		help='Uses synthetase concentrations from proteomics from Schmidt et al 2015 if set')
+	parser.add_argument('--no-ribosome-control',
+		action='store_false', dest='ribosome_control',
+		help='Uses bulk container ribosome counts if set, otherwise updates ribosome'
+			+ ' concentrations based on ppGpp regulation until convergence.')
 	parser.add_argument('-o', '--out',
 		default=None,
 		help='Output file name saved in out/, (default: varies depending on what is saved)')
@@ -1261,7 +1296,7 @@ if __name__ == '__main__':
 
 	# Perform desired analysis
 	if args.sensitivity:
-		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective)
+		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective, args.ribosome_control)
 	elif args.sgd:
 		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
 
@@ -1280,7 +1315,7 @@ if __name__ == '__main__':
 				np.random.seed(seed)
 				constants, synthetase_changes, objective = coordinate_descent(
 					sim_data, cell_specs, conditions, args.schmidt, objective,
-					update_synthetases=args.update_synthetases)
+					args.ribosome_control, update_synthetases=args.update_synthetases)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants)
 					+ synthetase_changes)
 				f.flush()
@@ -1289,11 +1324,11 @@ if __name__ == '__main__':
 				for param, value in original_constants.items():
 					setattr(sim_data.constants, param, value)
 	elif args.synthetases:
-		find_synthetases(sim_data, cell_specs, conditions, args.schmidt, objective)
+		find_synthetases(sim_data, cell_specs, conditions, args.schmidt, objective, args.ribosome_control)
 	elif args.plot_synthetases:
 		out = output_location(args.out, OUTPUT_DIR, SYNTHETASE_PLOT_OUT)
 
-		plot_synthetases(sim_data, cell_specs, conditions, objective, out)
+		plot_synthetases(sim_data, cell_specs, conditions, objective, args.ribosome_control, out)
 	elif args.plot_parameters:
 		out = output_location(args.out, OUTPUT_DIR, args.plot_parameters.split('.')[0])
 
@@ -1303,6 +1338,6 @@ if __name__ == '__main__':
 
 		plot_parameters(data, out)
 	else:
-		main(sim_data, cell_specs, conditions, args.schmidt, objective)
+		main(sim_data, cell_specs, conditions, args.schmidt, objective, args.ribosome_control)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

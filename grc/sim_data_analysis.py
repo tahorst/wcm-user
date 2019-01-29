@@ -683,7 +683,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights, ri
 				for condition in conditions
 				]
 
-			error_str = '  '.join(format(e, '.2f') for e in error)
+			error_str = '  '.join(format(e[0], '.2f') for e in error)
 			print('\t x{} error: {}'.format(magnitude, error_str))
 
 		setattr(sim_data.constants, param, original_value)
@@ -729,6 +729,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 	delta = 0.1  # rate of change at each step
 	decay = 0.9  # rate of decay of delta
 	factors = np.ones(len(conditions))
+	charged_fraction = None
 
 	try:
 		while it < max_it:
@@ -743,14 +744,14 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_objective = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
-				ribosome_control, factors=factors, update_synthetases=update_synthetases,
+			high_objective, high_charged = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+				ribosome_control, charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_objective = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
-				ribosome_control, factors=factors, update_synthetases=update_synthetases,
+			low_objective, low_charged = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+				ribosome_control, charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
 			# Update to new parameter value based on lowest error
@@ -758,11 +759,13 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 				delta_objective = objective - low_objective
 				propensity[idx] = max(delta_objective, propensity.min())
 				objective = low_objective
+				charged_fraction = low_charged
 				status = 'decreased'
 			elif high_objective < objective:
 				delta_objective = objective - high_objective
 				propensity[idx] = max(delta_objective, propensity.min())
 				objective = high_objective
+				charged_fraction = high_charged
 				setattr(sim_data.constants, param, original_value * (1 + delta))
 				status = 'increased'
 			else:
@@ -783,8 +786,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 			# Update synthetase concentrations to improve objective if set
 			if update_factors > 0 and it % update_factors == 0:
 				new_factors, new_objective = find_concentrations(
-					sim_data, cell_specs, conditions, schmidt, objective_weights,
-					ribosome_control, factors=factors, update_synthetases=update_synthetases,
+					sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control,
+					charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 					update_aas=update_aas, max_it=1, verbose=False)
 
 				if new_objective < objective:
@@ -819,8 +822,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 
 	return sim_data.constants, list(factors), objective
 
-def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_weights,
-		ribosome_control, factors=None, update_synthetases=False, update_aas=False, max_it=None, verbose=True):
+def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control,
+		charged=None, factors=None, update_synthetases=False, update_aas=False, max_it=None, verbose=True):
 	'''
 	Use gradient descent to determine optimal synthetase or amino acid concentrations.
 	Updates concentrations in one condition at a time to minimize error until
@@ -837,6 +840,8 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_wei
 			if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
+		charged (list[ndarray[float]]): fraction of charged tRNA for each amino acid
+			in each condition
 		factors (ndarray[float]): factor to multiply synthetase or amino acid
 			concentrations by for each condition
 		update_synthetases (bool): if True, find synthetase concentrations to minimize objective
@@ -851,57 +856,71 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_wei
 
 	total_objective = 0
 	delta = 0.01  # rate of change at each step
-	eps = 1
+	eps = 0.5
 	if factors is None:
 		factors = np.ones(len(conditions))
 	it = 0
 
 	for idx, condition in enumerate(conditions):
 		factor = factors[idx]
+		if charged is None:
+			charged_fraction = None
+		else:
+			charged_fraction = charged[idx]
 
 		# Change high
 		high_factor = factor * (1 + delta)
-		high_objective = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
-			ribosome_control, factors=[high_factor], update_synthetases=update_synthetases,
-			update_aas=update_aas, verbose=False)
+		high_objective, high_charged = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+			ribosome_control, charged=charged_fraction, factors=[high_factor],
+			update_synthetases=update_synthetases, update_aas=update_aas, verbose=False)
 
 		# Change low
 		low_factor = factor * (1 - delta)
-		low_objective = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
-			ribosome_control, factors=[low_factor], update_synthetases=update_synthetases,
-			update_aas=update_aas, verbose=False)
+		low_objective, low_charged = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+			ribosome_control, charged=charged_fraction, factors=[low_factor],
+			update_synthetases=update_synthetases, update_aas=update_aas, verbose=False)
 
 		# Move in direction of decreasing objective
 		if high_objective < low_objective:
 			direction = 1
 			objective = high_objective
 			factor = high_factor
+			charged_fraction = high_charged
 		else:
 			direction = -1
 			objective = low_objective
 			factor = low_factor
+			charged_fraction = low_charged
 
-		# Set old_objective to enter the while loop
-		old_objective = objective + eps
+		if verbose:
+			print(objective, factor)
 
 		# Update in direction of decreasing objective until objective converges
-		while old_objective >= objective + eps:
-			old_objective = objective
-			old_factor = factor
+		converged = 0
+		best_objective = objective
+		best_factor = factor
+		while converged < 3:
 			it += 1
 
 			if max_it and it >= max_it:
 				break
 
 			factor *= 1 + direction * delta
-			objective = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
-				ribosome_control, factors=[factor], update_synthetases=update_synthetases,
+			objective, charged_fraction = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+				ribosome_control, charged=charged_fraction, factors=[factor], update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
+
+			if objective > best_objective - eps:
+				converged += 1
+			if objective < best_objective:
+				best_objective = objective
+				best_factor = factor
+
 			if verbose:
 				print(objective, factor)
 
-		factors[idx] = old_factor
-		total_objective += old_objective
+		factors[idx] = best_factor
+		total_objective += best_objective
 
 	# Summarize results
 	if verbose:
@@ -1116,7 +1135,7 @@ def plot_parameters(data, path):
 	plotly.io.write_image(fig, path + '_splom.png')
 
 def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control,
-		factors=None, update_synthetases=False, update_aas=False, verbose=True):
+		charged=None, factors=None, update_synthetases=False, update_aas=False, verbose=True):
 	'''
 	Main function to perform analysis.
 
@@ -1131,6 +1150,8 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 			if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
+		charged (list[ndarray[float]]): fraction of charged tRNA for each amino acid
+			in each condition, if None, charged fraction starts at 0
 		factors (ndarray[float]): factor to multiply synthetase or amino acid
 			concentrations by for each condition, if None, defaults to 1
 		update_synthetases (bool): if True, find synthetase concentrations to minimize objective
@@ -1139,6 +1160,8 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 
 	Returns:
 		float: objective value for all conditions
+		list[ndarray[float]]: fraction of charged tRNA for each amino acid in each
+			condition, for fast iteration
 	'''
 
 	objective = 0
@@ -1152,9 +1175,13 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
 	if factors is None:
 		factors = np.ones(len(conditions))
+	if charged is None:
+		charged = np.zeros(len(conditions))
+
+	final_charged_fractions = []
 
 	# Calculate ppGpp concentrations for each condition
-	for condition, factor in zip(conditions, factors):
+	for condition, factor, charged_fraction in zip(conditions, factors, charged):
 		# Get condition specific values
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		synth_prob = cell_specs[condition]['synthProb']
@@ -1180,9 +1207,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 				aas = aas * factor
 
 			# Calculate values from current state
-			if i == 0:
-				charged_fraction = 0
-			else:
+			if i > 0:
 				charged_fraction = charged_trna / total_trnas
 			charged_trna, uncharged_trna, v_rib = charge_trna(
 				total_trnas, synthetases, aas, ribosomes, f, constants, charged_fraction)
@@ -1204,7 +1229,9 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 		objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
 			expected_ppgpp, v_rib, expected_v_rib, objective_weights)
 
-	return objective
+		final_charged_fractions += [charged_trna / total_trnas]
+
+	return objective, final_charged_fractions
 
 def parse_args():
 	'''

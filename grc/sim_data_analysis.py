@@ -1305,9 +1305,9 @@ if __name__ == '__main__':
 
 	# Convert objective to float if provided
 	if args.objective:
-		objective = np.array(args.objective, float)
+		objective_weights = np.array(args.objective, float)
 	else:
-		objective = None
+		objective_weights = None
 
 	# Load necessary files
 	if not args.plot_parameters:
@@ -1325,7 +1325,7 @@ if __name__ == '__main__':
 
 	# Perform desired analysis
 	if args.sensitivity:
-		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective, args.ribosome_control)
+		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective_weights, args.ribosome_control)
 	elif args.sgd:
 		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
 
@@ -1355,7 +1355,7 @@ if __name__ == '__main__':
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, factors, objective = coordinate_descent(
-					sim_data, cell_specs, conditions, args.schmidt, objective,
+					sim_data, cell_specs, conditions, args.schmidt, objective_weights,
 					args.ribosome_control, update_factors=update_factors,
 					update_synthetases=update_synthetases, update_aas=update_aas)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants)
@@ -1366,15 +1366,15 @@ if __name__ == '__main__':
 				for param, value in original_constants.items():
 					setattr(sim_data.constants, param, value)
 	elif args.synthetases:
-		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective,
+		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_weights,
 			args.ribosome_control, update_synthetases=True)
 	elif args.aas:
-		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective,
+		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_weights,
 			args.ribosome_control, update_aas=True)
 	elif args.plot_synthetases:
 		out = output_location(args.out, OUTPUT_DIR, SYNTHETASE_PLOT_OUT)
 
-		plot_synthetases(sim_data, cell_specs, conditions, objective, args.ribosome_control, out)
+		plot_synthetases(sim_data, cell_specs, conditions, objective_weights, args.ribosome_control, out)
 	elif args.plot_parameters:
 		out = output_location(args.out, OUTPUT_DIR, args.plot_parameters.split('.')[0])
 
@@ -1384,6 +1384,6 @@ if __name__ == '__main__':
 
 		plot_parameters(data, out)
 	else:
-		main(sim_data, cell_specs, conditions, args.schmidt, objective, args.ribosome_control)
+		main(sim_data, cell_specs, conditions, args.schmidt, objective_weights, args.ribosome_control)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

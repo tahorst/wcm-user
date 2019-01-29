@@ -293,13 +293,12 @@ def get_expected_ppgpp(sim_data, doubling_time):
 
 	return ppgpp.asNumber(MICROMOLAR_UNITS)
 
-def get_expected_v_rib(sim_data, doubling_time, nutrients):
+def get_expected_v_rib(sim_data, nutrients):
 	'''
-	Gets the expected ribosome elongation rate for a given doubling time.
+	Gets the expected ribosome elongation rate for a given nutrient condition.
 
 	Args:
 		sim_data (SimulationData object): knowledgebase for a simulation
-		doubling_time (float with time units): expected cell doubling time
 		nutrients (str): nutrient label
 
 	Returns:
@@ -416,8 +415,7 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 
 	Args:
 		rrna_prob (float): synthesis probability of rRNA based on ppGpp regulation
-		expected_rrna_prob (ndarray[float]): synthesis probabilities of each rRNA
-			from the fitter
+		expected_rrna_prob (float): expected average synthesis probability rRNA
 		ppgpp (float): concentration of ppGpp from state of the cell (in units of uM)
 		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
 		v_rib (float): ribosome elongation rate from state of the cell (in units of uM/s)
@@ -439,8 +437,6 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 			return weights[idx]
 		else:
 			return 1.
-
-	expected_rrna_prob = np.mean(expected_rrna_prob[expected_rrna_prob > 0])
 
 	objective = 0
 	objective += get_weight(weights, 0) * objective_function(rrna_prob, expected_rrna_prob)
@@ -473,7 +469,7 @@ def get_growth_constants(constants, no_units=True):
 
 	return constants_list
 
-def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants, t_limit=10):
+def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constants, charged_fraction, t_limit=10):
 	'''
 	Calculates the concentration of charged and uncharged tRNA from the composition of the cell.
 
@@ -486,6 +482,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 		ribosome_conc (float): concentration of active ribosomes
 		f (ndarray[float]): fraction of each amino acid in sequences to be translated
 		constants (class): constants from sim_data
+		charged_fraction (float): fraction of each tRNA species that are charged
 		t_limit (float): time limit for charging to prevent long computation times
 
 	Returns:
@@ -495,15 +492,14 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	'''
 
 	# Parameters from Bosdriesz et al
-	k_s = constants.synthetase_charging_rate.asNumber(1 / units.s)
-	KM_aa = constants.Km_synthetase_amino_acid.asNumber(MICROMOLAR_UNITS)
-	KM_tf = constants.Km_synthetase_uncharged_trna.asNumber(MICROMOLAR_UNITS)
-	k_rta = constants.Kdissociation_charged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
-	k_rtf = constants.Kdissociation_uncharged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
+	k_s = constants.synthetase_charging_rate
+	KM_aa = constants.Km_synthetase_amino_acid
+	KM_tf = constants.Km_synthetase_uncharged_trna
+	k_rta = constants.Kdissociation_charged_trna_ribosome
+	k_rtf = constants.Kdissociation_uncharged_trna_ribosome
 	rib_elong_rate = 22
 
-	# Initialize to approximate charged levels to avoid dividing by 0
-	charged_fraction = 0
+	# Initialize to approximate charged levels
 	charged_trna_conc = total_trna * charged_fraction
 	uncharged_trna_conc = total_trna * (1 - charged_fraction)
 
@@ -512,11 +508,11 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	dt = 0.001
 	diff = 1
 	while diff > 1e-3:
-		v_charging = (k_s * synthetase_conc * uncharged_trna_conc * aa_conc / (KM_aa * KM_tf
-			* (1 + uncharged_trna_conc / KM_tf + aa_conc / KM_aa
-			+ uncharged_trna_conc * aa_conc / KM_tf / KM_aa)))
-		numerator_ribosome = 1 + np.sum(f * (k_rta / charged_trna_conc
-			+ uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf))
+		v_charging = (k_s * synthetase_conc * uncharged_trna_conc * aa_conc
+			/ (KM_aa * KM_tf + KM_aa * uncharged_trna_conc + KM_tf * aa_conc
+			+ uncharged_trna_conc * aa_conc))
+		numerator_ribosome = 1 + np.sum(f * k_rta / charged_trna_conc * (1
+			+ uncharged_trna_conc / k_rtf))
 		v_rib = rib_elong_rate * ribosome_conc / numerator_ribosome
 
 		# Handle case when f is 0 and charged_trna_conc is 0
@@ -526,7 +522,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 		delta_conc = (v_charging - v_rib * f) * dt
 		uncharged_trna_conc -= delta_conc
 		charged_trna_conc += delta_conc
-		diff = np.linalg.norm(delta_conc)
+		diff = np.sqrt(delta_conc.dot(delta_conc))  # quick norm vs np.linalg.norm
 
 		t += dt
 
@@ -553,12 +549,12 @@ def create_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_con
 	'''
 
 	# Parameters from Bosdriesz et al
-	k_rela = constants.k_RelA_ppGpp_synthesis.asNumber(1 / units.s)
-	KD_rela = constants.KD_RelA_ribosome.asNumber(MICROMOLAR_UNITS)
-	k_spot_syn = constants.k_SpoT_ppGpp_synthesis.asNumber(MICROMOLAR_UNITS / units.s)
-	k_spot_deg = constants.k_SpoT_ppGpp_degradation.asNumber(1 / units.s)
-	k_rta = constants.Kdissociation_charged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
-	k_rtf = constants.Kdissociation_uncharged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
+	k_rela = constants.k_RelA_ppGpp_synthesis
+	KD_rela = constants.KD_RelA_ribosome
+	k_spot_syn = constants.k_SpoT_ppGpp_synthesis
+	k_spot_deg = constants.k_SpoT_ppGpp_degradation
+	k_rta = constants.Kdissociation_charged_trna_ribosome
+	k_rtf = constants.Kdissociation_uncharged_trna_ribosome
 
 	numerator_ribosome = 1 + np.sum(f * (k_rta / charged_trna_conc
 		+ uncharged_trna_conc / charged_trna_conc * k_rta / k_rtf))
@@ -1165,7 +1161,12 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 		doubling_time = sim_data.conditionToDoublingTime[condition]
 		nutrients = sim_data.conditions[condition]['nutrients']
 
-		rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
+		expected_rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
+		rrna_synth_prob = expected_rrna_synth_prob
+
+		f = get_aa_fraction(sim_data, bulk_container)
+		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
+		expected_v_rib = get_expected_v_rib(sim_data, nutrients)
 
 		for i in range(iter):
 			rnap_activation_rate = get_rnap_activation(
@@ -1173,17 +1174,18 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 			rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
 				sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
 				schmidt, ribosome_control)
-			f = get_aa_fraction(sim_data, bulk_container)
-			expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
-			expected_v_rib = get_expected_v_rib(sim_data, doubling_time, nutrients)
 			if update_synthetases:
 				synthetases = synthetases * factor
 			elif update_aas:
 				aas = aas * factor
 
 			# Calculate values from current state
+			if i == 0:
+				charged_fraction = 0
+			else:
+				charged_fraction = charged_trna / total_trnas
 			charged_trna, uncharged_trna, v_rib = charge_trna(
-				total_trnas, synthetases, aas, ribosomes, f, constants)
+				total_trnas, synthetases, aas, ribosomes, f, constants, charged_fraction)
 			ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 			new_rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
 
@@ -1199,7 +1201,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 			error_summary(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
 				expected_ppgpp, v_rib, expected_v_rib)
 
-		objective += get_objective_value(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
+		objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
 			expected_ppgpp, v_rib, expected_v_rib, objective_weights)
 
 	return objective
@@ -1322,6 +1324,17 @@ if __name__ == '__main__':
 		constants.rrn_vmax = 2000  # 1/s, Bosdriesz
 		constants.KI_ppgpp_rnap = 1  # uM, Bosdriesz
 		constants.KM_rrn_rnap = 20  # uM, Bosdriesz
+
+		# Strip units
+		constants.synthetase_charging_rate = constants.synthetase_charging_rate.asNumber(1 / units.s)
+		constants.Km_synthetase_amino_acid = constants.Km_synthetase_amino_acid.asNumber(MICROMOLAR_UNITS)
+		constants.Km_synthetase_uncharged_trna = constants.Km_synthetase_uncharged_trna.asNumber(MICROMOLAR_UNITS)
+		constants.Kdissociation_charged_trna_ribosome = constants.Kdissociation_charged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
+		constants.Kdissociation_uncharged_trna_ribosome = constants.Kdissociation_uncharged_trna_ribosome.asNumber(MICROMOLAR_UNITS)
+		constants.k_RelA_ppGpp_synthesis = constants.k_RelA_ppGpp_synthesis.asNumber(1 / units.s)
+		constants.KD_RelA_ribosome = constants.KD_RelA_ribosome.asNumber(MICROMOLAR_UNITS)
+		constants.k_SpoT_ppGpp_synthesis = constants.k_SpoT_ppGpp_synthesis.asNumber(MICROMOLAR_UNITS / units.s)
+		constants.k_SpoT_ppGpp_degradation = constants.k_SpoT_ppGpp_degradation.asNumber(1 / units.s)
 
 	# Perform desired analysis
 	if args.sensitivity:

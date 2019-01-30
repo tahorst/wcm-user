@@ -1213,8 +1213,11 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 		expected_v_rib = get_expected_v_rib(sim_data, nutrients)
 
 		for i in range(iter):
+			updated_synth_prob = synth_prob.copy()
+			updated_synth_prob[is_rrna & (synth_prob > 0)] = rrna_synth_prob
+			updated_synth_prob /= updated_synth_prob.sum()
 			rnap_activation_rate = get_rnap_activation(
-				sim_data, bulk_container, doubling_time, synth_prob)
+				sim_data, bulk_container, doubling_time, updated_synth_prob)
 			rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
 				sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
 				schmidt, ribosome_control)

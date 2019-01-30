@@ -409,7 +409,7 @@ def get_aa_fraction(sim_data, bulk_container):
 	return total_aa / total_aa.sum()
 
 def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib,
-		expected_v_rib, weights):
+		expected_v_rib, params):
 	'''
 	Calculate an objective value for the difference between calculated values and expected
 	values for rRNA synthesis probability, ppGpp concentration and ribosome elongation rate.
@@ -421,16 +421,17 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 		expected_ppgpp (float): expected concentration of ppGpp (in units of uM)
 		v_rib (float): ribosome elongation rate from state of the cell (in units of uM/s)
 		expected_v_rib (float): expected ribosome elongation rate (in units of uM/s)
-		weights (ndarray[float]): objective weights for each component,
-			if None, all weights will be 1
+		params (tuple(int, ndarray[float])): objective function and objective
+			weights for each component, if None, all weights will be 1
 
 	Returns:
 		float: objective value
-
-	TODO: allow for different objectives selected with an argument
 	'''
 
-	def objective_function(actual, expected):
+	def squared_normalized(actual, expected):
+		return ((actual - expected) / expected)**2
+
+	def squared_absolute(actual, expected):
 		return (actual - expected)**2
 
 	def get_weight(weights, idx):
@@ -438,6 +439,15 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 			return weights[idx]
 		else:
 			return 1.
+
+	objective_index = params[0]
+	weights = params[1]
+
+	# Select objective function from params
+	objective_functions = [squared_normalized, squared_absolute]
+	if objective_index >= len(objective_functions):
+		objective_index = 0
+	objective_function = objective_functions[objective_index]
 
 	objective = 0
 	objective += get_weight(weights, 0) * objective_function(rrna_prob, expected_rrna_prob)
@@ -656,7 +666,7 @@ def error_summary(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib, e
 	print_error('ppGpp concentration', ppgpp, expected_ppgpp, ':.1f')
 	print_error('Ribosome elongation rate', v_rib, expected_v_rib, ':.1f')
 
-def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control):
+def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control):
 	'''
 	Performs sensitivity analysis for each of the parameters.
 
@@ -667,8 +677,8 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights, ri
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
-		objective_weights (ndarray[float]): objective weights for each component,
-			if None, all weights will be 1
+		objective_params (tuple(int, ndarray[float])): objective function and objective
+			weights for each component, if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
 	'''
@@ -680,7 +690,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights, ri
 		for magnitude in [0.1, 0.2, 0.5, 0.75, 0.9, 1.1, 1.5, 2, 5, 10]:
 			setattr(sim_data.constants, param, original_value * magnitude)
 			error = [
-				main(sim_data, cell_specs, [condition], schmidt, objective_weights, ribosome_control, verbose=False)
+				main(sim_data, cell_specs, [condition], schmidt, objective_params, ribosome_control, verbose=False)
 				for condition in conditions
 				]
 
@@ -689,7 +699,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_weights, ri
 
 		setattr(sim_data.constants, param, original_value)
 
-def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weights,
+def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_params,
 		ribosome_control, update_factors=0, update_synthetases=False, update_aas=False):
 	'''
 	Stochastic coordinate descent to determine optimal parameters.  Updates one
@@ -704,8 +714,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
-		objective_weights (ndarray[float]): objective weights for each component,
-			if None, all weights will be 1
+		objective_params (tuple(int, ndarray[float])): objective function and objective
+			weights for each component, if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
 		update_factors (int): if a positive value, synthetase or amino acid concentrations
@@ -745,13 +755,13 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_objective, high_charged = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+			high_objective, high_charged = main(sim_data, cell_specs, conditions, schmidt, objective_params,
 				ribosome_control, charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_objective, low_charged = main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+			low_objective, low_charged = main(sim_data, cell_specs, conditions, schmidt, objective_params,
 				ribosome_control, charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
@@ -787,7 +797,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 			# Update synthetase concentrations to improve objective if set
 			if update_factors > 0 and it % update_factors == 0:
 				new_factors, new_objective = find_concentrations(
-					sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control,
+					sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control,
 					charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 					update_aas=update_aas, max_it=1, verbose=False)
 
@@ -818,12 +828,12 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_weig
 	for factor, condition in zip(factors, conditions):
 		print('{} change in {}: {:.3f}'.format(conc_changed, condition, factor))
 
-	main(sim_data, cell_specs, conditions, schmidt, objective_weights,
+	main(sim_data, cell_specs, conditions, schmidt, objective_params,
 		ribosome_control, factors=factors, update_synthetases=update_synthetases, update_aas=update_aas)
 
 	return sim_data.constants, list(factors), objective
 
-def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control,
+def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control,
 		charged=None, factors=None, update_synthetases=False, update_aas=False, max_it=None, verbose=True):
 	'''
 	Use gradient descent to determine optimal synthetase or amino acid concentrations.
@@ -837,8 +847,8 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_wei
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
-		objective_weights (ndarray[float]): objective weights for each component,
-			if None, all weights will be 1
+		objective_params (tuple(int, ndarray[float])): objective function and objective
+			weights for each component, if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
 		charged (list[ndarray[float]]): fraction of charged tRNA for each amino acid
@@ -871,13 +881,13 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_wei
 
 		# Change high
 		high_factor = factor * (1 + delta)
-		high_objective, high_charged = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+		high_objective, high_charged = main(sim_data, cell_specs, [condition], schmidt, objective_params,
 			ribosome_control, charged=charged_fraction, factors=[high_factor],
 			update_synthetases=update_synthetases, update_aas=update_aas, verbose=False)
 
 		# Change low
 		low_factor = factor * (1 - delta)
-		low_objective, low_charged = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+		low_objective, low_charged = main(sim_data, cell_specs, [condition], schmidt, objective_params,
 			ribosome_control, charged=charged_fraction, factors=[low_factor],
 			update_synthetases=update_synthetases, update_aas=update_aas, verbose=False)
 
@@ -907,7 +917,7 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_wei
 				break
 
 			factor *= 1 + direction * delta
-			objective, charged_fraction = main(sim_data, cell_specs, [condition], schmidt, objective_weights,
+			objective, charged_fraction = main(sim_data, cell_specs, [condition], schmidt, objective_params,
 				ribosome_control, charged=charged_fraction, factors=[factor], update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
@@ -925,12 +935,12 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_wei
 
 	# Summarize results
 	if verbose:
-		main(sim_data, cell_specs, conditions, schmidt, objective_weights,
-			ribosome_control, factors=factors, update_synthetases=update_synthetases, update_aas=update_aas)
+		main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control,
+			factors=factors, update_synthetases=update_synthetases, update_aas=update_aas)
 
 	return factors, total_objective
 
-def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, ribosome_control, path):
+def plot_synthetases(sim_data, cell_specs, conditions, objective_params, ribosome_control, path):
 	'''
 	Plot synthetase concentrations in the different conditions comparing model
 	and proteomics data from Schmidt et al. 2015.
@@ -940,8 +950,8 @@ def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, riboso
 		cell_specs (dict): information about each condition that was fit
 		conditions (list[str]): set of conditions to test
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
-		objective_weights (ndarray[float]): objective weights for each component,
-			if None, all weights will be 1
+		objective_params (tuple(int, ndarray[float])): objective function and objective
+			weights for each component, if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
 		path (str): path to output file
@@ -959,9 +969,9 @@ def plot_synthetases(sim_data, cell_specs, conditions, objective_weights, riboso
 
 	is_rrna = sim_data.process.transcription.rnaData['isRRna']
 	model_factors, _ = find_concentrations(sim_data, cell_specs, conditions, False,
-		objective_weights, ribosome_control, update_synthetases=True)
+		objective_params, ribosome_control, update_synthetases=True)
 	schmidt_factors, _ = find_concentrations(sim_data, cell_specs, conditions, True,
-		objective_weights, ribosome_control, update_synthetases=True)
+		objective_params, ribosome_control, update_synthetases=True)
 
 	# Setup plot
 	plt.figure(figsize=(8.5, 11))
@@ -1135,7 +1145,7 @@ def plot_parameters(data, path):
 	fig = dict(data=[reference_trace, modified_trace], layout=layout)
 	plotly.io.write_image(fig, path + '_splom.png')
 
-def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_control,
+def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control,
 		charged=None, factors=None, update_synthetases=False, update_aas=False, verbose=True):
 	'''
 	Main function to perform analysis.
@@ -1147,8 +1157,8 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 			(eg. ['basal', 'with_aa', 'no_oxygen'])
 		schmidt (bool): if True, uses synthetase concentrations from proteomics
 			from Schmidt et al. 2015
-		objective_weights (ndarray[float]): objective weights for each component,
-			if None, all weights will be 1
+		objective_params (tuple(int, ndarray[float])): objective function and objective
+			weights for each component, if None, all weights will be 1
 		ribosome_control (bool): if True, updates ribosome concentration based on
 			ppGpp regulation, otherwise uses bulk container counts
 		charged (list[ndarray[float]]): fraction of charged tRNA for each amino acid
@@ -1228,7 +1238,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_weights, ribosome_
 				expected_ppgpp, v_rib, expected_v_rib)
 
 		objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
-			expected_ppgpp, v_rib, expected_v_rib, objective_weights)
+			expected_ppgpp, v_rib, expected_v_rib, objective_params)
 
 		final_charged_fractions += [charged_trna / total_trnas]
 
@@ -1271,6 +1281,10 @@ def parse_args():
 		default=None,
 		help='Output file name saved in out/, (default: varies depending on what is saved)')
 	parser.add_argument('--objective',
+		type=int,
+		default=0,
+		help='Objective to select (default: 0)')
+	parser.add_argument('--objective-weights',
 		nargs='+',
 		help='Objective function weights')
 
@@ -1338,10 +1352,10 @@ if __name__ == '__main__':
 		conditions = [conditions[args.condition]]
 
 	# Convert objective to float if provided
-	if args.objective:
-		objective_weights = np.array(args.objective, float)
+	if args.objective_weights:
+		objective_params = (args.objective, np.array(args.objective_weights, float))
 	else:
-		objective_weights = None
+		objective_params = (args.objective, None)
 
 	# Load necessary files
 	if not args.plot_parameters:
@@ -1370,7 +1384,7 @@ if __name__ == '__main__':
 
 	# Perform desired analysis
 	if args.sensitivity:
-		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective_weights, args.ribosome_control)
+		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective_params, args.ribosome_control)
 	elif args.sgd:
 		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
 
@@ -1402,7 +1416,7 @@ if __name__ == '__main__':
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, factors, objective = coordinate_descent(
-					sim_data, cell_specs, conditions, args.schmidt, objective_weights,
+					sim_data, cell_specs, conditions, args.schmidt, objective_params,
 					args.ribosome_control, update_factors=update_factors,
 					update_synthetases=update_synthetases, update_aas=update_aas)
 				csv_writer.writerow([seed, objective] + get_growth_constants(constants)
@@ -1413,15 +1427,15 @@ if __name__ == '__main__':
 				for param, value in original_constants.items():
 					setattr(sim_data.constants, param, value)
 	elif args.synthetases:
-		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_weights,
+		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_params,
 			args.ribosome_control, update_synthetases=True)
 	elif args.aas:
-		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_weights,
+		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_params,
 			args.ribosome_control, update_aas=True)
 	elif args.plot_synthetases:
 		out = output_location(args.out, OUTPUT_DIR, SYNTHETASE_PLOT_OUT)
 
-		plot_synthetases(sim_data, cell_specs, conditions, objective_weights, args.ribosome_control, out)
+		plot_synthetases(sim_data, cell_specs, conditions, objective_params, args.ribosome_control, out)
 	elif args.plot_parameters:
 		out = output_location(args.out, OUTPUT_DIR, args.plot_parameters.split('.')[0])
 
@@ -1431,6 +1445,6 @@ if __name__ == '__main__':
 
 		plot_parameters(data, out)
 	else:
-		main(sim_data, cell_specs, conditions, args.schmidt, objective_weights, args.ribosome_control)
+		main(sim_data, cell_specs, conditions, args.schmidt, objective_params, args.ribosome_control)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

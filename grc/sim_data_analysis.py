@@ -434,6 +434,9 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 	def squared_absolute(actual, expected):
 		return (actual - expected)**2
 
+	def accuracy(actual, expected):
+		return (actual - expected) / expected
+
 	def get_weight(weights, idx):
 		if weights is not None and idx < len(weights):
 			return weights[idx]
@@ -444,7 +447,7 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 	weights = params[1]
 
 	# Select objective function from params
-	objective_functions = [squared_normalized, squared_absolute]
+	objective_functions = [squared_normalized, squared_absolute, accuracy]
 	if objective_index >= len(objective_functions):
 		objective_index = 0
 	objective_function = objective_functions[objective_index]
@@ -727,6 +730,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 		Constants object: class of all constants values from sim_data
 		list[float]: factors to multiply synthetase or amino acid concentrations by in each condition
 		float: objective value reached
+		float: reference objective value
 	'''
 
 	max_it = 1000
@@ -755,13 +759,13 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 
 			# Change high
 			setattr(sim_data.constants, param, original_value * (1 + delta))
-			high_objective, high_charged = main(sim_data, cell_specs, conditions, schmidt, objective_params,
+			high_objective, high_charged, _ = main(sim_data, cell_specs, conditions, schmidt, objective_params,
 				ribosome_control, charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
 			# Change low
 			setattr(sim_data.constants, param, original_value * (1 - delta))
-			low_objective, low_charged = main(sim_data, cell_specs, conditions, schmidt, objective_params,
+			low_objective, low_charged, _ = main(sim_data, cell_specs, conditions, schmidt, objective_params,
 				ribosome_control, charged=charged_fraction, factors=factors, update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
@@ -828,10 +832,10 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 	for factor, condition in zip(factors, conditions):
 		print('{} change in {}: {:.3f}'.format(conc_changed, condition, factor))
 
-	main(sim_data, cell_specs, conditions, schmidt, objective_params,
+	objective, _, ref_objective = main(sim_data, cell_specs, conditions, schmidt, objective_params,
 		ribosome_control, factors=factors, update_synthetases=update_synthetases, update_aas=update_aas)
 
-	return sim_data.constants, list(factors), objective
+	return sim_data.constants, list(factors), objective, ref_objective
 
 def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control,
 		charged=None, factors=None, update_synthetases=False, update_aas=False, max_it=None, verbose=True):
@@ -881,13 +885,13 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_par
 
 		# Change high
 		high_factor = factor * (1 + delta)
-		high_objective, high_charged = main(sim_data, cell_specs, [condition], schmidt, objective_params,
+		high_objective, high_charged, _ = main(sim_data, cell_specs, [condition], schmidt, objective_params,
 			ribosome_control, charged=charged_fraction, factors=[high_factor],
 			update_synthetases=update_synthetases, update_aas=update_aas, verbose=False)
 
 		# Change low
 		low_factor = factor * (1 - delta)
-		low_objective, low_charged = main(sim_data, cell_specs, [condition], schmidt, objective_params,
+		low_objective, low_charged, _ = main(sim_data, cell_specs, [condition], schmidt, objective_params,
 			ribosome_control, charged=charged_fraction, factors=[low_factor],
 			update_synthetases=update_synthetases, update_aas=update_aas, verbose=False)
 
@@ -917,7 +921,7 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_par
 				break
 
 			factor *= 1 + direction * delta
-			objective, charged_fraction = main(sim_data, cell_specs, [condition], schmidt, objective_params,
+			objective, charged_fraction, _ = main(sim_data, cell_specs, [condition], schmidt, objective_params,
 				ribosome_control, charged=charged_fraction, factors=[factor], update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
@@ -1173,9 +1177,11 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 		float: objective value for all conditions
 		list[ndarray[float]]: fraction of charged tRNA for each amino acid in each
 			condition, for fast iteration
+		float: reference objective value for all conditions
 	'''
 
 	objective = 0
+	ref_objective = 0
 
 	if ribosome_control:
 		iter = 10
@@ -1239,10 +1245,12 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 
 		objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
 			expected_ppgpp, v_rib, expected_v_rib, objective_params)
+		ref_objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
+			expected_ppgpp, v_rib, expected_v_rib, (2, None))
 
 		final_charged_fractions += [charged_trna / total_trnas]
 
-	return objective, final_charged_fractions
+	return objective, final_charged_fractions, ref_objective
 
 def parse_args():
 	'''
@@ -1402,9 +1410,9 @@ if __name__ == '__main__':
 
 		with open(out, 'w') as f:
 			csv_writer = csv.writer(f, delimiter='\t')
-			csv_writer.writerow(['Seed', 'Objective'] + PARAMS
+			csv_writer.writerow(['Seed', 'Reference Objective', 'Objective'] + PARAMS
 				+ ['{} in {}'.format(conc_updated, c) for c in conditions])
-			csv_writer.writerow(['Original', ''] + get_growth_constants(sim_data.constants)
+			csv_writer.writerow(['Original', '', ''] + get_growth_constants(sim_data.constants)
 				+ [1 for c in conditions])
 			f.flush()
 
@@ -1415,12 +1423,12 @@ if __name__ == '__main__':
 					seed = args.seed
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
-				constants, factors, objective = coordinate_descent(
+				constants, factors, objective, ref_objective = coordinate_descent(
 					sim_data, cell_specs, conditions, args.schmidt, objective_params,
 					args.ribosome_control, update_factors=update_factors,
 					update_synthetases=update_synthetases, update_aas=update_aas)
-				csv_writer.writerow([seed, objective] + get_growth_constants(constants)
-					+ factors)
+				csv_writer.writerow([seed, ref_objective, objective]
+					+ get_growth_constants(constants) + factors)
 				f.flush()
 
 				# Reset constants to original values

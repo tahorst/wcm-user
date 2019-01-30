@@ -11,7 +11,8 @@ Requires (cPickle files, defaults to .cp files in data directory):
 
 Output:
 	For the --sgd option, an output tsv will be saved by default in out/sgd.tsv
-	For the --plot option, an output plot will be saved by default in out/analysis.png
+	For the --plot-synthetases option, an output plot will be saved by default in out/synthetases.png
+	For the --plot-parameters option, an output plot will be saved by default in out/<input file>.png
 '''
 
 from __future__ import division
@@ -1286,6 +1287,10 @@ def parse_args():
 		type=int,
 		default=default_seeds,
 		help='Number of seeds to perform sgd for (default: {})'.format(default_seeds))
+	parser.add_argument('--seed',
+		type=int,
+		default=None,
+		help='Random seed to set for sgd, choosen randomly if not set')
 	parser.add_argument('--update-synthetases',
 		type=int,
 		default=default_update,
@@ -1392,6 +1397,8 @@ if __name__ == '__main__':
 			original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
 
 			for seed in np.random.randint(0, 100000, args.seeds):
+				if args.seed is not None:
+					seed = args.seed
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, factors, objective = coordinate_descent(

@@ -447,7 +447,7 @@ def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_
 		return (actual - expected)**2
 
 	def accuracy(actual, expected):
-		return (actual - expected) / expected
+		return np.abs(actual - expected) / expected
 
 	def get_weight(weights, idx):
 		if weights is not None and idx < len(weights):
@@ -845,7 +845,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 		print('{} change in {}: {:.3f}'.format(conc_changed, condition, factor))
 
 	objective, _, ref_objective = main(sim_data, cell_specs, conditions, schmidt, objective_params,
-		ribosome_control, factors=factors, update_synthetases=update_synthetases, update_aas=update_aas)
+		ribosome_control, factors=factors, charged=charged_fraction,
+		update_synthetases=update_synthetases, update_aas=update_aas)
 
 	return sim_data.constants, list(factors), objective, ref_objective
 

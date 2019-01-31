@@ -90,6 +90,18 @@ def output_location(arg, parent, default):
 
 	return os.path.join(parent, arg)
 
+def add_parameter_noise(constants):
+	'''
+	Adds noise to parameters.
+	Uses gamma distribution to prevent negative values with mean of 1 and variance of 0.1.
+
+	Args:
+		constants (class): constants from sim_data
+	'''
+
+	for param in PARAMS:
+		setattr(constants, param, getattr(constants, param) * np.random.gamma(10, 0.1))
+
 def get_volume(sim_data, bulk_container):
 	'''
 	Calculates the volume of a cell for a given composition assuming constant
@@ -1298,6 +1310,9 @@ def parse_args():
 	parser.add_argument('--objective-weights',
 		nargs='+',
 		help='Objective function weights')
+	parser.add_argument('--random-init',
+		action='store_true',
+		help='Initializes parameters with random noise if set')
 
 	# Sensitivity arguments
 	parser.add_argument('--sensitivity',
@@ -1395,6 +1410,8 @@ if __name__ == '__main__':
 
 	# Perform desired analysis
 	if args.sensitivity:
+		if args.random_init:
+			add_parameter_noise(sim_data.constants)
 		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective_params, args.ribosome_control)
 	elif args.sgd:
 		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
@@ -1424,6 +1441,8 @@ if __name__ == '__main__':
 			for seed in np.random.randint(0, 100000, args.seeds):
 				if args.seed is not None:
 					seed = args.seed
+				if args.random_init:
+					add_parameter_noise(sim_data.constants)
 				print('Seed: {}'.format(seed))
 				np.random.seed(seed)
 				constants, factors, objective, ref_objective = coordinate_descent(

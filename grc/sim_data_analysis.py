@@ -884,7 +884,7 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_par
 
 	total_objective = 0
 	delta = 0.01  # rate of change at each step
-	eps = 0.5
+	eps = 0.0001
 	if factors is None:
 		factors = np.ones(len(conditions))
 	it = 0
@@ -927,7 +927,7 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_par
 		converged = 0
 		best_objective = objective
 		best_factor = factor
-		while converged < 3:
+		while converged < 10:
 			it += 1
 
 			if max_it and it >= max_it:
@@ -938,7 +938,7 @@ def find_concentrations(sim_data, cell_specs, conditions, schmidt, objective_par
 				ribosome_control, charged=charged_fraction, factors=[factor], update_synthetases=update_synthetases,
 				update_aas=update_aas, verbose=False)
 
-			if objective > best_objective - eps:
+			if objective > best_objective * (1 - eps):
 				converged += 1
 			if objective < best_objective:
 				best_objective = objective

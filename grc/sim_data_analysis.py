@@ -1072,6 +1072,7 @@ def plot_parameters(data, path):
 	reference_parameters = np.array(data[1, start_parameter_col:], float)
 	modified_parameters = np.array(data[2:, start_parameter_col:], float)
 	objective = np.array(data[2:, objective_col], float).squeeze()
+	inverse_objective = 1 / objective
 
 	# Plot distributions
 	plt.figure(figsize=(8.5, 11))
@@ -1080,10 +1081,14 @@ def plot_parameters(data, path):
 
 	## Subplot for each parameter
 	for idx, param in enumerate(params):
+		parameters = modified_parameters[:, idx]
+		objective_weighted_parameter = inverse_objective.dot(parameters) / inverse_objective.sum()
+
 		ax = plt.subplot(n_rows, n_cols, idx + 1)
 
-		ax.hist(modified_parameters[:, idx])
+		ax.hist(parameters)
 		ax.axvline(reference_parameters[idx], color='r', linestyle='--')
+		ax.axvline(objective_weighted_parameter, color='k', linestyle='--')
 		ax.set_title(param, fontsize=8)
 		ax.tick_params(labelsize=7)
 

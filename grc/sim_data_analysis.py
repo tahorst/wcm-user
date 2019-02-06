@@ -246,7 +246,7 @@ def get_bound_rnap_counts(sim_data, bulk_container, doubling_time):
 
 	return bound_counts
 
-def get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob):
+def get_rnap_activation(sim_data, bulk_container, doubling_time, nutrients, synth_prob):
 	'''
 	Gets the number of RNAP activations within one second.  Assumes steady state
 	so activations will be equal to terminations to maintain the appropriate
@@ -256,6 +256,7 @@ def get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob):
 		sim_data (SimulationData object): knowledgebase for a simulation
 		bulk_container (BulkMoleculesContainer object): counts for each molecule
 		doubling_time (float with time units): expected cell doubling time
+		nutrients (str): nutrient label
 		synth_prob (ndarray[float]): synthesis probabilities for each RNA
 
 	Returns:
@@ -281,9 +282,10 @@ def get_rnap_activation(sim_data, bulk_container, doubling_time, synth_prob):
 			    = B / (synth_prob * rna_lengths / elong_rate)
 	'''
 
+	transcription = sim_data.process.transcription
 	rnap = get_bound_rnap_counts(sim_data, bulk_container, doubling_time)
-	rna_lengths = sim_data.process.transcription.rnaData['length'].asNumber()
-	elong_rate = sim_data.growthRateParameters.rnaPolymeraseElongationRate.asNumber()
+	rna_lengths = transcription.rnaData['length'].asNumber()
+	elong_rate = transcription.rnaPolymeraseElongationRateDict[nutrients].asNumber()
 
 	activation_rate = rnap / (rna_lengths / elong_rate).dot(synth_prob)
 
@@ -1004,11 +1006,12 @@ def plot_synthetases(sim_data, cell_specs, conditions, objective_params, ribosom
 		bulk_container = cell_specs[condition]['bulkAverageContainer']
 		doubling_time = sim_data.conditionToDoublingTime[condition]
 		synth_prob = cell_specs[condition]['synthProb']
+		nutrients = sim_data.conditions[condition]['nutrients']
 
 		rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
 
 		rnap_activation_rate = get_rnap_activation(
-			sim_data, bulk_container, doubling_time, synth_prob)
+			sim_data, bulk_container, doubling_time, nutrients, synth_prob)
 		_, _, _, model_synthetases, _, _ = get_concentrations(
 			sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
 			False, ribosome_control)
@@ -1235,7 +1238,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 			updated_synth_prob[is_rrna & (synth_prob > 0)] = rrna_synth_prob
 			updated_synth_prob /= updated_synth_prob.sum()
 			rnap_activation_rate = get_rnap_activation(
-				sim_data, bulk_container, doubling_time, updated_synth_prob)
+				sim_data, bulk_container, doubling_time, nutrients, updated_synth_prob)
 			rela, total_trnas, ribosomes, synthetases, aas, rnaps = get_concentrations(
 				sim_data, bulk_container, doubling_time, rnap_activation_rate, rrna_synth_prob,
 				schmidt, ribosome_control)

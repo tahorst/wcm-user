@@ -144,11 +144,11 @@ def get_counts_to_micromolar(doubling_time):
 	'''
 
 	if doubling_time.asNumber() > 50:
-		conversion = 0.0040315516
+		conversion = 0.00403
 	elif doubling_time.asNumber() < 40:
-		conversion = 0.0006922573
+		conversion = 0.000692
 	else:
-		conversion = 0.0015064190
+		conversion = 0.00151
 
 	return conversion
 

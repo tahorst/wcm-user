@@ -20,6 +20,7 @@ from __future__ import division
 import argparse
 import cPickle
 import csv
+import json
 import os
 import time
 
@@ -393,9 +394,26 @@ def get_concentrations(sim_data, bulk_container, doubling_time, rnap_activation_
 		else:
 			synthetase_conc = SCHMIDT_CONC['basal']
 
+	if doubling_time.asNumber() < 40:
+		filename = os.path.join(DATA_DIR, 'aa.json')
+	elif doubling_time.asNumber() > 50:
+		filename = os.path.join(DATA_DIR, 'anaerobic.json')
+	else:
+		filename = os.path.join(DATA_DIR, 'basal.json')
+
+	with open(filename) as f:
+		conc = json.load(f)
+
+	rela_conc = conc['rela']
+	total_trna_conc = np.array(conc['utrna']) + np.array(conc['ctrna'])
+	ribosome_conc = ribosome_counts * conc['conv']
+	synthetase_conc = np.array(conc['synthetases'])
+	aa_conc = np.array(conc['aa'])
+	rnap_conc = conc['rnap']
+
 	return rela_conc, total_trna_conc, ribosome_conc, synthetase_conc, aa_conc, rnap_conc
 
-def get_aa_fraction(sim_data, bulk_container):
+def get_aa_fraction(sim_data, bulk_container, doubling_time):
 	'''
 	Gets the fraction of amino acids that would be expected to be translated
 	based on mRNA expression and translation efficiencies.
@@ -408,19 +426,29 @@ def get_aa_fraction(sim_data, bulk_container):
 		ndarray[float]: fraction of expected elongations for each amino acid
 	'''
 
-	transcription = sim_data.process.transcription
-	translation = sim_data.process.translation
-	mapping = sim_data.relation.rnaIndexToMonomerMapping
+	# transcription = sim_data.process.transcription
+	# translation = sim_data.process.translation
+	# mapping = sim_data.relation.rnaIndexToMonomerMapping
 
-	translation_efficiencies = translation.translationEfficienciesByMonomer
-	aa_content = translation.monomerData['aaCounts'].asNumber()
+	# translation_efficiencies = translation.translationEfficienciesByMonomer
+	# aa_content = translation.monomerData['aaCounts'].asNumber()
 
-	rna_names = transcription.rnaData['id'][mapping]
-	rna_counts = bulk_container.counts(rna_names) + 1  # +1 for smoothing int counts
+	# rna_names = transcription.rnaData['id'][mapping]
+	# rna_counts = bulk_container.counts(rna_names) + 1  # +1 for smoothing int counts
 
-	total_aa = (rna_counts * translation_efficiencies).dot(aa_content)
+	# total_aa = (rna_counts * translation_efficiencies).dot(aa_content)
 
-	return total_aa / total_aa.sum()
+	if doubling_time.asNumber() < 40:
+		filename = os.path.join(DATA_DIR, 'aa.json')
+	elif doubling_time.asNumber() > 50:
+		filename = os.path.join(DATA_DIR, 'anaerobic.json')
+	else:
+		filename = os.path.join(DATA_DIR, 'basal.json')
+
+	with open(filename) as f:
+		conc = json.load(f)
+
+	return np.array(conc['f'])
 
 def get_objective_value(rrna_prob, expected_rrna_prob, ppgpp, expected_ppgpp, v_rib,
 		expected_v_rib, params):
@@ -1229,7 +1257,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 		expected_rrna_synth_prob = np.mean(synth_prob[is_rrna][synth_prob[is_rrna] > 0])
 		rrna_synth_prob = expected_rrna_synth_prob
 
-		f = get_aa_fraction(sim_data, bulk_container)
+		f = get_aa_fraction(sim_data, bulk_container, doubling_time)
 		expected_ppgpp = get_expected_ppgpp(sim_data, doubling_time)
 		expected_v_rib = get_expected_v_rib(sim_data, nutrients)
 

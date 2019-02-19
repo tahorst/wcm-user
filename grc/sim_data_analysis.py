@@ -621,7 +621,7 @@ def regulate_rrna_expression(ppgpp, rnap_free, new_rna_rate, constants):
 
 	return synth_prob
 
-def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, synthetases, aas, ppgpp, f):
+def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, rnaps, synthetases, aas, ppgpp, f):
 	'''
 	Prints a summary of the state (concentrations) of the cell to stdout
 
@@ -631,6 +631,7 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 		charged_trna (ndarray[float]): concentrations of charged tRNA for each amino acid
 		uncharged_trna (ndarray[float]): concentrations of uncharged tRNA for each amino acid
 		ribosomes (float): concentration of active ribosomes
+		rnaps (float): concentration of free RNA polymerases
 		synthetases (ndarray[float]): concentration of synthetases for each amino acid
 		aas (ndarray[float]): concentration for each amino acid
 		ppgpp (float): concentration of ppGpp
@@ -649,6 +650,7 @@ def summarize_state(condition, rela, charged_trna, uncharged_trna, ribosomes, sy
 	print_conc('Charged tRNA', charged_trna)
 	print_conc('Uncharged tRNA', uncharged_trna)
 	print_conc('Ribosomes', ribosomes)
+	print_conc('RNAP', rnaps)
 	print_conc('Synthetases', synthetases)
 	print_conc('Amino acids', aas)
 	print_conc('ppGpp', ppgpp)
@@ -1263,7 +1265,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 		# Print current state
 		if verbose:
 			summarize_state(condition, rela, charged_trna, uncharged_trna,
-				ribosomes, synthetases, aas, ppgpp, f)
+				ribosomes, rnaps, synthetases, aas, ppgpp, f)
 			error_summary(rrna_synth_prob, synth_prob[is_rrna], ppgpp,
 				expected_ppgpp, v_rib, expected_v_rib)
 

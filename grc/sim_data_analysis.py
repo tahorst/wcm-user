@@ -719,7 +719,7 @@ def sensitivity(sim_data, cell_specs, conditions, schmidt, objective_params, rib
 		setattr(sim_data.constants, param, original_value)
 
 def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_params,
-		ribosome_control, update_factors=0, update_synthetases=False, update_aas=False):
+		ribosome_control, update_factors=0, factors=None, update_synthetases=False, update_aas=False):
 	'''
 	Stochastic coordinate descent to determine optimal parameters.  Updates one
 	parameter at a time to minimize error for a given number of iterations or
@@ -739,6 +739,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 			ppGpp regulation, otherwise uses bulk container counts
 		update_factors (int): if a positive value, synthetase or amino acid concentrations
 			will be updated every update_factors time steps
+		factors (ndarray[float]): factor to multiply in each condition, must match length of conditions
 		update_synthetases (bool): if True, find synthetase concentrations to minimize objective
 		update_aas (bool): if True, find amino acid concentrations to minimize objective
 
@@ -759,7 +760,8 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 	objective_limit = 0.001  # below limit, change is assumed constant
 	delta = 0.1  # rate of change at each step
 	decay = 0.9  # rate of decay of delta
-	factors = np.ones(len(conditions))
+	if factors is None:
+		factors = np.ones(len(conditions))
 	charged_fraction = None
 
 	try:
@@ -1288,6 +1290,7 @@ def parse_args():
 
 	default_sim_data = os.path.join(DATA_DIR, 'sim_data.cp')
 	default_cell_specs = os.path.join(DATA_DIR, 'cell_specs.cp')
+	default_iters = 1
 	default_seeds = 1
 	default_update = 0
 
@@ -1334,6 +1337,11 @@ def parse_args():
 	parser.add_argument('--sgd',
 		action='store_true',
 		help='Perform stochastic gradient descent to find parameters')
+	parser.add_argument('--iters',
+		type=int,
+		default=default_iters,
+		help='Number of iterations to perform sgd for selecting best parameters'
+			 ' after each, useful with --random-init (default: {})'.format(default_iters))
 	parser.add_argument('--seeds',
 		type=int,
 		default=default_seeds,
@@ -1419,13 +1427,20 @@ if __name__ == '__main__':
 		constants.k_SpoT_ppGpp_synthesis = constants.k_SpoT_ppGpp_synthesis.asNumber(MICROMOLAR_UNITS / units.s)
 		constants.k_SpoT_ppGpp_degradation = constants.k_SpoT_ppGpp_degradation.asNumber(1 / units.s)
 
+		# constants.Kdissociation_charged_trna_ribosome = 2.75
+		# constants.Kdissociation_uncharged_trna_ribosome = 10
+		# constants.KI_ppgpp_rnap = 20
+		# constants.rrn_vmax = 500
+
 	# Perform desired analysis
 	if args.sensitivity:
 		if args.random_init:
 			add_parameter_noise(sim_data.constants)
 		sensitivity(sim_data, cell_specs, conditions, args.schmidt, objective_params, args.ribosome_control)
 	elif args.sgd:
-		out = output_location(args.out, OUTPUT_DIR, SGD_OUT)
+		best_objective = None
+		best_params = None
+		best_factors = None
 
 		update_factors = 0
 		update_synthetases = False
@@ -1439,34 +1454,52 @@ if __name__ == '__main__':
 			update_aas = True
 			conc_updated = 'Amino acids'
 
-		with open(out, 'w') as f:
-			csv_writer = csv.writer(f, delimiter='\t')
-			csv_writer.writerow(['Seed', 'Reference Objective', 'Objective'] + PARAMS
-				+ ['{} in {}'.format(conc_updated, c) for c in conditions])
-			csv_writer.writerow(['Original', '', ''] + get_growth_constants(sim_data.constants)
-				+ [1 for c in conditions])
-			f.flush()
+		for it in range(args.iters):
+			factors = best_factors
 
-			original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
+			if args.iters == 1:
+				it = None
+			out = output_location('{}{}.tsv'.format(args.out, it), OUTPUT_DIR, SGD_OUT)
 
-			for seed in np.random.randint(0, 100000, args.seeds):
-				if args.seed is not None:
-					seed = args.seed
-				if args.random_init:
-					add_parameter_noise(sim_data.constants)
-				print('Seed: {}'.format(seed))
-				np.random.seed(seed)
-				constants, factors, objective, ref_objective = coordinate_descent(
-					sim_data, cell_specs, conditions, args.schmidt, objective_params,
-					args.ribosome_control, update_factors=update_factors,
-					update_synthetases=update_synthetases, update_aas=update_aas)
-				csv_writer.writerow([seed, ref_objective, objective]
-					+ get_growth_constants(constants) + factors)
+			with open(out, 'w') as f:
+				csv_writer = csv.writer(f, delimiter='\t')
+				csv_writer.writerow(['Seed', 'Reference Objective', 'Objective'] + PARAMS
+					+ ['{} in {}'.format(conc_updated, c) for c in conditions])
+				csv_writer.writerow(['Original', '', ''] + get_growth_constants(sim_data.constants)
+					+ [1 for c in conditions])
 				f.flush()
 
-				# Reset constants to original values
-				for param, value in original_constants.items():
-					setattr(sim_data.constants, param, value)
+				original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
+
+				for seed in np.random.randint(0, 100000, args.seeds):
+					if args.seed is not None:
+						seed = args.seed
+					if args.random_init:
+						add_parameter_noise(sim_data.constants)
+					print('Seed: {}'.format(seed))
+					np.random.seed(seed)
+					constants, factors, objective, ref_objective = coordinate_descent(
+						sim_data, cell_specs, conditions, args.schmidt, objective_params,
+						args.ribosome_control, update_factors=update_factors, factors=factors,
+						update_synthetases=update_synthetases, update_aas=update_aas)
+					csv_writer.writerow([seed, ref_objective, objective]
+						+ get_growth_constants(constants) + factors)
+					f.flush()
+
+					if best_objective is None:
+						best_objective = objective
+					if objective <= best_objective:
+						best_params = {param: getattr(sim_data.constants, param) for param in PARAMS}
+						best_factors = factors
+
+					# Reset constants to original values
+					for param, value in original_constants.items():
+						setattr(sim_data.constants, param, value)
+
+			# Start from best objective parameters for next iteration
+			for param, value in best_params.items():
+				setattr(sim_data.constants, param, value)
+
 	elif args.synthetases:
 		find_concentrations(sim_data, cell_specs, conditions, args.schmidt, objective_params,
 			args.ribosome_control, update_synthetases=True)

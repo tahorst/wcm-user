@@ -58,7 +58,7 @@ PARAMS = [
 	'KM_rrn_rnap',
 	]
 
-# Concentrations for each AA from proteomics from Schmidt et al. 2015
+# Concentrations for each AA synthetase from proteomics from Schmidt et al. 2015
 SCHMIDT_CONC = {
 	'basal': np.array([
 		0.570, 0.550, 1.616, 0.664, 0.322, 1.497, 0.584, 0.485, 0.552, 1.267, 1.080,

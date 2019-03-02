@@ -517,6 +517,7 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 		ndarray[float]: concentration of charged tRNA for each amino acid (in units of uM)
 		ndarray[float]: concentration of uncharged tRNA for each amino acid (in units of uM)
 		float: ribosome elongation rate (in units of uM/s)
+		float: status indicator for charging, >1 if time limit reached, else 1
 	'''
 
 	# Parameters from Bosdriesz et al
@@ -535,7 +536,9 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 	t = 0
 	dt = 0.001
 	diff = 1
-	while diff > 1e-3:
+	tol = 1e-3
+	status = 1
+	while diff > tol:
 		v_charging = (k_s * synthetase_conc * uncharged_trna_conc * aa_conc
 			/ (KM_aa * KM_tf + KM_aa * uncharged_trna_conc + KM_tf * aa_conc
 			+ uncharged_trna_conc * aa_conc))
@@ -556,9 +559,10 @@ def charge_trna(total_trna, synthetase_conc, aa_conc, ribosome_conc, f, constant
 
 		if t > t_limit:
 			print('** Time limit reached, diff: {} **'.format(diff))
+			status = diff / tol
 			break
 
-	return charged_trna_conc, uncharged_trna_conc, v_rib
+	return charged_trna_conc, uncharged_trna_conc, v_rib, status
 
 def create_ppgpp(rela_conc, charged_trna_conc, uncharged_trna_conc, ribosome_conc, f, constants):
 	'''
@@ -816,7 +820,7 @@ def coordinate_descent(sim_data, cell_specs, conditions, schmidt, objective_para
 			if it == 1:
 				propensity[:] = objective
 
-			# Update synthetase concentrations to improve objective if set
+			# Update concentrations to improve objective if set
 			if update_factors > 0 and it % update_factors == 0:
 				new_factors, new_objective = find_concentrations(
 					sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_control,
@@ -1254,7 +1258,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 			# Calculate values from current state
 			if i > 0:
 				charged_fraction = charged_trna / total_trnas
-			charged_trna, uncharged_trna, v_rib = charge_trna(
+			charged_trna, uncharged_trna, v_rib, status = charge_trna(
 				total_trnas, synthetases, aas, ribosomes, f, constants, charged_fraction)
 			ppgpp = create_ppgpp(rela, charged_trna, uncharged_trna, ribosomes, f, constants)
 			new_rrna_synth_prob = regulate_rrna_expression(ppgpp, rnaps, rnap_activation_rate, constants)
@@ -1264,6 +1268,9 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 			else:
 				rrna_synth_prob = new_rrna_synth_prob
 
+			if status > 1:
+				break
+
 		# Print current state
 		if verbose:
 			summarize_state(condition, rela, charged_trna, uncharged_trna,
@@ -1272,7 +1279,7 @@ def main(sim_data, cell_specs, conditions, schmidt, objective_params, ribosome_c
 				expected_ppgpp, v_rib, expected_v_rib)
 
 		objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
-			expected_ppgpp, v_rib, expected_v_rib, objective_params)
+			expected_ppgpp, v_rib, expected_v_rib, objective_params) * status
 		ref_objective += get_objective_value(rrna_synth_prob, expected_rrna_synth_prob, ppgpp,
 			expected_ppgpp, v_rib, expected_v_rib, (2, None))
 

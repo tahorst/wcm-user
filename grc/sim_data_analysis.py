@@ -1455,7 +1455,7 @@ if __name__ == '__main__':
 			conc_updated = 'Amino acids'
 
 		for it in range(args.iters):
-			factors = best_factors
+			iter_factors = best_factors
 
 			if args.iters == 1:
 				it = None
@@ -1463,11 +1463,12 @@ if __name__ == '__main__':
 
 			with open(out, 'w') as f:
 				csv_writer = csv.writer(f, delimiter='\t')
-				csv_writer.writerow(['Seed', 'Reference Objective', 'Objective'] + PARAMS
-					+ ['{} in {}'.format(conc_updated, c) for c in conditions])
-				csv_writer.writerow(['Original', '', ''] + get_growth_constants(sim_data.constants)
-					+ [1 for c in conditions])
-				f.flush()
+				if not it:
+					csv_writer.writerow(['Seed', 'Reference Objective', 'Objective'] + PARAMS
+						+ ['{} in {}'.format(conc_updated, c) for c in conditions])
+					csv_writer.writerow(['Original', '', ''] + get_growth_constants(sim_data.constants)
+						+ [1 for c in conditions])
+					f.flush()
 
 				original_constants = {param: getattr(sim_data.constants, param) for param in PARAMS}
 
@@ -1480,7 +1481,7 @@ if __name__ == '__main__':
 					np.random.seed(seed)
 					constants, factors, objective, ref_objective = coordinate_descent(
 						sim_data, cell_specs, conditions, args.schmidt, objective_params,
-						args.ribosome_control, update_factors=update_factors, factors=factors,
+						args.ribosome_control, update_factors=update_factors, factors=iter_factors,
 						update_synthetases=update_synthetases, update_aas=update_aas)
 					csv_writer.writerow([seed, ref_objective, objective]
 						+ get_growth_constants(constants) + factors)
@@ -1489,6 +1490,7 @@ if __name__ == '__main__':
 					if best_objective is None:
 						best_objective = objective
 					if objective <= best_objective:
+						best_objective = objective
 						best_params = {param: getattr(sim_data.constants, param) for param in PARAMS}
 						best_factors = factors
 

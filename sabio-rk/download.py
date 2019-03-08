@@ -13,7 +13,7 @@ PARAM_QUERY_URL = 'http://sabiork.h-its.org/entry/exportToExcelCustomizable'
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'ecoli-kinetics.tsv')
 
 # ask SABIO-RK for all EntryIDs matching a query
-query = {'format':'txt', 'q':'Organism:"Escherichia coli"'}
+query = {'format':'txt', 'q':'Organism:"Escherichia coli" AND EnzymeType:"wildtype"'}
 
 # make GET request
 request = requests.get(ENTRYID_QUERY_URL, params = query)
@@ -25,7 +25,7 @@ print('%d matching entries found.' % len(entryIDs))
 
 # encode next request, for parameter data given entry IDs
 data_field = {'entryIDs[]': entryIDs}
-query = {'format':'tsv', 'fields[]':['EntryID', 'Organism', 'UniprotID','ECNumber', 'Parameter']}
+query = {'format':'tsv', 'fields[]':['EntryID', 'PubMedID', 'Organism', 'UniprotID', 'Enzymename', 'ECNumber', 'Parameter', 'ReactionEquation']}
 
 # make POST request
 request = requests.post(PARAM_QUERY_URL, params=query, data=data_field)

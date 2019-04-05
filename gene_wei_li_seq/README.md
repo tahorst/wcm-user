@@ -1,0 +1,1 @@
+Uses Gene Wei Li's sequencing dataset to replace certain genes in the model expression.  Gene Wei Li's dataset is a subset of genes in the model (3724 vs 4624) so a hybrid is needed.  This can be incorporated into the model by copying the data to the file in wcEcoli/reconstruction/ecoli/flat/rna_seq_data/.  Input file rna_seq_gene_wei_li.tsv comes from EcoliFoldChanges repo.

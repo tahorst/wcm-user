@@ -7,11 +7,17 @@ Requires:
 '''
 
 import cPickle
+import json
 import os
 
 
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 SIM_DATA_FILE = os.path.join(ROOT_DIR, 'scripts', 'sim_data.cp')
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, 'out')
+if not os.path.exists(OUTPUT_DIR):
+	os.mkdir(OUTPUT_DIR)
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'no_flux_reactions.json')
 
 
 if __name__ == '__main__':
@@ -40,7 +46,7 @@ if __name__ == '__main__':
 				reactants.add(met)
 
 	# Add all metabolites that can be exchanged
-	for met in metabolism.all_external_exchange_molecules:
+	for met in metabolism.boundary.all_external_exchange_molecules:
 		all_mets.add(met)
 		reactants.add(met)
 		products.add(met)
@@ -61,5 +67,8 @@ if __name__ == '__main__':
 	print('# of single metabolites: {}'.format(len(single_mets)))
 	print('# of rxns that will not occur: {}'.format(len(no_flux_rxns)))
 	print('# of rxns with kinetics that will not occur: {}'.format(len(no_flux_kinetics)))
+
+	with open(OUTPUT_FILE, 'w') as f:
+		json.dump(no_flux_rxns, f)
 
 	import ipdb; ipdb.set_trace()

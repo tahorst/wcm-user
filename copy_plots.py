@@ -57,6 +57,10 @@ if __name__ == '__main__':
 	if os.path.exists(args.dest) and not args.force and not args.dry_run:
 		raise Exception('Destination already exists. Use -f to force a copy.')
 
+	# Prevent replace bug if src not given with directory separator at end
+	if not args.src.endswith(os.sep):
+		args.src += os.sep
+
 	for root, dirs, files in os.walk(args.src):
 		current_dir = os.path.basename(root)
 		dest_dirs = root.replace(args.src, '')

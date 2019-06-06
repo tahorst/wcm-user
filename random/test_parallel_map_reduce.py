@@ -10,6 +10,7 @@ from future_builtins import zip
 
 import gc
 import multiprocessing as mp
+import operator
 import time
 
 import numpy as np
@@ -39,11 +40,6 @@ def reduce_results_gc(total, new):
 	gc.collect()
 	return (t + n for t,n in zip(total, new))
 
-def reduce_results_del(total, new):
-	value = (t + n for t,n in zip(total, new))
-	del new
-	return value
-
 # Functions to test
 def serial():
 	reduce(reduce_results, mapped())
@@ -65,6 +61,13 @@ def parallel_gc():
 	pool.close()
 	pool.join()
 
+def parallel_no_tuple():
+	pool = mp.Pool(8)
+	results = pool.imap_unordered(get_results, zip([None] * SAMPLES,))
+	reduce(operator.add, results)
+	pool.close()
+	pool.join()
+
 # Timing function
 def time_fun(fun, desc):
 	print('\n{}'.format(desc))
@@ -72,8 +75,9 @@ def time_fun(fun, desc):
 	fun()
 	print('Completed: {:.1f} sec'.format(time.time() - st))
 
-
-time_fun(serial, 'Serial no gc')  # 8.8 sec
-time_fun(serial_gc, 'Serial with gc')  # 21.4 sec - doesn't free memory
-time_fun(parallel, 'Parallel no gc')  # 6.0 sec
-time_fun(parallel_gc, 'Parallel with gc')  # 29.9 sec - much slower, doesn't free mem
+# Times with 5000 samples, tested individually to prevent memory buildup
+time_fun(serial, 'Serial no gc')  # 8.7 sec
+time_fun(serial_gc, 'Serial with gc')  # 22.1 sec - doesn't free memory
+time_fun(parallel, 'Parallel no gc')  # 9.4 sec
+time_fun(parallel_gc, 'Parallel with gc')  # 33.9 sec - much slower, doesn't free mem
+time_fun(parallel_no_tuple, 'Parallel no tuple')  # 10.5 sec - Fixes memory build up

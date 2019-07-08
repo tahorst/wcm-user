@@ -134,9 +134,10 @@ functional_monomers = {
 	'RNA Decay': rnaDecayMonomers,
 	'Transcription Regulation': tfMonomers,
 	}
+
 with open(OUTPUT_FILE, 'w') as f:
 	writer = csv.writer(f, delimiter='\t')
-	writer.writerow(['Gene', 'Monomer', 'Process'])
+	writer.writerow(['Gene', 'RNA ID', 'Monomer ID', 'Process'])
 
 	monomers_added = set()
 	for gene, monomer in zip(geneNames, monomers):
@@ -147,8 +148,9 @@ with open(OUTPUT_FILE, 'w') as f:
 				break
 
 		# Prevent duplicates
+		monomer = monomer[:-3]
 		if monomer not in monomers_added:
-			writer.writerow([gene, monomer, process])
+			writer.writerow([gene, monomerToRna[monomer], monomer, process])
 			monomers_added.add(monomer)
 
 nGenes = len(set(monomers))

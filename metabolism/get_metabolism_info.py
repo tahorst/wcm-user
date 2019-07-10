@@ -43,7 +43,7 @@ with open(METABOLITES_FILE, 'w') as f:
 		if m[:-3] in bennett:
 			source = 'Bennett et al. 2009'
 		else:
-			source = 'Biomass'
+			source = 'Biomass (EcoCyc GEM, Bremer and Dennis. 1996., and Neidhardt. 2006.)'
 		writer.writerow([m, source])
 
 # Save kinetic constraints

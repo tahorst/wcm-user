@@ -68,8 +68,7 @@ if __name__ == '__main__':
 		for f in files:
 			# Paths for metadata files
 			if current_dir == METADATA_DIR:
-				src = os.path.join(root, f)
-				dest = os.path.join(args.dest, dest_dirs, f)
+				pass
 			# Paths for plot files
 			elif args.extension in f:
 				# Bring up nested plot directories (eg plotOut/low_res_plots -> plotOut/)
@@ -81,25 +80,26 @@ if __name__ == '__main__':
 					if not dest_dirs:
 						dest_dirs = root.replace(args.src, '')
 						break
-
-				src = os.path.join(root, f)
-				dest = os.path.join(args.dest, dest_dirs, f)
 			else:
+				# Paths for other files
 				for e in OTHER_EXTENSIONS:
 					if e in f:
-						src = os.path.join(root, f)
-						dest = os.path.join(args.dest, dest_dirs, f)
 						break
 				else:
 					continue
 
+			src = os.path.join(root, f)
+			dest = os.path.join(args.dest, dest_dirs, f)
+			status = '{{}} file {} to {}'.format(src, dest)
+
 			# Create directories and copy files
-			if not args.dry_run:
+			if args.dry_run:
+				print(status.format('Will copy'))
+			else:
 				dest_dir = os.path.dirname(dest)
 				if not os.path.exists(dest_dir):
 					os.makedirs(dest_dir)
 				shutil.copy2(src, dest)
 
-			# Print status
-			if args.verbose or args.dry_run:
-				print('Copied file {} to {}'.format(src, dest))
+				if args.verbose:
+					print(status.format('Copied'))

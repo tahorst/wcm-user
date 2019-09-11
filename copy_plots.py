@@ -15,7 +15,8 @@ import shutil
 METADATA_DIR = 'metadata'
 PLOT_DIR = 'plotOut'
 
-DEFAULT_EXTENSION = '.png'
+DEFAULT_EXTENSION = '.png'  # For plots
+OTHER_EXTENSIONS = ['.tsv']  # For other files
 
 
 def parse_args():
@@ -84,7 +85,13 @@ if __name__ == '__main__':
 				src = os.path.join(root, f)
 				dest = os.path.join(args.dest, dest_dirs, f)
 			else:
-				continue
+				for e in OTHER_EXTENSIONS:
+					if e in f:
+						src = os.path.join(root, f)
+						dest = os.path.join(args.dest, dest_dirs, f)
+						break
+				else:
+					continue
 
 			# Create directories and copy files
 			if not args.dry_run:

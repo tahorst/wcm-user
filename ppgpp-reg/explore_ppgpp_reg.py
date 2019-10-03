@@ -28,6 +28,7 @@ if not os.path.exists(OUT_DIR):
 PPGPP_REG_FILE = os.path.join(DATA_DIR, 'ppgpp_regulation.tsv')
 SIM_DATA_FILE = os.path.join(DATA_DIR, 'sim_data.cp')
 SYNONYMS_FILE = os.path.join(DATA_DIR, 'gene_ids.tsv')
+FOLD_CHANGE_FILE = os.path.join(DATA_DIR, 'ppgpp_fc.tsv')
 
 
 def load_regulation():
@@ -39,11 +40,13 @@ def load_regulation():
 		data = np.array(list(reader))
 		data[data == ''] = '0'
 
-	genes = data[:, 0]
-	ppgpp_reg = data[:, 1].astype(int)
-	ppgpp_dksa_reg = data[:, 2].astype(int)
+	genes = data[:, header.index('Gene')]
+	ppgpp_reg = data[:, header.index('ppGpp')].astype(int)
+	ppgpp_dksa_reg = data[:, header.index('DksA-ppGpp')].astype(int)
+	curated = data[:, header.index('Curated Gene')]
+	original_gene_mapping = {g: c for g, c in zip(genes, curated) if g != c}
 
-	return genes, ppgpp_reg, ppgpp_dksa_reg
+	return genes, ppgpp_reg, ppgpp_dksa_reg, original_gene_mapping
 
 def load_sim_data():
 	with open(SIM_DATA_FILE) as f:
@@ -62,13 +65,33 @@ def load_synonyms():
 
 	return synonyms
 
+def load_fc():
+	valid_categories = {'A', 'B', 'C', 'D'}  # statistically significant change and not small RNA
+	with open(FOLD_CHANGE_FILE) as f:
+		reader = csv.reader(f, delimiter='\t')
+		headers = reader.next()
+		data = np.array(list(reader))
+
+	data[data == 'N/A'] = '0'
+	genes = data[:, headers.index('Gene')]
+	early_expression = data[:, headers.index('1+2+ 5 min')].astype(float)
+	late_expression = data[:, headers.index('1+2+ 10 min')].astype(float)
+	discard_early = np.array([d not in valid_categories
+		for d in data[:, headers.index('1+2+ 5 min Category')]], bool)
+	discard_late = np.array([d not in valid_categories
+		for d in data[:, headers.index('1+2+ 10 min Category')]])
+	early_expression[discard_early] = 0
+	late_expression[discard_late] = 0
+
+	return genes, early_expression, late_expression
+
 def print_is_fraction(rna_data, key, idx):
 	total = np.sum(rna_data[key])
 	regulated = np.sum(rna_data[key][idx])
 	print('\t{}: {:.1f}% ({}/{})'.format(key, 100 * regulated / total, regulated, total))
 
 def plot_expression(expression, regulation, genes):
-	print('Plotting expression in {} ...'.format(OUT_DIR))
+	print('\nPlotting expression in {} ...'.format(OUT_DIR))
 	for exp, reg, gene in zip(expression, regulation, genes):
 		plt.figure()
 
@@ -84,9 +107,10 @@ def plot_expression(expression, regulation, genes):
 
 
 if __name__ == '__main__':
-	genes, ppgpp_reg, ppgpp_dksa_reg = load_regulation()
+	genes, ppgpp_reg, ppgpp_dksa_reg, original_gene_mapping = load_regulation()
 	sim_data = load_sim_data()
 	synonyms = load_synonyms()
+	fc_genes, fc_early, fc_late = load_fc()
 
 	replication = sim_data.process.replication
 	transcription = sim_data.process.transcription
@@ -181,4 +205,65 @@ if __name__ == '__main__':
 		  .format(100 * aa_consistent / n_genes, aa_consistent, n_genes))
 	print('Relative expression consistent for {:.1f}% of genes ({}/{}) in basal to no_oxygen'
 		  .format(100 * anaerobic_consistent / n_genes, anaerobic_consistent, n_genes))
+
+	# Compare to ppGpp FC data
+	unique_genes = np.unique(genes)
+	fc_gene_set = set(fc_genes)
+	not_included = [g for g in unique_genes if g not in fc_gene_set and original_gene_mapping.get(g, '') not in fc_gene_set]
+	n_total = len(unique_genes)
+	n_included = n_total - len(not_included)
+	print('\nFC data for {}/{} genes from EcoCyc that are in WCM'.format(n_included, n_total))
+	print('Genes without FC data:')
+	for g in not_included:
+		print('\t{}'.format(g))
+
+	# Get FC data for WCM genes
+	fc_early_dict = {g: f for g, f in zip(fc_genes, fc_early)}
+	fc_late_dict = {g: f for g, f in zip(fc_genes, fc_late)}
+	fc_genes_in_wcm = np.array([
+		g if g in fc_gene_set else original_gene_mapping.get(g)
+		for g in genes
+		if g in fc_gene_set or original_gene_mapping.get(g, '') in fc_gene_set
+	])
+	fc_mask = np.array([
+		g in fc_gene_set or original_gene_mapping.get(g, '') in fc_gene_set
+		for g in genes
+	])
+	reg_direction = np.sign(total_reg[fc_mask])
+
+	## 5 min data (early)
+	fc_in_wcm = np.array([fc_early_dict[g] for g in fc_genes_in_wcm])
+	print('\nFC data for 5 min:')
+	print('\t{} positive fold changes (mean FC: {:.2f})'
+		  .format(np.sum(fc_in_wcm > 0), np.mean(fc_in_wcm[fc_in_wcm > 0])))
+	print('\t{} negative fold changes (mean FC: {:.2f})'
+		  .format(np.sum(fc_in_wcm < 0), np.mean(fc_in_wcm[fc_in_wcm < 0])))
+	print('\t{} with no fold change'.format(np.sum(fc_in_wcm == 0)))
+	fc_direction = np.sign(fc_in_wcm)
+	fc_nonzero = fc_direction != 0
+	consistent = reg_direction[fc_nonzero] == fc_direction[fc_nonzero]
+	n_consistent = np.sum(consistent)
+	print('\n\tFC consistent with curated regulation for {}/{} genes'.format(n_consistent, np.sum(fc_nonzero)))
+	print('\tInconsistent genes with 5 and 10 min FC:')
+	for g in fc_genes_in_wcm[fc_nonzero][~consistent]:
+		print('\t\t{}: {}\t{}'.format(g, fc_early_dict[g], fc_late_dict[g]))
+
+	## 10 min data (late)
+	fc_in_wcm = np.array([fc_late_dict[g] for g in fc_genes_in_wcm])
+	print('\nFC data for 10 min:')
+	print('\t{} positive fold changes (mean FC: {:.2f})'
+		  .format(np.sum(fc_in_wcm > 0), np.mean(fc_in_wcm[fc_in_wcm > 0])))
+	print('\t{} negative fold changes (mean FC: {:.2f})'
+		  .format(np.sum(fc_in_wcm < 0), np.mean(fc_in_wcm[fc_in_wcm < 0])))
+	print('\t{} with no fold change'.format(np.sum(fc_in_wcm == 0)))
+	fc_direction = np.sign(fc_in_wcm)
+	fc_nonzero = fc_direction != 0
+	consistent = reg_direction[fc_nonzero] == fc_direction[fc_nonzero]
+	n_consistent = np.sum(consistent)
+	print('\n\tFC consistent with curated regulation for {}/{} genes'.format(n_consistent, np.sum(fc_nonzero)))
+	print('\tInconsistent genes with 5 and 10 min FC:')
+	for g in fc_genes_in_wcm[fc_nonzero][~consistent]:
+		print('\t\t{}: {}\t{}'.format(g, fc_early_dict[g], fc_late_dict[g]))
+
+	# Time intensive tasks
 	plot_expression(expression.T, total_reg, genes)

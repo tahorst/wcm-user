@@ -7,7 +7,17 @@ for ppGpp binding to RNAP.
 
 from __future__ import division
 
+import os
+
+import matplotlib.pyplot as plt
 import numpy as np
+import sympy as sp
+
+
+FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
+OUT_DIR = os.path.join(FILE_LOCATION, 'out')
+if not os.path.exists(OUT_DIR):
+	os.mkdir(OUT_DIR)
 
 
 if __name__ == '__main__':
@@ -17,30 +27,51 @@ if __name__ == '__main__':
 	## From dryMassComposition.tsv
 	rna = np.array([0.135135135, 0.151162791, 0.177829099, 0.205928237, 0.243930636])
 
-	# Derived values
-	n_times = len(rna)
-	p_sum = ppgpp.sum()
-	r_sum = rna.sum()
-	comb = ppgpp * rna
-	c_sum = comb.sum()
+	a1s, a2s, kms = sp.symbols('a1 a2 km')
+
+	relation = a1s*(1 - ppgpp/(kms + ppgpp)) + a2s*ppgpp/(kms + ppgpp) - rna
+	J = relation.dot(relation)
+
+	# Significantly faster than leaving in symbolic form and using subs at each iteration
+	# 0.006 sec vs 38 sec for 1000 iterations
+	lambda_str = 'lambda a1, a2, km: {}'
+	dJda1 = eval(lambda_str.format(J.diff(a1s)))
+	dJda2 = eval(lambda_str.format(J.diff(a2s)))
+	dJdkm = eval(lambda_str.format(J.diff(kms)))
+	J = eval(lambda_str.format(J))
 
 	# Initial parameters
-	a1 = 0.3
-	a2 = 0.03
-	km = 0.2
-	step_size = 0.01
+	a1 = 0.5
+	a2 = 0.1
+	km = 0.025
+	step_size = 0.001
 
-	J = np.linalg.norm(a1*km*np.ones(n_times) + a2*ppgpp - km*rna - comb)
-	while J > 1e-5:
-		dJda1 = 2*a1*km**2 + 2*a2*km*p_sum - 2*km**2*r_sum - 2*km*c_sum
-		dJda2 = 2*a2*ppgpp.dot(ppgpp) + 2*a1*km*p_sum - 2*km*ppgpp.dot(rna) - 2*ppgpp.dot(comb)
-		dJdkm = 2*a1**2*km + 2*a1*a2*p_sum - 4*a1*km*r_sum - 2*a1*c_sum - 2*a2*ppgpp.dot(rna) + 2*km*rna.dot(rna) + 2*rna.dot(comb)
+	obj = J(a1, a2, km)
+	step = 0
+	while obj > 5e-6:
+		a1 -= dJda1(a1, a2, km) * step_size
+		a2 -= dJda2(a1, a2, km) * step_size
+		km -= dJdkm(a1, a2, km) * step_size
 
-		a1 -= dJda1 * step_size
-		a2 -= dJda2 * step_size
-		km -= dJdkm * step_size
+		obj = J(a1, a2, km)
 
-		J = np.linalg.norm(a1*km*np.ones(n_times) + a2*ppgpp - km*rna - comb)
-		new_rna = a1*(1-ppgpp/(km+ppgpp)) + a2*ppgpp/(km+ppgpp)
-		print(new_rna)
-		print(J)
+		step += 1
+		if step % 100000 == 0:
+			print(obj)
+			print(a1, a2, km)
+
+	rna_fit = a1*(1 - ppgpp/(km + ppgpp)) + a2*ppgpp/(km + ppgpp)
+
+	# Plot results of fit to data
+	plt.figure()
+
+	plt.plot(ppgpp, rna, 'o')
+	plt.plot(ppgpp, rna_fit, 'x')
+	plt.axvline(km, color='k', linestyle='--')
+
+	plt.xlabel('ppGpp (pmol / ng)')
+	plt.ylabel('RNA Mass Fraction')
+	plt.legend(['Measured', 'Fit', 'KM'])
+	plt.title('a1: {:.3f}, a2: {:.3f}, KM: {:.3f}'.format(a1, a2, km))
+
+	plt.savefig(os.path.join(OUT_DIR, 'ppgpp-rna.png'))

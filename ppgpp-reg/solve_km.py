@@ -34,11 +34,10 @@ if __name__ == '__main__':
 
 	# Significantly faster than leaving in symbolic form and using subs at each iteration
 	# 0.006 sec vs 38 sec for 1000 iterations
-	lambda_str = 'lambda a1, a2, km: {}'
-	dJda1 = eval(lambda_str.format(J.diff(a1s)))
-	dJda2 = eval(lambda_str.format(J.diff(a2s)))
-	dJdkm = eval(lambda_str.format(J.diff(kms)))
-	J = eval(lambda_str.format(J))
+	dJda1 = sp.lambdify((a1s, a2s, kms), J.diff(a1s))
+	dJda2 = sp.lambdify((a1s, a2s, kms), J.diff(a2s))
+	dJdkm = sp.lambdify((a1s, a2s, kms), J.diff(kms))
+	J = sp.lambdify((a1s, a2s, kms), J)
 
 	# Initial parameters
 	a1 = 0.5

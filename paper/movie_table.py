@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 """
-Create table of implemented genes for latex for science paper
+Create table of data sources for latex for science paper
 """
 
 from __future__ import division

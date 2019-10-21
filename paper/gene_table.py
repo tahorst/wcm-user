@@ -39,6 +39,7 @@ PARBOX = '\\parbox{{{}\\linewidth}}{{\n' \
 # Adjustable for dataset
 n_parbox = 3
 parbox_width = 0.3
+first_lines = 50
 max_lines = 55
 continued_str = '\n\\newpage Table S6 continued.\n'
 headers = ['Gene', 'Function']
@@ -55,7 +56,10 @@ n_lines = len(lines)
 tables = []
 current = 0
 while current < n_lines:
-	lines_per = int(min(max_lines, np.ceil((n_lines - current) / n_parbox)))
+	if current == 0:
+		lines_per = first_lines
+	else:
+		lines_per = int(min(max_lines, np.ceil((n_lines - current) / n_parbox)))
 	parboxes = []
 	for col in range(n_parbox):
 		parboxes += [PARBOX.format(parbox_width, header_line, ''.join(lines[current:current+lines_per]))]

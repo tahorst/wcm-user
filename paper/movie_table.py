@@ -35,7 +35,7 @@ PARBOX = '\\centering\n' \
 	'\\end{{tabular}}\n' \
 
 # Adjustable for dataset
-first_lines = 50
+first_lines = 45
 max_lines = 55
 continued_str = '\n\\newpage Table S9 continued.\n'
 

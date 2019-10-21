@@ -40,7 +40,7 @@ PARBOX = '\\parbox{{{}\\linewidth}}{{\n' \
 # Adjustable for dataset
 n_parbox = 2
 parbox_width = 0.45
-max_lines = 50
+max_lines = 45
 continued_str = '\n\\newpage Table S7 continued.\n'
 headers = ['Metabolite', 'Source']
 header_line = ' & '.join(headers) + '\\\\\n'

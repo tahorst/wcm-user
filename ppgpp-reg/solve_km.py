@@ -23,7 +23,7 @@ if not os.path.exists(OUT_DIR):
 if __name__ == '__main__':
 	# Data for different doubling times (100, 60, 40, 30, 24 min)
 	## From growthRateDependentParameters.tsv (pmol / ug)
-	ppgpp = np.array([0.316, 0.219, 0.127, 0.0866, 0.0578])
+	ppgpp = np.array([0.316, 0.219, 0.127, 0.0866, 0.0578])**2
 	## From dryMassComposition.tsv
 	rna = np.array([0.135135135, 0.151162791, 0.177829099, 0.205928237, 0.243930636])
 	## From average fold change for negative regulation in sim_data.processs.transcription.ppgpp_fold_changes (511dcff41)
@@ -79,9 +79,9 @@ if __name__ == '__main__':
 	# Plot results of fit to data
 	plt.figure()
 
-	plt.plot(ppgpp, rna, 'o')
-	plt.plot(ppgpp, rna_fit, 'x')
-	plt.axvline(km, color='k', linestyle='--')
+	plt.plot(np.sqrt(ppgpp), rna, 'o')
+	plt.plot(np.sqrt(ppgpp), rna_fit, 'x')
+	plt.axvline(np.sqrt(km), color='k', linestyle='--')
 
 	plt.xlabel('ppGpp (pmol / ng)')
 	plt.ylabel('RNA Mass Fraction')

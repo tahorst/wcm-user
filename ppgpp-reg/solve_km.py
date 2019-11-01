@@ -22,19 +22,19 @@ if not os.path.exists(OUT_DIR):
 
 if __name__ == '__main__':
 	# Data for different doubling times (100, 60, 40, 30, 24 min)
-	## From growthRateDependentParameters.tsv
+	## From growthRateDependentParameters.tsv (pmol / ug)
 	ppgpp = np.array([0.316, 0.219, 0.127, 0.0866, 0.0578])
 	## From dryMassComposition.tsv
 	rna = np.array([0.135135135, 0.151162791, 0.177829099, 0.205928237, 0.243930636])
 	## From average fold change for negative regulation in sim_data.processs.transcription.ppgpp_fold_changes (511dcff41)
-	fc_target = -1.4037
+	fc_target = 2**-1.4037
 
 	a1s, a2s, kms = sp.symbols('a1 a2 km')
 
 	# Use sp.exp to prevent negative parameter values, also improves stability for larger step size
 	relation = sp.exp(a1s)*(1 - ppgpp/(sp.exp(kms) + ppgpp)) + sp.exp(a2s)*ppgpp/(sp.exp(kms) + ppgpp) - rna
 	f_low = ppgpp[-1] / (sp.exp(kms) + ppgpp[-1])
-	fc = a2s - sp.log(sp.exp(a1s)*(1 - f_low) + sp.exp(a2s)*f_low) - fc_target
+	fc = sp.exp(a2s) / (sp.exp(a1s)*(1 - f_low) + sp.exp(a2s)*f_low) - fc_target
 	J = relation.dot(relation) + fc**2
 
 	# Significantly faster than leaving in symbolic form and using subs at each iteration
@@ -45,9 +45,9 @@ if __name__ == '__main__':
 	J = sp.lambdify((a1s, a2s, kms), J)
 
 	# Initial parameters
-	a1 = np.log(0.3)
-	a2 = np.log(0.05)
-	km = np.log(0.1)
+	a1 = np.log(0.5)
+	a2 = np.log(0.1)
+	km = np.log(0.04)
 	step_size = 0.1
 
 	obj = J(a1, a2, km)
@@ -72,6 +72,9 @@ if __name__ == '__main__':
 	a2 = np.exp(a2)
 	km = np.exp(km)
 	rna_fit = a1*(1 - ppgpp/(km + ppgpp)) + a2*ppgpp/(km + ppgpp)
+	f_low = ppgpp[-1] / (km + ppgpp[-1])
+	fc = np.log2(a2 / (a1*(1 - f_low) + a2*f_low))
+	print('fc: {}'.format(fc))
 
 	# Plot results of fit to data
 	plt.figure()

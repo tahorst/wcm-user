@@ -35,7 +35,7 @@ if __name__ == '__main__':
 	relation = sp.exp(a1s)*(1 - ppgpp/(sp.exp(kms) + ppgpp)) + sp.exp(a2s)*ppgpp/(sp.exp(kms) + ppgpp) - rna
 	f_low = ppgpp[-1] / (sp.exp(kms) + ppgpp[-1])
 	fc = sp.exp(a2s) / (sp.exp(a1s)*(1 - f_low) + sp.exp(a2s)*f_low) - fc_target
-	J = relation.dot(relation) + fc**2
+	J = relation.dot(relation)
 
 	# Significantly faster than leaving in symbolic form and using subs at each iteration
 	# 0.006 sec vs 38 sec for 1000 iterations
@@ -86,6 +86,6 @@ if __name__ == '__main__':
 	plt.xlabel('ppGpp (pmol / ng)')
 	plt.ylabel('RNA Mass Fraction')
 	plt.legend(['Measured', 'Fit', 'KM'])
-	plt.title('a1: {:.3f}, a2: {:.3f}, KM: {:.3f}'.format(a1, a2, km))
+	plt.title('a1: {:.3f}, a2: {:.3f}, KM: {:.3f}'.format(a1, a2, np.sqrt(km)))
 
 	plt.savefig(os.path.join(OUT_DIR, 'ppgpp-rna.png'))

@@ -85,10 +85,12 @@ def load_fc():
 
 	return genes, early_expression, late_expression
 
-def print_is_fraction(rna_data, key, idx):
+def print_is_fraction(rna_data, key, neg_idx, pos_idx):
 	total = np.sum(rna_data[key])
-	regulated = np.sum(rna_data[key][idx])
-	print('\t{}: {:.1f}% ({}/{})'.format(key, 100 * regulated / total, regulated, total))
+	negative = np.sum(rna_data[key][neg_idx])
+	positive = np.sum(rna_data[key][pos_idx])
+	regulated = negative + positive
+	print('\t{}: {:.1f}% ({}/{}), +:{}, -:{}'.format(key, 100 * regulated / total, regulated, total, positive, negative))
 
 def plot_expression(expression, regulation, genes):
 	print('\nPlotting expression in {} ...'.format(OUT_DIR))
@@ -152,8 +154,7 @@ if __name__ == '__main__':
 	genes = genes[mask]
 	ppgpp_reg = ppgpp_reg[mask]
 	ppgpp_dksa_reg = ppgpp_dksa_reg[mask]
-	total_reg = ppgpp_reg + ppgpp_dksa_reg
-	total_reg = total_reg / np.fmax(1, np.abs(total_reg))
+	total_reg = np.sign(ppgpp_reg + ppgpp_dksa_reg)
 	n_genes = len(genes)
 
 	# Convert to wcm framework
@@ -162,6 +163,8 @@ if __name__ == '__main__':
 	rna_id_to_monomer_id = {g['rnaId']: g['monomerId'] for g in gene_data}
 	gene_ids = np.array([symbol_to_id[g] for g in genes])
 	rna_data_idx = np.array([gene_id_to_rna_idx[g] for g in gene_ids])
+	neg_rna_data_idx = np.array([gene_id_to_rna_idx[g] for g, r in zip(gene_ids, total_reg) if r < 0])
+	pos_rna_data_idx = np.array([gene_id_to_rna_idx[g] for g, r in zip(gene_ids, total_reg) if r > 0])
 
 	# Counts of RNAP, ribosomes, tRNA, synthetases
 	synthetase_monomers = np.hstack([
@@ -175,14 +178,18 @@ if __name__ == '__main__':
 		'isSynthetase': np.array([rna_id_to_monomer_id[r[:-3]] in synthetase_monomers for r in rna_data['id']])
 	}
 	print('\nFraction regulated for specific groups:')
-	print_is_fraction(rna_data, 'isRRna5S', rna_data_idx)
-	print_is_fraction(rna_data, 'isRRna16S', rna_data_idx)
-	print_is_fraction(rna_data, 'isRRna23S', rna_data_idx)
-	print_is_fraction(rna_data, 'isRRna', rna_data_idx)
-	print_is_fraction(rna_data, 'isTRna', rna_data_idx)
-	print_is_fraction(rna_data, 'isRProtein', rna_data_idx)
-	print_is_fraction(rna_data, 'isRnap', rna_data_idx)
-	print_is_fraction(synthetase_data, 'isSynthetase', rna_data_idx)
+	print_is_fraction(rna_data, 'isRRna5S', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(rna_data, 'isRRna16S', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(rna_data, 'isRRna23S', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(rna_data, 'isRRna', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(rna_data, 'isTRna', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(rna_data, 'isRProtein', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(rna_data, 'isRnap', neg_rna_data_idx, pos_rna_data_idx)
+	print_is_fraction(synthetase_data, 'isSynthetase', neg_rna_data_idx, pos_rna_data_idx)
+	print('Positive rProtein regulation:')
+	for i, r in enumerate(rna_data):
+		if rna_data['isRProtein'][i] and i in pos_rna_data_idx:
+			print('\t{}'.format(rna_id_to_monomer_id[r['id'][:-3]]))
 	print('rProtein not regulated:')
 	for i, r in enumerate(rna_data):
 		if rna_data['isRProtein'][i] and i not in rna_data_idx:

@@ -18,15 +18,11 @@ if not os.path.exists(OUT_DIR):
 	os.mkdir(OUT_DIR)
 
 
-def plot_fraction(ax, x, y, title, c_basal, c_rich, hline, hline_label, draw_hline=False):
+def plot_fraction(ax, x, y, title, c_basal, c_rich):
 	# Plot
 	ax.set_xscale('log')
 	ax.plot(x, y)
-	if draw_hline:
-		ax.axhline(hline, linestyle='--', color='k', linewidth=0.5)
 	ax.axhline(1, linestyle='--', color='k', linewidth=0.5)
-	ax.axvline(c_basal, linestyle='--', color='k', linewidth=0.5)
-	ax.axvline(c_rich, linestyle='--', color='k', linewidth=0.5)
 
 	# x-axis
 	ax.set_xticks([], minor=True)
@@ -36,8 +32,8 @@ def plot_fraction(ax, x, y, title, c_basal, c_rich, hline, hline_label, draw_hli
 
 	# y-axis
 	ax.set_ylim(0, 1.5)
-	ax.set_yticks([0, hline, 1])
-	ax.set_yticklabels([0, hline_label, 1], fontsize=6)
+	ax.set_yticks([0, 1])
+	ax.set_yticklabels([0, 1], fontsize=6)
 	ax.set_ylabel('{} fraction'.format(title), fontsize=7)
 
 def plot_conditions(ax, c, fraction, c_target, c_other, labels):
@@ -67,12 +63,12 @@ if __name__ == '__main__':
 	f1 = 0.1
 	f2 = 0.1
 	KI = f1 * c_basal / (1 - f1)
-	KM = (1 / f2 - 1)*(c_rich - c_basal)
+	KM = (1 / f2 - 1) * c_rich
 
-	supply = 1 - f1 * c / c
+	supply = c / c - f1 + c_basal / (KM + c_basal)
 	inhibited_synthesis = 1 / (1 + c / KI)
-	import_rate = f1 + f2 * c / c
-	export_rate = (c - c_basal) / (KM + (c - c_basal))
+	import_rate = c / c - (supply + 1 / (1 + c_rich / KI) - f2)
+	export_rate = c / (KM + c)
 	basal_fraction = supply + inhibited_synthesis - export_rate
 	rich_fraction = supply + inhibited_synthesis + import_rate - export_rate
 
@@ -81,19 +77,19 @@ if __name__ == '__main__':
 
 	## Base supply
 	ax = plt.subplot(2, 2, 1)
-	plot_fraction(ax, c, supply, 'Supply', c_basal, c_rich, 1-f1, '1-f1')
+	plot_fraction(ax, c, supply, 'Supply', c_basal, c_rich)
 
 	## Inhibited synthesis
 	ax = plt.subplot(2, 2, 2)
-	plot_fraction(ax, c, inhibited_synthesis, 'Inhibited synthesis', c_basal, c_rich, f1, 'f1', draw_hline=True)
+	plot_fraction(ax, c, inhibited_synthesis, 'Inhibited synthesis', c_basal, c_rich)
 
 	## Import
 	ax = plt.subplot(2, 2, 3)
-	plot_fraction(ax, c, import_rate, 'Import', c_basal, c_rich, f1+f2, 'f1+f2')
+	plot_fraction(ax, c, import_rate, 'Import', c_basal, c_rich)
 
 	## Export
 	ax = plt.subplot(2, 2, 4)
-	plot_fraction(ax, c, export_rate, 'Export', c_basal, c_rich, f2, 'f2', draw_hline=True)
+	plot_fraction(ax, c, export_rate, 'Export', c_basal, c_rich)
 
 	## Save plot
 	plt.tight_layout()

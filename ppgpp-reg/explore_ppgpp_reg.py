@@ -95,6 +95,32 @@ def print_is_fraction(rna_data, key, neg_idx, pos_idx):
 	regulated = negative + positive
 	print('\t{}: {:.1f}% ({}/{}), +:{}, -:{}'.format(key, 100 * regulated / total, regulated, total, positive, negative))
 
+def plot_gene_comparison(gene, fc, exp):
+	exp = exp / exp.max()  # normalize top to 1
+
+	# Calculate fold change comparison data
+	x_fc = [0, len(exp)-1]
+	if fc <= 0:
+		fc_low = exp.max()
+	else:
+		fc_low = exp.min()
+	fc_high = fc_low * 2**fc
+	y_fc = [fc_low, fc_high]
+
+	# Plot data
+	plt.figure()
+	plt.plot(exp, 'o')
+	plt.plot(x_fc, y_fc, 'x')
+
+	# Format plot
+	plt.legend(['WCM expression', 'FC data'])
+	plt.xticks([0, 1, 2], ['AA', 'Basal', 'Anaerobic'])
+	plt.ylabel('Normalized expression')
+
+	# TODO: change directory if looping over all genes
+	plt.savefig(os.path.join(OUT_DIR, '{}.png'.format(gene)))
+	plt.close('all')
+
 def plot_expression(expression, regulation, genes):
 	print('\nPlotting expression in {} ...'.format(EXP_OUT_DIR))
 	for exp, reg, gene in zip(expression, regulation, genes):
@@ -274,6 +300,12 @@ if __name__ == '__main__':
 	print('\tInconsistent genes with 5 and 10 min FC:')
 	for g in fc_genes_in_wcm[fc_nonzero][~consistent]:
 		print('\t\t{}: {}\t{}'.format(g, fc_early_dict[g], fc_late_dict[g]))
+
+	# Plot SpoT expression comparison
+	gene_of_interest = 'spoT'
+	fc = fc_early_dict[gene_of_interest]
+	exp = expression[:, genes==gene_of_interest]
+	plot_gene_comparison(gene_of_interest, fc, exp)
 
 	# Time intensive tasks
 	plot_expression(expression.T, total_reg, genes)

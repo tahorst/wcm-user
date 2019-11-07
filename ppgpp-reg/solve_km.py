@@ -93,3 +93,17 @@ if __name__ == '__main__':
 	plt.title('a1: {:.3f}, a2: {:.3f}, KM: {:.3f}'.format(a1, a2, np.sqrt(km)))
 
 	plt.savefig(os.path.join(OUT_DIR, 'ppgpp-rna.png'))
+
+	# Plot raw RNA data
+	plt.figure()
+	plt.plot(np.sqrt(ppgpp), rna, 'o')
+	plt.xlabel('ppGpp (pmol / ng)')
+	plt.ylabel('RNA Mass Fraction')
+	plt.savefig(os.path.join(OUT_DIR, 'rna.png'))
+
+	# Plot raw RNAP data
+	plt.figure()
+	plt.plot(np.sqrt(ppgpp), rnap_per_cell/mass_per_cell, 'o')
+	plt.xlabel('ppGpp (pmol / ng)')
+	plt.ylabel('RNAP')
+	plt.savefig(os.path.join(OUT_DIR, 'rnap.png'))

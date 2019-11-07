@@ -21,8 +21,11 @@ import numpy as np
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(FILE_LOCATION, 'data')
 OUT_DIR = os.path.join(FILE_LOCATION, 'out')
+EXP_OUT_DIR = os.path.join(OUT_DIR, 'expression')
 if not os.path.exists(OUT_DIR):
 	os.mkdir(OUT_DIR)
+if not os.path.exists(EXP_OUT_DIR):
+	os.mkdir(EXP_OUT_DIR)
 
 # File paths
 PPGPP_REG_FILE = os.path.join(DATA_DIR, 'ppgpp_regulation.tsv')
@@ -93,7 +96,7 @@ def print_is_fraction(rna_data, key, neg_idx, pos_idx):
 	print('\t{}: {:.1f}% ({}/{}), +:{}, -:{}'.format(key, 100 * regulated / total, regulated, total, positive, negative))
 
 def plot_expression(expression, regulation, genes):
-	print('\nPlotting expression in {} ...'.format(OUT_DIR))
+	print('\nPlotting expression in {} ...'.format(EXP_OUT_DIR))
 	for exp, reg, gene in zip(expression, regulation, genes):
 		plt.figure()
 
@@ -104,7 +107,7 @@ def plot_expression(expression, regulation, genes):
 		plt.plot(x, plt.ylim(), 'k--')
 		plt.title(gene)
 
-		plt.savefig(os.path.join(OUT_DIR, '{}.png'.format(gene)))
+		plt.savefig(os.path.join(EXP_OUT_DIR, '{}.png'.format(gene)))
 		plt.close('all')
 
 

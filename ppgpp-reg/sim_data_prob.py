@@ -5,6 +5,7 @@ Script to compare synthesis probabilities and expression calculated from old
 parca methods to regulated by ppGpp.
 """
 
+import argparse
 import cPickle
 import os
 
@@ -19,10 +20,11 @@ DATA_DIR = os.path.join(FILE_LOCATION, 'data')
 OUT_DIR = os.path.join(FILE_LOCATION, 'out', 'ppgpp-regulation')
 if not os.path.exists(OUT_DIR):
 	os.mkdir(OUT_DIR)
-SIM_DATA_FILE = os.path.join(DATA_DIR, 'sim_data_ppgpp_prob.cp')
+SIM_DATA_FILE = os.path.join(DATA_DIR, 'sim_data_{}.cp')
 
 CONDITIONS = ['with_aa', 'basal', 'no_oxygen']
 MICROMOLAR = units.umol / units.L
+DEFAULT_HASH = 'c0cc7ede6'
 
 
 def plot_ax(ax, old, new, highlighted, title, label, show_xlabel):
@@ -99,16 +101,43 @@ def plot_expression_comparison(sim_data, label, highlighted=None):
 	plt.savefig(filename)
 	plt.close('all')
 
+def parse_args():
+	# type: () -> argparse.Namespace
+	"""
+	Parses arguments from the command line.
+
+	Returns:
+		values of variables parsed from the command line
+	"""
+
+	parser = argparse.ArgumentParser()
+
+	parser.add_argument('--hash',
+		default=DEFAULT_HASH,
+		help='Hash of sim_data object to use for analysis (default: {})'.format(DEFAULT_HASH))
+	parser.add_argument('-l', '--label',
+		default=None,
+		help='Label to prepend to output files (default: selected hash)')
+
+	return parser.parse_args()
+
 
 if __name__ == '__main__':
-	with open(SIM_DATA_FILE) as f:
+	args = parse_args()
+
+	with open(SIM_DATA_FILE.format(args.hash)) as f:
 		sim_data = cPickle.load(f)
 	transcription = sim_data.process.transcription
 	rna_data = transcription.rnaData
+	if args.label is None:
+		label = '{}_'.format(args.hash)
+	else:
+		label = args.label
 
 	# All genes
-	plot_synth_prob_comparison(sim_data, 'all')
-	plot_expression_comparison(sim_data, 'all')
+	plot_label = '{}all'.format(label)
+	plot_synth_prob_comparison(sim_data, plot_label)
+	plot_expression_comparison(sim_data, plot_label)
 
 	# Highlight regulated genes
 	is_ppgpp_regulated = np.array([rna[:-3] in transcription.ppgpp_regulated_genes for rna in rna_data['id']])
@@ -116,8 +145,9 @@ if __name__ == '__main__':
 		'b': ~is_ppgpp_regulated,
 		'r': is_ppgpp_regulated,
 		}
-	plot_synth_prob_comparison(sim_data, 'ppgpp_reg', highlighted=highlighted)
-	plot_expression_comparison(sim_data, 'ppgpp_reg', highlighted=highlighted)
+	plot_label = '{}ppgpp_reg'.format(label)
+	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
 
 	# Highlight stable RNA
 	stable_rna = rna_data['isTRna'] | rna_data['isRRna']
@@ -125,8 +155,9 @@ if __name__ == '__main__':
 		'b': ~stable_rna,
 		'r': stable_rna,
 		}
-	plot_synth_prob_comparison(sim_data, 'stable_rna', highlighted=highlighted)
-	plot_expression_comparison(sim_data, 'stable_rna', highlighted=highlighted)
+	plot_label = '{}stable_rna'.format(label)
+	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
 
 	# Ribosome/RNAP related mRNA
 	polymerizing_mrna = rna_data['isRProtein'] | rna_data['isRnap']
@@ -134,5 +165,6 @@ if __name__ == '__main__':
 		'b': ~polymerizing_mrna,
 		'r': polymerizing_mrna,
 		}
-	plot_synth_prob_comparison(sim_data, 'polymerizing_mrna', highlighted=highlighted)
-	plot_expression_comparison(sim_data, 'polymerizing_mrna', highlighted=highlighted)
+	plot_label = '{}polymerizing_mrna'.format(label)
+	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)

@@ -33,7 +33,7 @@ def plot_ax(ax, old, new, highlighted, title, label, show_xlabel):
 	"""
 
 	for c, mask in highlighted.items():
-		ax.plot(old[mask], new[mask], 'o', color=c, alpha=0.5)
+		ax.plot(np.log10(old[mask]), np.log10(new[mask]), 'o', color=c, alpha=0.5)
 
 	ax.set_title(title)
 
@@ -168,10 +168,17 @@ if __name__ == '__main__':
 	plot_split_expression_comparison(sim_data, plot_label)
 
 	# Highlight regulated genes
-	is_ppgpp_regulated = np.array([rna[:-3] in transcription.ppgpp_regulated_genes for rna in rna_data['id']])
+	rna_idx = {r[:-3]: i for i, r in enumerate(rna_data['id'])}
+	neg_idx = np.array([rna_idx[r] for r, fc in zip(transcription.ppgpp_regulated_genes, transcription.ppgpp_fold_changes) if fc < 0])
+	pos_idx = np.array([rna_idx[r] for r, fc in zip(transcription.ppgpp_regulated_genes, transcription.ppgpp_fold_changes) if fc > 0])
+	neg_mask = np.zeros(len(rna_data), bool)
+	neg_mask[neg_idx] = True
+	pos_mask = np.zeros(len(rna_data), bool)
+	pos_mask[pos_idx] = True
 	highlighted = {
-		'b': ~is_ppgpp_regulated,
-		'r': is_ppgpp_regulated,
+		'k': (~neg_mask) | (~pos_mask),
+		'r': neg_mask,
+		'g': pos_mask,
 		}
 	plot_label = '{}ppgpp_reg'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)

@@ -1,7 +1,8 @@
 #! /usr/bin/env python
-'''
+
+"""
 Template file for new python files.
-'''
+"""
 
 import argparse
 import os
@@ -12,19 +13,20 @@ FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 
 
 def main():
-	'''
+	"""
 	Main function
-	'''
+	"""
 
 	return
 
 def parse_args():
-	'''
+	# type: () -> argparse.Namespace
+	"""
 	Parses arguments from the command line.
 
 	Returns:
-		ArgumentParser namespace: values of variables parsed from the command line
-	'''
+		values of variables parsed from the command line
+	"""
 
 	parser = argparse.ArgumentParser()
 

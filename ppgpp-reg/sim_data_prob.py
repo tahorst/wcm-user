@@ -101,6 +101,33 @@ def plot_expression_comparison(sim_data, label, highlighted=None):
 	plt.savefig(filename)
 	plt.close('all')
 
+def plot_split_expression_comparison(sim_data, label, highlighted=None):
+	"""
+	Plot scatterplots between new and old methods for RNA expression showing
+	expression for free RNAP and ppGpp bound RNAP.
+	"""
+
+	n_conditions = len(CONDITIONS)
+	filename = os.path.join(OUT_DIR, '{}_expression_split.png'.format(label))
+	transcription = sim_data.process.transcription
+
+	plt.figure(figsize=(8, 10))
+
+	for i, condition in enumerate(CONDITIONS):
+		old = transcription.rnaExpression[condition]
+
+		for j, attr in enumerate(['exp_free', 'exp_ppgpp']):
+			new = getattr(transcription, attr)
+			ax = plt.subplot(n_conditions, 2, 2*i+j+1)
+			if highlighted is None:
+				highlighted = {'b': np.ones(len(new), bool)}
+			show_xlabel = i == n_conditions - 1
+			plot_ax(ax, old, new, highlighted, '{}: {}'.format(condition, attr), 'expression', show_xlabel)
+
+	plt.tight_layout()
+	plt.savefig(filename)
+	plt.close('all')
+
 def parse_args():
 	# type: () -> argparse.Namespace
 	"""
@@ -138,6 +165,7 @@ if __name__ == '__main__':
 	plot_label = '{}all'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label)
 	plot_expression_comparison(sim_data, plot_label)
+	plot_split_expression_comparison(sim_data, plot_label)
 
 	# Highlight regulated genes
 	is_ppgpp_regulated = np.array([rna[:-3] in transcription.ppgpp_regulated_genes for rna in rna_data['id']])
@@ -148,6 +176,7 @@ if __name__ == '__main__':
 	plot_label = '{}ppgpp_reg'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
 	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_split_expression_comparison(sim_data, plot_label, highlighted=highlighted)
 
 	# Highlight stable RNA
 	stable_rna = rna_data['isTRna'] | rna_data['isRRna']
@@ -158,6 +187,7 @@ if __name__ == '__main__':
 	plot_label = '{}stable_rna'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
 	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_split_expression_comparison(sim_data, plot_label, highlighted=highlighted)
 
 	# Ribosome/RNAP related mRNA
 	polymerizing_mrna = rna_data['isRProtein'] | rna_data['isRnap']
@@ -168,3 +198,4 @@ if __name__ == '__main__':
 	plot_label = '{}polymerizing_mrna'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
 	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_split_expression_comparison(sim_data, plot_label, highlighted=highlighted)

@@ -209,3 +209,13 @@ if __name__ == '__main__':
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
 	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
 	plot_split_expression_comparison(sim_data, plot_label, highlighted=highlighted)
+
+	# Only ribosome/RNAP related mRNA
+	highlighted = {
+		'r-protein': ('b', rna_data['isRProtein']),
+		'RNAP': ('r', rna_data['isRnap']),
+		}
+	plot_label = '{}only_polymerizing_mrna'.format(label)
+	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_expression_comparison(sim_data, plot_label, highlighted=highlighted)
+	plot_split_expression_comparison(sim_data, plot_label, highlighted=highlighted)

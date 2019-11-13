@@ -43,7 +43,7 @@ def plot_ax(ax, old, new, highlighted, title, label, show_xlabel):
 	y_min, y_max = ax.get_ylim()
 	ax_min = min(x_min, y_min)
 	ax_max = max(x_max, y_max)
-	ax.plot([x_min, x_max], [y_min, y_max], 'k--')
+	ax.plot([ax_min, ax_max], [ax_min, ax_max], 'k--')
 
 	if len(series) > 1:
 		plt.legend(series, fontsize=7)

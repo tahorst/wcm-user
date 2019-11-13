@@ -32,20 +32,29 @@ def plot_ax(ax, old, new, highlighted, title, label, show_xlabel):
 	Plot data on a given axis.
 	"""
 
-	for c, mask in highlighted.items():
-		ax.plot(np.log10(old[mask]), np.log10(new[mask]), 'o', color=c, alpha=0.5)
-
-	ax.set_title(title)
+	if highlighted is None:
+		highlighted = {'All': ('b', np.ones(len(new), bool))}
+	series = []
+	for name, (c, mask) in highlighted.items():
+		series += [name]
+		ax.plot(np.log10(old[mask]), np.log10(new[mask]), 'o', color=c, alpha=0.2)
 
 	x_min, x_max = ax.get_xlim()
 	y_min, y_max = ax.get_ylim()
 	ax_min = min(x_min, y_min)
 	ax_max = max(x_max, y_max)
+	ax.plot([x_min, x_max], [y_min, y_max], 'k--')
+
+	if len(series) > 1:
+		plt.legend(series, fontsize=7)
+
+	ax.set_title(title, fontsize=10)
 	ax.set_xlim([ax_min, ax_max])
 	ax.set_ylim([ax_min, ax_max])
 	if show_xlabel:
-		ax.set_xlabel('Old {}'.format(label))
-	ax.set_ylabel('ppGpp {}'.format(label))
+		ax.set_xlabel('Old {}'.format(label), fontsize=8)
+	ax.set_ylabel('ppGpp {}'.format(label), fontsize=8)
+	ax.tick_params(which='both', labelsize=7)
 
 def plot_synth_prob_comparison(sim_data, label, highlighted=None):
 	"""
@@ -64,8 +73,6 @@ def plot_synth_prob_comparison(sim_data, label, highlighted=None):
 		new = transcription.synth_prob_from_ppgpp(ppgpp)
 
 		ax = plt.subplot(n_conditions, 1, i+1)
-		if highlighted is None:
-			highlighted = {'b': np.ones(len(new), bool)}
 		show_xlabel = i == n_conditions - 1
 		plot_ax(ax, old, new, highlighted, condition, 'synth prob', show_xlabel)
 
@@ -92,8 +99,6 @@ def plot_expression_comparison(sim_data, label, highlighted=None):
 		new = transcription.exp_free * (1 - f) + transcription.exp_ppgpp * f
 
 		ax = plt.subplot(n_conditions, 1, i+1)
-		if highlighted is None:
-			highlighted = {'b': np.ones(len(new), bool)}
 		show_xlabel = i == n_conditions - 1
 		plot_ax(ax, old, new, highlighted, condition, 'expression', show_xlabel)
 
@@ -119,8 +124,6 @@ def plot_split_expression_comparison(sim_data, label, highlighted=None):
 		for j, attr in enumerate(['exp_free', 'exp_ppgpp']):
 			new = getattr(transcription, attr)
 			ax = plt.subplot(n_conditions, 2, 2*i+j+1)
-			if highlighted is None:
-				highlighted = {'b': np.ones(len(new), bool)}
 			show_xlabel = i == n_conditions - 1
 			plot_ax(ax, old, new, highlighted, '{}: {}'.format(condition, attr), 'expression', show_xlabel)
 
@@ -176,9 +179,9 @@ if __name__ == '__main__':
 	pos_mask = np.zeros(len(rna_data), bool)
 	pos_mask[pos_idx] = True
 	highlighted = {
-		'k': (~neg_mask) | (~pos_mask),
-		'r': neg_mask,
-		'g': pos_mask,
+		'Unregulated': ('k', (~neg_mask) & (~pos_mask)),
+		'Negative reg': ('r', neg_mask),
+		'Positive reg': ('g', pos_mask),
 		}
 	plot_label = '{}ppgpp_reg'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
@@ -188,8 +191,8 @@ if __name__ == '__main__':
 	# Highlight stable RNA
 	stable_rna = rna_data['isTRna'] | rna_data['isRRna']
 	highlighted = {
-		'b': ~stable_rna,
-		'r': stable_rna,
+		'Other': ('b', ~stable_rna),
+		'Stable RNA': ('r', stable_rna),
 		}
 	plot_label = '{}stable_rna'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)
@@ -199,8 +202,8 @@ if __name__ == '__main__':
 	# Ribosome/RNAP related mRNA
 	polymerizing_mrna = rna_data['isRProtein'] | rna_data['isRnap']
 	highlighted = {
-		'b': ~polymerizing_mrna,
-		'r': polymerizing_mrna,
+		'Other': ('b', ~polymerizing_mrna),
+		'Polymerizing mRNA': ('r', polymerizing_mrna),
 		}
 	plot_label = '{}polymerizing_mrna'.format(label)
 	plot_synth_prob_comparison(sim_data, plot_label, highlighted=highlighted)

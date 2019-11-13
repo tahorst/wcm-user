@@ -24,7 +24,7 @@ SIM_DATA_FILE = os.path.join(DATA_DIR, 'sim_data_{}.cp')
 
 CONDITIONS = ['with_aa', 'basal', 'no_oxygen']
 MICROMOLAR = units.umol / units.L
-DEFAULT_HASH = '32999bd5b'
+DEFAULT_HASH = 'da3685f97'
 
 
 def plot_ax(ax, old, new, highlighted, title, label, show_xlabel):

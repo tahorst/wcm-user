@@ -1,0 +1,32 @@
+Timer unit: 1e-06 s
+
+Total time: 0.000223 s
+File: /home/travis/wcEcoli/models/ecoli/processes/polypeptide_initiation.py
+Function: calculateRequest at line 60
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    60                                           	@line_profile
+    61                                           	def calculateRequest(self):
+    62         1          2.0      2.0      0.9  		current_media_id = self._external_states['Environment'].current_media_id
+    63                                           
+    64         1          4.0      4.0      1.8  		self.ribosome30S.requestAll()
+    65         1          2.0      2.0      0.9  		self.ribosome50S.requestAll()
+    66         1          7.0      7.0      3.1  		self.mRnas.requestAll()
+    67                                           
+    68         1          1.0      1.0      0.4  		self.fracActiveRibosome = self.fracActiveRibosomeDict[current_media_id]
+    69                                           
+    70                                           		# Read ribosome elongation rate from last timestep
+    71         1          7.0      7.0      3.1  		self.ribosomeElongationRate = self.readFromListener("RibosomeData", "effectiveElongationRate")
+    72                                           		# If the ribosome elongation rate is zero (which is always the case for the first timestep), set ribosome elongation rate to one in dictionary
+    73         1          2.0      2.0      0.9  		if self.ribosomeElongationRate == 0:
+    74                                           			self.ribosomeElongationRate = self.ribosomeElongationRateDict[current_media_id].asNumber(units.aa / units.s)
+    75         1          0.0      0.0      0.0  		self.elongation_rates = self.make_elongation_rates(
+    76         1          1.0      1.0      0.4  			self.randomState,
+    77         1          0.0      0.0      0.0  			self.ribosomeElongationRate,
+    78         1          0.0      0.0      0.0  			1,  # want elongation rate, not lengths adjusted for time step
+    79         1        189.0    189.0     84.8  			self.variable_elongation)
+    80                                           
+    81                                           		# ensure rates are never zero
+    82         1          8.0      8.0      3.6  		self.elongation_rates = np.fmax(self.elongation_rates, 1)
+

@@ -1,0 +1,123 @@
+Timer unit: 1e-06 s
+
+Total time: 0.016254 s
+File: /home/travis/wcEcoli/models/ecoli/processes/polypeptide_elongation.py
+Function: evolveState at line 175
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   175                                           	@line_profile
+   176                                           	def evolveState(self):
+   177         1          2.0      2.0      0.0  		self.new_count_diff = {}
+   178                                           
+   179                                           		# Write allocation data to listener
+   180         1         20.0     20.0      0.1  		self.writeToListener("GrowthLimits", "gtpAllocated", self.gtp.count())
+   181         1         12.0     12.0      0.1  		self.writeToListener("GrowthLimits", "aaAllocated", self.aas.counts())
+   182                                           
+   183                                           		# Get number of active ribosomes
+   184         1          2.0      2.0      0.0  		n_active_ribosomes = self.active_ribosomes.total_counts()[0]
+   185         1          5.0      5.0      0.0  		self.writeToListener("GrowthLimits", "activeRibosomeAllocated", n_active_ribosomes)
+   186                                           
+   187         1          2.0      2.0      0.0  		if n_active_ribosomes == 0:
+   188                                           			return
+   189                                           
+   190                                           		# Build amino acids sequences for each ribosome to polymerize
+   191         1          1.0      1.0      0.0  		proteinIndexes, peptideLengths = self.active_ribosomes.attrs(
+   192         1       1118.0   1118.0      6.9  			'proteinIndex', 'peptideLength'
+   193                                           			)
+   194                                           
+   195         1          2.0      2.0      0.0  		sequences = buildSequences(
+   196         1          1.0      1.0      0.0  			self.proteinSequences,
+   197         1          0.0      0.0      0.0  			proteinIndexes,
+   198         1          1.0      1.0      0.0  			peptideLengths,
+   199         1        496.0    496.0      3.1  			self.elongation_rates)
+   200                                           
+   201         1          1.0      1.0      0.0  		if sequences.size == 0:
+   202                                           			return
+   203                                           
+   204                                           		# Calculate elongation resource capacity
+   205         1        738.0    738.0      4.5  		aaCountInSequence = np.bincount(sequences[(sequences != polymerize.PAD_VALUE)])
+   206         1         11.0     11.0      0.1  		total_aa_counts = self.aas.counts()
+   207                                           
+   208                                           		# MODEL SPECIFIC: Get amino acid counts
+   209         1          6.0      6.0      0.0  		aa_counts_for_translation = self.elongation_model.final_amino_acids(total_aa_counts)
+   210                                           
+   211                                           		# Using polymerization algorithm elongate each ribosome up to the limits
+   212                                           		# of amino acids, sequence, and GTP
+   213         1          1.0      1.0      0.0  		result = polymerize(
+   214         1          1.0      1.0      0.0  			sequences,
+   215         1          1.0      1.0      0.0  			aa_counts_for_translation,
+   216         1          0.0      0.0      0.0  			10000000, # Set to a large number, the limit is now taken care of in metabolism
+   217         1          0.0      0.0      0.0  			self.randomState,
+   218         1      10913.0  10913.0     67.1  			self.elongation_rates[proteinIndexes])
+   219                                           
+   220         1          1.0      1.0      0.0  		sequenceElongations = result.sequenceElongation
+   221         1          0.0      0.0      0.0  		aas_used = result.monomerUsages
+   222         1          1.0      1.0      0.0  		nElongations = result.nReactions
+   223                                           
+   224                                           		# Update masses of ribosomes attached to polymerizing polypeptides
+   225         1          1.0      1.0      0.0  		added_protein_mass = computeMassIncrease(
+   226         1          1.0      1.0      0.0  			sequences,
+   227         1          1.0      1.0      0.0  			sequenceElongations,
+   228         1        194.0    194.0      1.2  			self.aaWeightsIncorporated
+   229                                           			)
+   230                                           
+   231         1         16.0     16.0      0.1  		updatedLengths = peptideLengths + sequenceElongations
+   232                                           
+   233                                           		didInitialize = (
+   234         1          9.0      9.0      0.1  			(sequenceElongations > 0) &
+   235         1         14.0     14.0      0.1  			(peptideLengths == 0)
+   236                                           			)
+   237                                           
+   238         1         48.0     48.0      0.3  		added_protein_mass[didInitialize] += self.endWeight
+   239                                           
+   240                                           		# Write current average elongation to listener
+   241         1         19.0     19.0      0.1  		currElongRate = (sequenceElongations.sum() / n_active_ribosomes) / self.timeStepSec()
+   242         1         21.0     21.0      0.1  		self.writeToListener("RibosomeData", "effectiveElongationRate", currElongRate)
+   243                                           
+   244                                           		# Update active ribosomes, terminating if necessary
+   245         1         14.0     14.0      0.1  		self.active_ribosomes.attrIs(peptideLength = updatedLengths)
+   246         1          7.0      7.0      0.0  		self.active_ribosomes.add_submass_by_name("protein", added_protein_mass)
+   247                                           
+   248                                           		# Ribosomes that reach the end of their sequences are terminated and
+   249                                           		# dissociated into 30S and 50S subunits. The polypeptide that they are polymerizing
+   250                                           		# is converted into a protein in BulkMolecules
+   251         1         24.0     24.0      0.1  		terminalLengths = self.proteinLengths[proteinIndexes]
+   252                                           
+   253         1          9.0      9.0      0.1  		didTerminate = (updatedLengths == terminalLengths)
+   254                                           
+   255         1          1.0      1.0      0.0  		terminatedProteins = np.bincount(
+   256         1         23.0     23.0      0.1  			proteinIndexes[didTerminate],
+   257         1         11.0     11.0      0.1  			minlength = self.proteinSequences.shape[0]
+   258                                           			)
+   259                                           
+   260         1         33.0     33.0      0.2  		self.active_ribosomes.delByIndexes(np.where(didTerminate)[0])
+   261         1         80.0     80.0      0.5  		self.bulkMonomers.countsInc(terminatedProteins)
+   262                                           
+   263         1         27.0     27.0      0.2  		nTerminated = didTerminate.sum()
+   264         1         21.0     21.0      0.1  		nInitialized = didInitialize.sum()
+   265                                           
+   266         1         21.0     21.0      0.1  		self.ribosome30S.countInc(nTerminated)
+   267         1         10.0     10.0      0.1  		self.ribosome50S.countInc(nTerminated)
+   268                                           
+   269                                           		# MODEL SPECIFIC: evolve
+   270         1       1456.0   1456.0      9.0  		net_charged, self.new_count_diff = self.elongation_model.evolve(total_aa_counts, aas_used, nElongations, nInitialized)
+   271                                           
+   272                                           		# Write data to listeners
+   273         1         13.0     13.0      0.1  		self.writeToListener("GrowthLimits", "net_charged", net_charged)
+   274         1          6.0      6.0      0.0  		self.writeToListener("GrowthLimits", "aasUsed", aas_used)
+   275         1          5.0      5.0      0.0  		self.writeToListener("GrowthLimits", "gtpUsed", self.gtpUsed)
+   276                                           
+   277         1         10.0     10.0      0.1  		self.writeToListener("RibosomeData", "aaCountInSequence", aaCountInSequence)
+   278         1          5.0      5.0      0.0  		self.writeToListener("RibosomeData", "aaCounts", aa_counts_for_translation)
+   279                                           
+   280         1         19.0     19.0      0.1  		self.writeToListener("RibosomeData", "actualElongations", sequenceElongations.sum())
+   281         1        363.0    363.0      2.2  		self.writeToListener("RibosomeData", "actualElongationHist", np.histogram(sequenceElongations, bins = np.arange(0,23))[0])
+   282         1        340.0    340.0      2.1  		self.writeToListener("RibosomeData", "elongationsNonTerminatingHist", np.histogram(sequenceElongations[~didTerminate], bins=np.arange(0,23))[0])
+   283                                           
+   284         1         38.0     38.0      0.2  		self.writeToListener("RibosomeData", "didTerminate", didTerminate.sum())
+   285         1         45.0     45.0      0.3  		self.writeToListener("RibosomeData", "terminationLoss", (terminalLengths - peptideLengths)[didTerminate].sum())
+   286         1          6.0      6.0      0.0  		self.writeToListener("RibosomeData", "numTrpATerminated", terminatedProteins[self.trpAIndex])
+   287                                           
+   288         1          7.0      7.0      0.0  		self.writeToListener("RibosomeData", "processElongationRate", self.ribosomeElongationRate / self.timeStepSec())
+

@@ -1,0 +1,29 @@
+Timer unit: 1e-06 s
+
+Total time: 0.008056 s
+File: /home/travis/wcEcoli/models/ecoli/processes/two_component_system.py
+Function: evolveState at line 70
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    70                                           	@line_profile
+    71                                           	def evolveState(self):
+    72                                           		# Get counts of molecules allocated to this process
+    73         1         12.0     12.0      0.1  		moleculeCounts = self.molecules.counts()
+    74                                           
+    75                                           		# Check if any molecules were allocated fewer counts than requested
+    76         1         11.0     11.0      0.1  		if (self.molecules_required > moleculeCounts).any():
+    77                                           			# Solve ODEs to a large time step using the the counts of molecules
+    78                                           			# allocated to this process using the BDF solver for stable integration.
+    79                                           			# The number of reactions has already been determined in calculateRequest
+    80                                           			# and rates will be much lower with a fraction of total counts allocated
+    81                                           			# so a much longer time scale is needed.
+    82                                           
+    83         1          0.0      0.0      0.0  			_, self.all_molecule_changes = self.moleculesToNextTimeStep(
+    84         1          0.0      0.0      0.0  				moleculeCounts, self.cellVolume, self.nAvogadro,
+    85         1       8014.0   8014.0     99.5  				10000, self.randomState, solver="BDF", min_time_step=self.timeStepSec(),
+    86                                           				)
+    87                                           
+    88                                           		# Increment changes in molecule counts
+    89         1         19.0     19.0      0.2  		self.molecules.countsInc(self.all_molecule_changes)
+

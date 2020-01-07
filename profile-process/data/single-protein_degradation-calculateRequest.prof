@@ -1,0 +1,25 @@
+Timer unit: 1e-06 s
+
+Total time: 0.000314 s
+File: /home/travis/wcEcoli/models/ecoli/processes/protein_degradation.py
+Function: calculateRequest at line 81
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    81                                           	@line_profile
+    82                                           	def calculateRequest(self):
+    83                                           
+    84                                           		# Determine how many proteins to degrade based on the degradation rates and counts of each protein
+    85         1          1.0      1.0      0.3  		nProteinsToDegrade = np.fmin(
+    86         1        173.0    173.0     55.1  			self.randomState.poisson(self._proteinDegRates() * self.proteins.total_counts()),
+    87         1         10.0     10.0      3.2  			self.proteins.total_counts()
+    88                                           			)
+    89                                           
+    90                                           		# Determine the number of hydrolysis reactions
+    91         1        110.0    110.0     35.0  		nReactions = np.dot(self.proteinLengths.asNumber(), nProteinsToDegrade)
+    92                                           
+    93                                           		# Determine the amount of water required to degrade the selected proteins
+    94                                           		# Assuming one N-1 H2O is required per peptide chain length N
+    95         1         15.0     15.0      4.8  		self.h2o.requestIs(nReactions - np.sum(nProteinsToDegrade))
+    96         1          5.0      5.0      1.6  		self.proteins.requestIs(nProteinsToDegrade)
+

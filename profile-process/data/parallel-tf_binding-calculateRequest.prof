@@ -1,0 +1,17 @@
+Timer unit: 1e-06 s
+
+Total time: 8.8e-05 s
+File: /home/travis/wcEcoli/models/ecoli/processes/tf_binding.py
+Function: calculateRequest at line 89
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    89                                           	@line_profile
+    90                                           	def calculateRequest(self):
+    91                                           		# Request all counts of active transcription factors
+    92        23         20.0      0.9     22.7  		for view in self.active_tf_view.itervalues():
+    93        22         62.0      2.8     70.5  			view.requestAll()
+    94                                           
+    95                                           		# Request edit access to promoter molecules
+    96         1          6.0      6.0      6.8  		self.promoters.request_access(self.EDIT_ACCESS)
+

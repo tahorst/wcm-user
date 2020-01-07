@@ -1,0 +1,71 @@
+Timer unit: 1e-06 s
+
+Total time: 0.002273 s
+File: /home/travis/wcEcoli/models/ecoli/processes/polypeptide_initiation.py
+Function: evolveState at line 85
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    85                                           	@line_profile
+    86                                           	def evolveState(self):
+    87                                           		# Calculate number of ribosomes that could potentially be initalized based on
+    88                                           		# counts of free 30S and 50S subunits
+    89         1          3.0      3.0      0.1  		inactiveRibosomeCount = np.min([
+    90         1         49.0     49.0      2.2  			self.ribosome30S.count().sum(),
+    91         1         43.0     43.0      1.9  			self.ribosome50S.count().sum(),
+    92                                           			])
+    93                                           
+    94                                           		# Calculate initiation probabilities for ribosomes based on mRNA counts and associated
+    95                                           		# mRNA translational efficiencies
+    96         1          1.0      1.0      0.0  		proteinInitProb = normalize(
+    97         1        161.0    161.0      7.1  			self.mRnas.counts() * self.translationEfficiencies
+    98                                           			)
+    99                                           
+   100                                           
+   101                                           		# Calculate actual number of ribosomes that should be activated based on probabilities
+   102         1          1.0      1.0      0.0  		self.activationProb = self._calculateActivationProb(
+   103         1          1.0      1.0      0.0  			self.fracActiveRibosome,
+   104         1          1.0      1.0      0.0  			self.proteinLengths,
+   105         1          1.0      1.0      0.0  			self.elongation_rates,
+   106         1          1.0      1.0      0.0  			proteinInitProb,
+   107         1        113.0    113.0      5.0  			self.timeStepSec())
+   108                                           
+   109         1          4.0      4.0      0.2  		ribosomeToActivate = np.int64(self.activationProb * inactiveRibosomeCount)
+   110                                           
+   111         1          2.0      2.0      0.1  		if ribosomeToActivate == 0:
+   112                                           			return
+   113                                           
+   114                                           		# Sample multinomial distribution to determine which mRNAs have full 70S
+   115                                           		# ribosomes initalized on them
+   116         1          3.0      3.0      0.1  		nNewProteins = self.randomState.multinomial(
+   117         1          1.0      1.0      0.0  			ribosomeToActivate,
+   118         1        258.0    258.0     11.4  			proteinInitProb
+   119                                           			)
+   120                                           
+   121                                           		# Each ribosome is assigned a protein index for the protein that corresponds to the
+   122                                           		# polypeptide it will polymerize. This is done in blocks of protein ids for efficiency.
+   123         1          5.0      5.0      0.2  		proteinIndexes = np.empty(ribosomeToActivate, np.int64)
+   124         1          8.0      8.0      0.4  		nonzeroCount = (nNewProteins > 0)
+   125         1          1.0      1.0      0.0  		startIndex = 0
+   126         1          2.0      2.0      0.1  		for proteinIndex, counts in itertools.izip(
+   127         1         25.0     25.0      1.1  				np.arange(nNewProteins.size)[nonzeroCount],
+   128       355        415.0      1.2     18.3  				nNewProteins[nonzeroCount],
+   129                                           				):
+   130                                           
+   131       354        639.0      1.8     28.1  			proteinIndexes[startIndex:startIndex+counts] = proteinIndex
+   132       354        385.0      1.1     16.9  			startIndex += counts
+   133                                           
+   134                                           		# Create active 70S ribosomes and assign their protein indexes calculated above
+   135         1          3.0      3.0      0.1  		self.activeRibosomes.moleculesNew(
+   136         1          1.0      1.0      0.0  			ribosomeToActivate,
+   137         1         15.0     15.0      0.7  			proteinIndex = proteinIndexes
+   138                                           			)
+   139                                           
+   140                                           		# Decrement free 30S and 70S ribosomal subunit counts
+   141         1         58.0     58.0      2.6  		self.ribosome30S.countDec(nNewProteins.sum())
+   142         1         27.0     27.0      1.2  		self.ribosome50S.countDec(nNewProteins.sum())
+   143                                           
+   144                                           		# Write number of initalized ribosomes to listener
+   145         1         36.0     36.0      1.6  		self.writeToListener("RibosomeData", "didInitialize", nNewProteins.sum())
+   146         1         10.0     10.0      0.4  		self.writeToListener("RibosomeData", "probTranslationPerTranscript", proteinInitProb)
+

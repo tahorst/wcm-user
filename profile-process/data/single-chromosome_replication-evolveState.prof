@@ -1,0 +1,374 @@
+Timer unit: 1e-06 s
+
+Total time: 0.022448 s
+File: /home/travis/wcEcoli/models/ecoli/processes/chromosome_replication.py
+Function: evolveState at line 158
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   158                                           	@line_profile
+   159                                           	def evolveState(self):
+   160                                           		## Module 1: Replication initiation
+   161                                           		# Get number of existing replisomes and oriCs
+   162         1          8.0      8.0      0.0  		n_active_replisomes = self.active_replisomes.total_counts()[0]
+   163         1          3.0      3.0      0.0  		n_oriC = self.oriCs.total_counts()[0]
+   164                                           
+   165                                           		# If there are no origins, return immediately
+   166         1          2.0      2.0      0.0  		if n_oriC == 0:
+   167                                           			return
+   168                                           
+   169                                           		# Get attributes of existing chromosome domains
+   170         1          2.0      2.0      0.0  		domain_index_existing_domain, child_domains = self.chromosome_domains.attrs(
+   171         1        158.0    158.0      0.7  			'domain_index', 'child_domains')
+   172                                           
+   173                                           		# Get number of available replisome subunits
+   174         1          9.0      9.0      0.0  		n_replisome_trimers = self.replisome_trimers.counts()
+   175         1          4.0      4.0      0.0  		n_replisome_monomers = self.replisome_monomers.counts()
+   176                                           
+   177                                           		# Initiate replication only when
+   178                                           		# 1) The cell has reached the critical mass per oriC
+   179                                           		# 2) There are enough replisome subunits to assemble two replisomes per
+   180                                           		# existing OriC.
+   181                                           		# Note that we assume asynchronous initiation does not happen.
+   182         1         15.0     15.0      0.1  		initiate_replication = (self.criticalMassPerOriC >= 1.0 and
+   183                                           			np.all(n_replisome_trimers == 6*n_oriC) and
+   184                                           			np.all(n_replisome_monomers == 2*n_oriC))
+   185                                           
+   186                                           		# If all conditions are met, initiate a round of replication on every
+   187                                           		# origin of replication
+   188         1          1.0      1.0      0.0  		if initiate_replication:
+   189                                           			# Get attributes of existing oriCs and domains
+   190                                           			domain_index_existing_oric = self.oriCs.attr('domain_index')
+   191                                           
+   192                                           			# Get indexes of the domains that would be getting child domains
+   193                                           			# (domains that contain an origin)
+   194                                           			new_parent_domains = np.where(np.in1d(domain_index_existing_domain,
+   195                                           				domain_index_existing_oric))[0]
+   196                                           
+   197                                           			# Calculate counts of new replisomes and domains to add
+   198                                           			n_new_replisome = 2*n_oriC
+   199                                           			n_new_domain = 2*n_oriC
+   200                                           
+   201                                           			# Calculate the domain indexes of new domains and oriC's
+   202                                           			max_domain_index = domain_index_existing_domain.max()
+   203                                           			domain_index_new = np.arange(
+   204                                           				max_domain_index + 1, max_domain_index + 2*n_oriC + 1,
+   205                                           				dtype=np.int32)
+   206                                           
+   207                                           			# Add new oriC's, and reset attributes of existing oriC's
+   208                                           			# All oriC's must be assigned new domain indexes
+   209                                           			self.oriCs.attrIs(domain_index=domain_index_new[:n_oriC])
+   210                                           			self.oriCs.moleculesNew(
+   211                                           				n_oriC, domain_index=domain_index_new[n_oriC:])
+   212                                           
+   213                                           			# Add and set attributes of newly created replisomes.
+   214                                           			# New replisomes inherit the domain indexes of the oriC's they
+   215                                           			# were initiated from. Two replisomes are formed per oriC, one on
+   216                                           			# the right replichore, and one on the left.
+   217                                           			coordinates_replisome = np.zeros(n_new_replisome, dtype=np.int64)
+   218                                           			right_replichore = np.tile(
+   219                                           				np.array([True, False], dtype=np.bool), n_oriC)
+   220                                           			domain_index_new_replisome = np.repeat(
+   221                                           				domain_index_existing_oric, 2)
+   222                                           
+   223                                           			self.active_replisomes.moleculesNew(
+   224                                           				n_new_replisome,
+   225                                           				coordinates=coordinates_replisome,
+   226                                           				right_replichore=right_replichore,
+   227                                           				domain_index=domain_index_new_replisome)
+   228                                           
+   229                                           			# Add and set attributes of new chromosome domains. All new domains
+   230                                           			# should have have no children domains.
+   231                                           			self.chromosome_domains.moleculesNew(
+   232                                           				n_new_domain,
+   233                                           				domain_index=domain_index_new,
+   234                                           				child_domains=np.full(
+   235                                           					(n_new_domain, 2), self.no_child_place_holder,
+   236                                           					dtype=np.int32))
+   237                                           
+   238                                           			# Add new domains as children of existing domains
+   239                                           			child_domains[new_parent_domains] = domain_index_new.reshape(-1, 2)
+   240                                           			self.chromosome_domains.attrIs(child_domains=child_domains)
+   241                                           
+   242                                           			# Decrement counts of replisome subunits
+   243                                           			self.replisome_trimers.countsDec(6*n_oriC)
+   244                                           			self.replisome_monomers.countsDec(2*n_oriC)
+   245                                           
+   246                                           		# Write data from this module to a listener
+   247         1          1.0      1.0      0.0  		self.writeToListener("ReplicationData", "criticalMassPerOriC",
+   248         1         11.0     11.0      0.0  			self.criticalMassPerOriC)
+   249         1          1.0      1.0      0.0  		self.writeToListener("ReplicationData", "criticalInitiationMass",
+   250         1         15.0     15.0      0.1  			self.criticalInitiationMass.asNumber(units.fg))
+   251                                           
+   252                                           		## Module 2: replication elongation
+   253                                           		# Get attributes of promoters
+   254         1          1.0      1.0      0.0  		TU_index, coordinates_promoters, domain_index_promoters, bound_TF = self.promoters.attrs(
+   255         1       1220.0   1220.0      5.4  			"TU_index", "coordinates", "domain_index", "bound_TF")
+   256                                           
+   257                                           		# Write gene copy numbers to listener
+   258         1          2.0      2.0      0.0  		self.writeToListener(
+   259         1          1.0      1.0      0.0  			"RnaSynthProb", "gene_copy_number",
+   260         1         30.0     30.0      0.1  			np.bincount(TU_index, minlength=len(self.replication_coordinate)))
+   261                                           
+   262                                           		# Get attributes of DnaA boxes
+   263         1          2.0      2.0      0.0  		coordinates_DnaA_boxes, domain_index_DnaA_boxes, DnaA_bound = self.DnaA_boxes.attrs(
+   264         1        230.0    230.0      1.0  			"coordinates", "domain_index", "DnaA_bound")
+   265                                           
+   266                                           		# Write DnaA_box copy numbers to listener
+   267         1          1.0      1.0      0.0  		self.writeToListener(
+   268         1         13.0     13.0      0.1  			"ReplicationData", "total_DnaA_boxes", self.DnaA_boxes.total_counts()[0])
+   269         1          2.0      2.0      0.0  		self.writeToListener(
+   270         1         29.0     29.0      0.1  			"ReplicationData", "free_DnaA_boxes", np.logical_not(DnaA_bound).sum())
+   271                                           
+   272                                           		# If no active replisomes are present, return immediately
+   273                                           		# Note: the new replication forks added in the previous module are not
+   274                                           		# elongated until the next timestep.
+   275         1          4.0      4.0      0.0  		if n_active_replisomes == 0:
+   276                                           			return
+   277                                           
+   278                                           		# Get allocated counts of dNTPs
+   279         1          9.0      9.0      0.0  		dNtpCounts = self.dntps.counts()
+   280                                           
+   281                                           		# Get attributes of existing replisomes
+   282         1          1.0      1.0      0.0  		domain_index_replisome, right_replichore, coordinates_replisome = self.active_replisomes.attrs(
+   283         1        157.0    157.0      0.7  			"domain_index", "right_replichore", "coordinates")
+   284         1         12.0     12.0      0.1  		sequence_length = np.abs(np.repeat(coordinates_replisome, 2))
+   285                                           
+   286                                           		# Build sequences to polymerize
+   287         1         21.0     21.0      0.1  		sequence_indexes = np.tile(np.arange(4), n_active_replisomes // 2)
+   288                                           
+   289         1          1.0      1.0      0.0  		sequences = buildSequences(
+   290         1          1.0      1.0      0.0  			self.sequences,
+   291         1          1.0      1.0      0.0  			sequence_indexes,
+   292         1          1.0      1.0      0.0  			sequence_length,
+   293         1         37.0     37.0      0.2  			self.elongation_rates)
+   294                                           
+   295                                           		# Use polymerize algorithm to quickly calculate the number of
+   296                                           		# elongations each fork catalyzes
+   297         1          5.0      5.0      0.0  		reactionLimit = dNtpCounts.sum()
+   298                                           
+   299                                           		# active_elongation_rates = self.elongation_rates[sequence_indexes]
+   300         1          2.0      2.0      0.0  		result = polymerize(
+   301         1          2.0      2.0      0.0  			sequences,
+   302         1          3.0      3.0      0.0  			dNtpCounts,
+   303         1          1.0      1.0      0.0  			reactionLimit,
+   304         1          2.0      2.0      0.0  			self.randomState,
+   305         1      19849.0  19849.0     88.4  			self.elongation_rates)
+   306                                           			# active_elongation_rates)
+   307                                           
+   308         1          1.0      1.0      0.0  		sequenceElongations = result.sequenceElongation
+   309         1          1.0      1.0      0.0  		dNtpsUsed = result.monomerUsages
+   310                                           
+   311                                           		# Compute mass increase for each elongated sequence
+   312         1          1.0      1.0      0.0  		mass_increase_dna = computeMassIncrease(
+   313         1          1.0      1.0      0.0  			sequences,
+   314         1          1.0      1.0      0.0  			sequenceElongations,
+   315         1        178.0    178.0      0.8  			self.polymerized_dntp_weights.asNumber(units.fg))
+   316                                           
+   317                                           		# Compute masses that should be added to each replisome
+   318         1          6.0      6.0      0.0  		added_dna_mass = mass_increase_dna[0::2] + mass_increase_dna[1::2]
+   319                                           
+   320                                           		# Update positions of each fork
+   321         1          2.0      2.0      0.0  		updated_length = sequence_length + sequenceElongations
+   322         1          2.0      2.0      0.0  		updated_coordinates = updated_length[0::2]
+   323                                           
+   324                                           		# Reverse signs of fork coordinates on left replichore
+   325         1          7.0      7.0      0.0  		updated_coordinates[~right_replichore] = -updated_coordinates[~right_replichore]
+   326                                           
+   327                                           		# Update attributes and submasses of replisomes
+   328         1         13.0     13.0      0.1  		self.active_replisomes.attrIs(coordinates = updated_coordinates)
+   329         1          8.0      8.0      0.0  		self.active_replisomes.add_submass_by_name("DNA", added_dna_mass)
+   330                                           
+   331                                           		# Update counts of polymerized metabolites
+   332         1         76.0     76.0      0.3  		self.dntps.countsDec(dNtpsUsed)
+   333         1         20.0     20.0      0.1  		self.ppi.countInc(dNtpsUsed.sum())
+   334                                           
+   335                                           
+   336                                           		# Define function that identifies replicated DNA motifs
+   337         1          2.0      2.0      0.0  		def get_replicated_motif_mask(motif_coordinates, motif_domain_indexes):
+   338                                           			"""
+   339                                           			Computes a mask array for DNA motifs that should be replicated in
+   340                                           			this timestep, based on the old and new positions of replisomes.
+   341                                           
+   342                                           			Args:
+   343                                           				motif_coordinates (ndarray): Replication coordinates of all
+   344                                           				existing motifs
+   345                                           				motif_domain_indexes (ndarray): Domain indexes of chromosome
+   346                                           				domains that each motif belongs to
+   347                                           
+   348                                           			Returns: Mask array of motifs that should be replicated in this
+   349                                           			timestep
+   350                                           			"""
+   351                                           			# Initialize mask array
+   352                                           			replicated_motifs = np.zeros_like(motif_coordinates, dtype=np.bool)
+   353                                           
+   354                                           			# Loop through all replisomes
+   355                                           			for (domain_index, rr, old_coord, new_coord) in izip(
+   356                                           					domain_index_replisome, right_replichore,
+   357                                           					coordinates_replisome, updated_coordinates):
+   358                                           				# Fork on right replichore
+   359                                           				if rr:
+   360                                           					coordinates_mask = np.logical_and(
+   361                                           						motif_coordinates >= old_coord,
+   362                                           						motif_coordinates < new_coord)
+   363                                           
+   364                                           				# Fork on left replichore
+   365                                           				else:
+   366                                           					coordinates_mask = np.logical_and(
+   367                                           						motif_coordinates <= old_coord,
+   368                                           						motif_coordinates > new_coord)
+   369                                           
+   370                                           				mask = np.logical_and(
+   371                                           					motif_domain_indexes == domain_index,
+   372                                           					coordinates_mask)
+   373                                           
+   374                                           				replicated_motifs[mask] = True
+   375                                           
+   376                                           			return replicated_motifs
+   377                                           
+   378                                           
+   379         1          1.0      1.0      0.0  		replicated_promoters = get_replicated_motif_mask(
+   380         1         57.0     57.0      0.3  			coordinates_promoters, domain_index_promoters)
+   381         1          2.0      2.0      0.0  		replicated_DnaA_boxes = get_replicated_motif_mask(
+   382         1         27.0     27.0      0.1  			coordinates_DnaA_boxes, domain_index_DnaA_boxes)
+   383                                           
+   384                                           		# Get counts of replicated promoters and DnaA boxes
+   385         1         13.0     13.0      0.1  		n_new_promoters = 2*replicated_promoters.sum()
+   386         1          5.0      5.0      0.0  		n_new_DnaA_boxes = 2*replicated_DnaA_boxes.sum()
+   387                                           
+   388                                           		# Handle replicated promoters
+   389         1          2.0      2.0      0.0  		if n_new_promoters > 0:
+   390                                           			# Delete original promoters
+   391         1         11.0     11.0      0.0  			self.promoters.delByIndexes(np.where(replicated_promoters)[0])
+   392                                           
+   393                                           			# Add freed active tfs
+   394         1          2.0      2.0      0.0  			self.active_tfs.countsInc(
+   395         1         36.0     36.0      0.2  				bound_TF[replicated_promoters, :].sum(axis=0))
+   396                                           
+   397                                           			# Set up attributes for the replicated promoters
+   398         1          8.0      8.0      0.0  			TU_index_new = np.repeat(TU_index[replicated_promoters], 2)
+   399         1          1.0      1.0      0.0  			coordinates_promoters_new = np.repeat(
+   400         1          5.0      5.0      0.0  				coordinates_promoters[replicated_promoters], 2)
+   401         1          3.0      3.0      0.0  			parent_domain_index_promoters = domain_index_promoters[replicated_promoters]
+   402                                           
+   403         1          1.0      1.0      0.0  			domain_index_promoters_new = child_domains[
+   404         1          1.0      1.0      0.0  				np.array([np.where(domain_index_existing_domain == idx)[0][0]
+   405         2         27.0     13.5      0.1  					for idx in parent_domain_index_promoters]),
+   406                                           				:].flatten()
+   407                                           
+   408                                           			# Add new promoters with new domain indexes
+   409         1          3.0      3.0      0.0  			self.promoters.moleculesNew(
+   410         1          2.0      2.0      0.0  				n_new_promoters,
+   411         1          2.0      2.0      0.0  				TU_index=TU_index_new,
+   412         1          3.0      3.0      0.0  				coordinates=coordinates_promoters_new,
+   413         1          2.0      2.0      0.0  				domain_index=domain_index_promoters_new,
+   414         1         10.0     10.0      0.0  				bound_TF=np.zeros((n_new_promoters, self.n_tf), dtype=np.bool))
+   415                                           
+   416                                           		# Handle replicated DnaA boxes
+   417         1          2.0      2.0      0.0  		if n_new_DnaA_boxes > 0:
+   418                                           			# Delete original DnaA boxes
+   419                                           			self.DnaA_boxes.delByIndexes(np.where(replicated_DnaA_boxes)[0])
+   420                                           
+   421                                           			# Set up attributes for the replicated DnaA boxes
+   422                                           			coordinates_DnaA_boxes_new = np.repeat(
+   423                                           				coordinates_DnaA_boxes[replicated_DnaA_boxes], 2)
+   424                                           			parent_domain_index_DnaA_boxes = domain_index_DnaA_boxes[
+   425                                           				replicated_DnaA_boxes]
+   426                                           
+   427                                           			domain_index_DnaA_boxes_new = child_domains[
+   428                                           				np.array([np.where(domain_index_existing_domain == idx)[0][0]
+   429                                           					for idx in parent_domain_index_DnaA_boxes]),
+   430                                           				:].flatten()
+   431                                           
+   432                                           			# Add new DnaA boxes with new domain indexes
+   433                                           			self.DnaA_boxes.moleculesNew(
+   434                                           				n_new_DnaA_boxes,
+   435                                           				coordinates=coordinates_DnaA_boxes_new,
+   436                                           				domain_index=domain_index_DnaA_boxes_new,
+   437                                           				DnaA_bound=np.zeros(n_new_DnaA_boxes, dtype=np.bool))
+   438                                           
+   439                                           		## Module 3: replication termination
+   440                                           		# Determine if any forks have reached the end of their sequences. If
+   441                                           		# so, delete the replisomes and domains that were terminated.
+   442         1          1.0      1.0      0.0  		terminal_lengths = self.replichore_lengths[
+   443         1         19.0     19.0      0.1  			np.tile(np.arange(2), n_active_replisomes // 2)]
+   444         1          5.0      5.0      0.0  		terminated_replisomes = (np.abs(updated_coordinates) == terminal_lengths)
+   445                                           
+   446                                           		# If any forks were terminated,
+   447         1          8.0      8.0      0.0  		if terminated_replisomes.sum() > 0:
+   448                                           			# Get domain indexes of terminated forks
+   449                                           			terminated_domains = np.unique(domain_index_replisome[terminated_replisomes])
+   450                                           
+   451                                           			# Get attributes of existing domains and full chromosomes
+   452                                           			domain_index_domains, child_domains = self.chromosome_domains.attrs(
+   453                                           				"domain_index", "child_domains")
+   454                                           			domain_index_full_chroms = self.full_chromosomes.attr("domain_index")
+   455                                           
+   456                                           			# Initialize array of replisomes and domains that should be deleted
+   457                                           			replisomes_to_delete = np.zeros_like(domain_index_replisome, dtype=np.bool)
+   458                                           			domains_to_delete = np.zeros_like(domain_index_domains, dtype=np.bool)
+   459                                           
+   460                                           			# Count number of new full chromosomes that should be created
+   461                                           			n_new_chromosomes = 0
+   462                                           
+   463                                           			# Initialize array for domain indexes of new full chromosomes
+   464                                           			domain_index_new_full_chroms = []
+   465                                           
+   466                                           			for terminated_domain_index in terminated_domains:
+   467                                           				# Get all terminated replisomes in the terminated domain
+   468                                           				terminated_domain_matching_replisomes = np.logical_and(
+   469                                           					domain_index_replisome == terminated_domain_index,
+   470                                           					terminated_replisomes)
+   471                                           
+   472                                           				# If both replisomes in the domain have terminated, we are
+   473                                           				# ready to split the chromosome and update the attributes.
+   474                                           				if terminated_domain_matching_replisomes.sum() == 2:
+   475                                           					# Tag replisomes and domains with the given domain index
+   476                                           					# for deletion
+   477                                           					replisomes_to_delete = np.logical_or(
+   478                                           						replisomes_to_delete,
+   479                                           						terminated_domain_matching_replisomes)
+   480                                           
+   481                                           					domain_matching_domains = (
+   482                                           						domain_index_domains == terminated_domain_index)
+   483                                           					domains_to_delete = np.logical_or(
+   484                                           						domains_to_delete,
+   485                                           						domain_matching_domains)
+   486                                           
+   487                                           					# Get child domains of deleted domain
+   488                                           					child_domains_this_domain = child_domains[
+   489                                           						np.where(domain_matching_domains)[0][0], :]
+   490                                           
+   491                                           					# Modify domain index of one existing full chromosome to
+   492                                           					# index of first child domain
+   493                                           					domain_index_full_chroms[
+   494                                           						np.where(domain_index_full_chroms == terminated_domain_index)[0]
+   495                                           						] = child_domains_this_domain[0]
+   496                                           
+   497                                           					# Increment count of new full chromosome
+   498                                           					n_new_chromosomes += 1
+   499                                           
+   500                                           					# Append chromosome index of new full chromosome
+   501                                           					domain_index_new_full_chroms.append(child_domains_this_domain[1])
+   502                                           
+   503                                           			# Delete terminated replisomes and domains
+   504                                           			self.active_replisomes.delByIndexes(np.where(replisomes_to_delete)[0])
+   505                                           			self.chromosome_domains.delByIndexes(np.where(domains_to_delete)[0])
+   506                                           
+   507                                           			# Generate new full chromosome molecules
+   508                                           			if n_new_chromosomes > 0:
+   509                                           				self.full_chromosomes.moleculesNew(
+   510                                           					n_new_chromosomes,
+   511                                           					division_time=[self.time() + self.D_period]*n_new_chromosomes,
+   512                                           					has_induced_division=[False] * n_new_chromosomes,
+   513                                           					domain_index=domain_index_new_full_chroms)
+   514                                           
+   515                                           				# Reset domain index of existing chromosomes that have finished
+   516                                           				# replication
+   517                                           				self.full_chromosomes.attrIs(
+   518                                           					domain_index = domain_index_full_chroms)
+   519                                           
+   520                                           			# Increment counts of replisome subunits
+   521                                           			self.replisome_trimers.countsInc(3*replisomes_to_delete.sum())
+   522                                           			self.replisome_monomers.countsInc(replisomes_to_delete.sum())
+

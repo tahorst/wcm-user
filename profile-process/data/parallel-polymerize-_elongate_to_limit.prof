@@ -1,0 +1,87 @@
+Timer unit: 1e-06 s
+
+Total time: 0.048981 s
+File: /home/travis/wcEcoli/wholecell/utils/polymerize.py
+Function: _elongate_to_limit at line 196
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   196                                           	@line_profile
+   197                                           	def _elongate_to_limit(self):
+   198                                           		'''
+   199                                           		Elongate as far as possible without hitting any resource limitations.
+   200                                           		'''
+   201                                           
+   202         1          2.0      2.0      0.0  		projectionIndex = 0
+   203         1          2.0      2.0      0.0  		notLimited = True
+   204         1          4.0      4.0      0.0  		advancementIndex = np.zeros(self._nSequences, np.int64)
+   205         1          2.0      2.0      0.0  		monomerProjection = np.zeros(self._nMonomers, np.int64)
+   206                                           
+   207                                           		# advance one step at a time until a sequence is limited
+   208       864       1110.0      1.3      2.3  		while notLimited and projectionIndex < self._maxElongation:
+   209       863        845.0      1.0      1.7  			if self.variable_elongation:
+   210                                           				step = self._currentStep + projectionIndex
+   211                                           				level = self.elongation_rates * (step + 1)
+   212                                           				last_unit = (level - np.floor(level))
+   213                                           				elongating = np.where(self.elongation_rates > last_unit)[0]
+   214                                           				active = np.intersect1d(self._activeSequencesIndexes, elongating)
+   215                                           			else:
+   216       863        801.0      0.9      1.6  				active = self._activeSequencesIndexes
+   217                                           
+   218       863       2118.0      2.5      4.3  			index = self._progress + advancementIndex
+   219                                           
+   220       863        850.0      1.0      1.7  			monomerStep = sum_monomers(
+   221       863       1884.0      2.2      3.8  				self._sequenceMonomers[:, :],
+   222       863       1095.0      1.3      2.2  				index[active],
+   223       863      10503.0     12.2     21.4  				active)
+   224                                           
+   225       863       4355.0      5.0      8.9  			self._monomerHistory[projectionIndex] = monomerProjection + monomerStep
+   226       863       2823.0      3.3      5.8  			self._monomerIsLimiting = self._monomerHistory[projectionIndex] > self._monomerLimits
+   227                                           
+   228       863       7016.0      8.1     14.3  			total_reactions = self._monomerHistory[projectionIndex].sum()
+   229                                           
+   230       863       4650.0      5.4      9.5  			if self._monomerIsLimiting.any():
+   231                                           				notLimited = False
+   232                                           			else:
+   233       863       1176.0      1.4      2.4  				if total_reactions > self._reactionLimit:
+   234                                           					self._reactionIsLimiting = True
+   235                                           					notLimited = False
+   236                                           					excess = total_reactions - self._reactionLimit
+   237                                           					active = choices(active, len(active) - excess)
+   238                                           					monomerStep = sum_monomers(
+   239                                           						self._sequenceMonomers[:, :],
+   240                                           						index[active],
+   241                                           						active)
+   242                                           					self._monomerHistory[projectionIndex] = monomerProjection + monomerStep
+   243                                           					self._monomerIsLimiting = self._monomerHistory[projectionIndex] > self._monomerLimits
+   244                                           
+   245       863       4050.0      4.7      8.3  				monomerProjection += monomerStep
+   246       863        955.0      1.1      1.9  				projectionIndex += 1
+   247       863       4689.0      5.4      9.6  				advancementIndex[active] += 1
+   248                                           
+   249         1          1.0      1.0      0.0  		limitingExtent = projectionIndex
+   250         1          2.0      2.0      0.0  		self._currentStep += limitingExtent
+   251                                           
+   252                                           		# Use resources
+   253         1          4.0      4.0      0.0  		if limitingExtent > 0:
+   254         1          3.0      3.0      0.0  			deltaMonomers = self._monomerHistory[limitingExtent - 1]
+   255         1         14.0     14.0      0.0  			deltaReactions = self._monomerHistory[limitingExtent - 1].sum()
+   256                                           
+   257         1          6.0      6.0      0.0  			self._monomerLimits -= deltaMonomers
+   258         1          3.0      3.0      0.0  			self._reactionLimit -= deltaReactions
+   259                                           
+   260         1          3.0      3.0      0.0  			self.monomerUsages += deltaMonomers
+   261         1          3.0      3.0      0.0  			self.nReactions += deltaReactions
+   262                                           
+   263         1          6.0      6.0      0.0  			self._progress[self._activeSequencesIndexes] += advancementIndex[self._activeSequencesIndexes]
+   264                                           
+   265                                           		# Update lengths
+   266         1          4.0      4.0      0.0  		self.sequenceElongation[self._activeSequencesIndexes] += advancementIndex[self._activeSequencesIndexes]
+   267                                           
+   268                                           		# Determine whether we are finished elongating
+   269                                           		# TODO (John): see if we can determine this outside this context,
+   270                                           		# consequently removing the need to "return" anything
+   271         1          1.0      1.0      0.0  		fully_elongated = (limitingExtent == self._maxElongation)
+   272                                           
+   273         1          1.0      1.0      0.0  		return fully_elongated
+

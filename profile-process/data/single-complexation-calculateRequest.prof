@@ -1,0 +1,17 @@
+Timer unit: 1e-06 s
+
+Total time: 0.001947 s
+File: /home/travis/wcEcoli/models/ecoli/processes/complexation.py
+Function: calculateRequest at line 56
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    56                                           	@line_profile
+    57                                           	def calculateRequest(self):
+    58         1          8.0      8.0      0.4  		moleculeCounts = self.molecules.total_counts()
+    59                                           
+    60         1       1923.0   1923.0     98.8  		result = self.system.evolve(self._sim.timeStepSec(), moleculeCounts)
+    61         1          1.0      1.0      0.1  		updatedMoleculeCounts = result['outcome']
+    62                                           
+    63         1         15.0     15.0      0.8  		self.molecules.requestIs(np.fmax(moleculeCounts - updatedMoleculeCounts, 0))
+

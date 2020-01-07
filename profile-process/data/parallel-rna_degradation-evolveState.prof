@@ -1,0 +1,90 @@
+Timer unit: 1e-06 s
+
+Total time: 0.000579 s
+File: /home/travis/wcEcoli/models/ecoli/processes/rna_degradation.py
+Function: evolveState at line 273
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   273                                           	@line_profile
+   274                                           	def evolveState(self):
+   275         1         90.0     90.0     15.5  		n_degraded_rna = self.rnas.counts()
+   276                                           
+   277         1          1.0      1.0      0.2  		self.writeToListener(
+   278         1         29.0     29.0      5.0  			"RnaDegradationListener", "countRnaDegraded", n_degraded_rna
+   279                                           			)
+   280         1          1.0      1.0      0.2  		self.writeToListener(
+   281         1          1.0      1.0      0.2  			"RnaDegradationListener", "nucleotidesFromDegradation",
+   282         1         29.0     29.0      5.0  			np.dot(n_degraded_rna, self.rna_lengths)
+   283                                           			)
+   284                                           
+   285                                           		# Calculate endolytic cleavage events
+   286                                           
+   287                                           		# Modeling assumption: Once a RNA is cleaved by an endonuclease its
+   288                                           		# resulting nucleotides are lumped together as "polymerized fragments".
+   289                                           		# These fragments can carry over from previous timesteps. We are also
+   290                                           		# assuming that during endonucleolytic cleavage the 5'terminal
+   291                                           		# phosphate is removed. This is modeled as all of the fragments being
+   292                                           		# one long linear chain of "fragment bases".
+   293                                           
+   294                                           		# Example:
+   295                                           		# PPi-Base-PO4(-)-Base-PO4(-)-Base-OH
+   296                                           		# ==>
+   297                                           		# Pi-FragmentBase-PO4(-)-FragmentBase-PO4(-)-FragmentBase + PPi
+   298                                           		# Note: Lack of -OH on 3' end of chain
+   299                                           
+   300         1          1.0      1.0      0.2  		metabolitesEndoCleavage = np.dot(
+   301         1         42.0     42.0      7.3  			self.endoDegradationSMatrix, n_degraded_rna)
+   302         1         71.0     71.0     12.3  		self.rnas.countsIs(0)
+   303         1         33.0     33.0      5.7  		self.fragmentMetabolites.countsInc(metabolitesEndoCleavage)
+   304                                           
+   305                                           		# Check if exonucleolytic digestion can happen 
+   306         1         25.0     25.0      4.3  		if self.fragmentBases.counts().sum() == 0:
+   307                                           			return
+   308                                           
+   309                                           		# Calculate exolytic cleavage events
+   310                                           
+   311                                           		# Modeling assumption: We model fragments as one long fragment chain of
+   312                                           		# polymerized nucleotides. We are also assuming that there is no
+   313                                           		# sequence specificity or bias towards which nucleotides are
+   314                                           		# hydrolyzed.
+   315                                           
+   316                                           		# Example:
+   317                                           		# Pi-FragmentBase-PO4(-)-FragmentBase-PO4(-)-FragmentBase + 3 H2O
+   318                                           		# ==>
+   319                                           		# 3 NMP + 3 H(+)
+   320                                           		# Note: Lack of -OH on 3' end of chain
+   321                                           
+   322         1         10.0     10.0      1.7  		n_exoRNases = self.exoRnases.counts()
+   323         1          6.0      6.0      1.0  		n_fragment_bases = self.fragmentBases.counts()
+   324         1          7.0      7.0      1.2  		n_fragment_bases_sum = n_fragment_bases.sum()
+   325                                           
+   326         1         69.0     69.0     11.9  		exornase_capacity = n_exoRNases.sum() * self.KcatExoRNase * (
+   327         1         33.0     33.0      5.7  				units.s * self.timeStepSec()
+   328                                           			)
+   329                                           
+   330         1         13.0     13.0      2.2  		if exornase_capacity >= n_fragment_bases_sum:
+   331         1         27.0     27.0      4.7  			self.nmps.countsInc(n_fragment_bases)
+   332         1         26.0     26.0      4.5  			self.h2o.countsDec(n_fragment_bases_sum)
+   333         1         19.0     19.0      3.3  			self.proton.countsInc(n_fragment_bases_sum)
+   334         1         27.0     27.0      4.7  			self.fragmentBases.countsIs(0)
+   335                                           
+   336         1          1.0      1.0      0.2  			total_fragment_bases_digested = n_fragment_bases_sum
+   337                                           
+   338                                           		else:
+   339                                           			fragmentSpecificity = n_fragment_bases / n_fragment_bases_sum
+   340                                           			possibleBasesToDigest = self.randomState.multinomial(
+   341                                           				exornase_capacity, fragmentSpecificity)
+   342                                           			n_fragment_bases_digested = n_fragment_bases - np.fmax(
+   343                                           				n_fragment_bases - possibleBasesToDigest, 0)
+   344                                           
+   345                                           			total_fragment_bases_digested = n_fragment_bases_digested.sum()
+   346                                           
+   347                                           			self.nmps.countsInc(n_fragment_bases_digested)
+   348                                           			self.h2o.countsDec(total_fragment_bases_digested)
+   349                                           			self.proton.countsInc(total_fragment_bases_digested)
+   350                                           			self.fragmentBases.countsDec(n_fragment_bases_digested)
+   351                                           
+   352         1          1.0      1.0      0.2  		self.writeToListener("RnaDegradationListener",
+   353         1         17.0     17.0      2.9  			"fragmentBasesDigested", total_fragment_bases_digested)
+

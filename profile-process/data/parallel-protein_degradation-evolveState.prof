@@ -1,0 +1,19 @@
+Timer unit: 1e-06 s
+
+Total time: 0.000395 s
+File: /home/travis/wcEcoli/models/ecoli/processes/protein_degradation.py
+Function: evolveState at line 99
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    99                                           	@line_profile
+   100                                           	def evolveState(self):
+   101                                           
+   102                                           		# Degrade selected proteins, release amino acids from those proteins back into the cell, 
+   103                                           		# and consume H_2O that is required for the degradation process
+   104         1          4.0      4.0      1.0  		self.metabolites.countsInc(np.dot(
+   105         1          2.0      2.0      0.5  			self.proteinDegSMatrix,
+   106         1        317.0    317.0     80.3  			self.proteins.counts()
+   107                                           			))
+   108         1         72.0     72.0     18.2  		self.proteins.countsIs(0)
+

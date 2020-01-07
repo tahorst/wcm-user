@@ -1,0 +1,82 @@
+Timer unit: 1e-06 s
+
+Total time: 0.000638 s
+File: /home/travis/wcEcoli/models/ecoli/processes/chromosome_replication.py
+Function: calculateRequest at line 83
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    83                                           	@line_profile
+    84                                           	def calculateRequest(self):
+    85                                           		# Get total count of existing oriC's
+    86         1         13.0     13.0      2.0  		n_oric = self.oriCs.total_counts()[0]
+    87                                           
+    88                                           		# If there are no origins, return immediately
+    89         1          4.0      4.0      0.6  		if n_oric == 0:
+    90                                           			return
+    91                                           
+    92                                           		# Get current cell mass
+    93         1         90.0     90.0     14.1  		cellMass = (self.readFromListener("Mass", "cellMass") * units.fg)
+    94                                           
+    95                                           		# Get critical initiation mass for current simulation environment
+    96         1          4.0      4.0      0.6  		current_media_id = self._external_states['Environment'].current_media_id
+    97         1          1.0      1.0      0.2  		self.criticalInitiationMass = self.getDnaCriticalMass(
+    98         1         36.0     36.0      5.6  			self.nutrientToDoublingTime[current_media_id])
+    99                                           
+   100                                           		# Calculate mass per origin of replication, and compare to critical
+   101                                           		# initiation mass. If the cell mass has reached this critical mass,
+   102                                           		# the process will initiate a round of chromosome replication for each
+   103                                           		# origin of replication.
+   104         1         13.0     13.0      2.0  		massPerOrigin = cellMass / n_oric
+   105         1         16.0     16.0      2.5  		self.criticalMassPerOriC = massPerOrigin / self.criticalInitiationMass
+   106                                           
+   107                                           		# If replication should be initiated, request subunits required for
+   108                                           		# building two replisomes per one origin of replication, and edit
+   109                                           		# access to oriC and chromosome domain attributes
+   110         1         11.0     11.0      1.7  		if self.criticalMassPerOriC >= 1.0:
+   111                                           			self.replisome_trimers.requestIs(6*n_oric)
+   112                                           			self.replisome_monomers.requestIs(2*n_oric)
+   113                                           			self.oriCs.request_access(self.EDIT_ACCESS)
+   114                                           			self.chromosome_domains.request_access(self.EDIT_DELETE_ACCESS)
+   115                                           
+   116                                           		# If there are no active forks return
+   117         1          7.0      7.0      1.1  		n_active_replisomes = self.active_replisomes.total_counts()[0]
+   118         1          2.0      2.0      0.3  		if n_active_replisomes == 0:
+   119                                           			return
+   120                                           
+   121                                           		# Get current locations of all replication forks
+   122         1        154.0    154.0     24.1  		fork_coordinates = self.active_replisomes.attr("coordinates")
+   123         1         14.0     14.0      2.2  		sequence_length = np.abs(np.repeat(fork_coordinates, 2))
+   124                                           
+   125         1          1.0      1.0      0.2  		self.elongation_rates = self.make_elongation_rates(
+   126         1          1.0      1.0      0.2  			self.randomState,
+   127         1          2.0      2.0      0.3  			len(self.sequences),
+   128         1          1.0      1.0      0.2  			self.basal_elongation_rate,
+   129         1         69.0     69.0     10.8  			self.timeStepSec())
+   130                                           
+   131         1          2.0      2.0      0.3  		sequences = buildSequences(
+   132         1          2.0      2.0      0.3  			self.sequences,
+   133         1         33.0     33.0      5.2  			np.tile(np.arange(4), n_active_replisomes//2),
+   134         1          1.0      1.0      0.2  			sequence_length,
+   135         1         67.0     67.0     10.5  			self.elongation_rates)
+   136                                           
+   137                                           		# Count number of each dNTP in sequences for the next timestep
+   138         1          2.0      2.0      0.3  		sequenceComposition = np.bincount(
+   139         1         34.0     34.0      5.3  			sequences[sequences != polymerize.PAD_VALUE], minlength=4)
+   140                                           
+   141                                           		# If one dNTP is limiting then limit the request for the other three by
+   142                                           		# the same ratio
+   143         1          5.0      5.0      0.8  		dNtpsTotal = self.dntps.total_counts()
+   144         1         20.0     20.0      3.1  		maxFractionalReactionLimit = (np.fmin(1, dNtpsTotal / sequenceComposition)).min()
+   145                                           
+   146                                           		# Request dNTPs
+   147         1          1.0      1.0      0.2  		self.dntps.requestIs(
+   148         1         14.0     14.0      2.2  			maxFractionalReactionLimit * sequenceComposition)
+   149                                           
+   150                                           		# Request access to relevant unique molecules
+   151         1          6.0      6.0      0.9  		self.full_chromosomes.request_access(self.EDIT_ACCESS)
+   152         1          3.0      3.0      0.5  		self.active_replisomes.request_access(self.EDIT_DELETE_ACCESS)
+   153         1          3.0      3.0      0.5  		self.chromosome_domains.request_access(self.EDIT_DELETE_ACCESS)
+   154         1          3.0      3.0      0.5  		self.promoters.request_access(self.EDIT_DELETE_ACCESS)
+   155         1          3.0      3.0      0.5  		self.DnaA_boxes.request_access(self.EDIT_DELETE_ACCESS)
+

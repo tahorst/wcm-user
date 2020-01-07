@@ -1,0 +1,23 @@
+Timer unit: 1e-06 s
+
+Total time: 0.003867 s
+File: /home/travis/wcEcoli/models/ecoli/processes/equilibrium.py
+Function: calculateRequest at line 48
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    48                                           	@line_profile
+    49                                           	def calculateRequest(self):
+    50                                           		# Get molecule counts
+    51         1          8.0      8.0      0.2  		moleculeCounts = self.molecules.total_counts()
+    52                                           
+    53                                           		# Get cell mass and volume
+    54         1        305.0    305.0      7.9  		cellMass = (self.readFromListener("Mass", "cellMass") * units.fg).asNumber(units.g)
+    55         1          2.0      2.0      0.1  		cellVolume = cellMass / self.cellDensity
+    56                                           
+    57                                           		# Solve ODEs to steady state
+    58         1       3545.0   3545.0     91.7  		self.rxnFluxes, self.req = self.fluxesAndMoleculesToSS(moleculeCounts, cellVolume, self.nAvogadro)
+    59                                           
+    60                                           		# Request counts of molecules needed
+    61         1          7.0      7.0      0.2  		self.molecules.requestIs(self.req)
+

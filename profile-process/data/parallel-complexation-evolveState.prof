@@ -1,0 +1,21 @@
+Timer unit: 1e-06 s
+
+Total time: 0.00064 s
+File: /home/travis/wcEcoli/models/ecoli/processes/complexation.py
+Function: evolveState at line 66
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    66                                           	@line_profile
+    67                                           	def evolveState(self):
+    68         1         63.0     63.0      9.8  		moleculeCounts = self.molecules.counts()
+    69                                           
+    70         1        519.0    519.0     81.1  		result = self.system.evolve(self._sim.timeStepSec(), moleculeCounts)
+    71         1          1.0      1.0      0.2  		updatedMoleculeCounts = result['outcome']
+    72         1          0.0      0.0      0.0  		events = result['occurrences']
+    73                                           
+    74         1         29.0     29.0      4.5  		self.molecules.countsIs(updatedMoleculeCounts)
+    75                                           
+    76                                           		# Write outputs to listeners
+    77         1         28.0     28.0      4.4  		self.writeToListener("ComplexationListener", "complexationEvents", events)
+

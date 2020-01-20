@@ -72,14 +72,14 @@ def extract_new(metabolism):
 
 	return rxns, mets, enzs
 
-def extract_sim(reactions, metabolism):
+def extract_sim(reactions, sim_data):
 	"""
 	Extract data of interest from sim_data.
 
 	Args:
 		reactions (List[Dict[str, Any]]): each row of the reactions table
 			as a list entry and columns as keys in a dict (from raw_data)
-		metabolism: Metabolism sim_data object
+		sim_data: SimulationDataEcoli object
 
 	Returns:
 		raw_rxns (set[str]): reaction IDs from flat file
@@ -87,22 +87,35 @@ def extract_sim(reactions, metabolism):
 			enzyme specific
 		kinetics_rxns (set[str]): reaction IDs from all_rxns that currently
 			have at least one kinetic constraint in the model
+		mols (set[str]): possible molecule IDs (enzymes, metabolites, etc)
+			with no location tag
 	"""
 
+	metabolism = sim_data.process.metabolism
+
+	# Simulation reactions
 	raw_rxns = {row['reaction id'] for row in reactions}
 	all_rxns = set(metabolism.reactionStoich.keys())
 	kinetics_rxns = set(metabolism.reactionsToConstraintsDict)
 
-	return raw_rxns, all_rxns, kinetics_rxns
+	# Simulation enzymes
+	mols = set(sim_data.getter._all_mass.keys())
+
+	return raw_rxns, all_rxns, kinetics_rxns, mols
 
 if __name__ == '__main__':
 	# Load data
-	rd, sd = load_data()
+	raw_data, sim_data = load_data()
+
+	# For easy troubleshooting
+	rd = raw_data
+	sd = sim_data
 	metabolism = sd.process.metabolism
+	translation = sd.process.translation
 
 	# Extract data of interest
-	new_rxns, new_mets, new_enzs = extract_new(rd.metabolism_kinetics)
-	raw_rxns, all_rxns, kinetics_rxns = extract_sim(rd.reactions, metabolism)
+	new_rxns, new_mets, new_enzs = extract_new(raw_data.metabolism_kinetics)
+	raw_rxns, all_rxns, kinetics_rxns, all_mols = extract_sim(raw_data.reactions, sim_data)
 
 	# Compare data
 	## Remove duplicates that are reverse or multiple enzyme kinetics reactions
@@ -112,21 +125,25 @@ if __name__ == '__main__':
 	## Find kinetic reactions in the new data that have a partial match to current reactions
 	## Indicates the need to add more information like specific molecules
 	partial_match_rxns = {rxn for rxn in unknown_rxns if np.any([rxn in r for r in raw_rxns])}
+	## Find metabolites that are not represented in the current wcm
+	unknown_mets = {met for met in new_mets if met not in all_mols and met.upper() not in all_mols}
+	## Find enzymes that are not represented in the current wcm
+	unknown_enzs = {enz for enz in new_enzs if enz not in all_mols}
 
 	# Summarize comparisons
-	print('Current model:')
+	print('\nCurrent model:')
 	print('\t{} total reactions'.format(len(all_rxns)))
 	print('\t{} reactions with at least one kinetic constraint'.format(len(kinetics_rxns)))
 	print('\t{} unique reactions (either direction) with kinetics'.format(len(unique_kinetics)))
 
-	print('New data:')
+	print('\nNew data:')
 	print('\t{} unique reactions with kinetics in new kinetics'.format(len(new_rxns)))
 	print('\t{} unknown reactions in raw_data'.format(len(unknown_rxns)))
 	print('\t{} of unknowns with a partial match'.format(len(partial_match_rxns)))
+	print('\t{}/{} unknown metabolites in raw_data'.format(len(unknown_mets), len(new_mets)))
+	print('\t{}/{} unknown enzymes in raw_data'.format(len(unknown_enzs), len(new_enzs)))
 
 	# TODO
-	# compare enzymes
-	# compare metabolites
 	# print discrepancies (save to file)
 	# get count of reactions that will be affected by change (kcat only or multiple kcat/km values)
 	import ipdb; ipdb.set_trace()

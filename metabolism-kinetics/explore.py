@@ -76,11 +76,15 @@ def extract_new(metabolism):
 		rxns (set[str]): all reaction IDs
 		mets (set[str]): all metabolite IDs
 		enzs (set[str]): all enzyme IDs
+		rxn_to_met (dict[str, list[str]]): map of each reaction to metabolites
+		rxn_to_enz (dict[str, list[str]]): map of each reaction to enzymes
 	"""
 
 	rxns = set()
 	mets = set()
 	enzs = set()
+	rxn_to_met = {}
+	rxn_to_enz = {}
 	for row in metabolism:
 		rxn = row['reactionID']
 		substrates = row['substrateIDs']
@@ -96,11 +100,14 @@ def extract_new(metabolism):
 			print('Invalid enzyme: {}'.format(enzymes))
 			enzymes = [enzymes]
 
+		rxn_to_met[rxn] = substrates
+		rxn_to_enz[rxn] = enzymes
+
 		rxns.update([row['reactionID']])
 		mets.update(substrates)
 		enzs.update(enzymes)
 
-	return rxns, mets, enzs
+	return rxns, mets, enzs, rxn_to_met, rxn_to_enz
 
 def extract_sim(reactions, sim_data):
 	"""
@@ -144,7 +151,7 @@ if __name__ == '__main__':
 	translation = sd.process.translation
 
 	# Extract data of interest
-	new_rxns, new_mets, new_enzs = extract_new(raw_data.metabolism_kinetics)
+	new_rxns, new_mets, new_enzs, rxn_to_met, rxn_to_enz = extract_new(raw_data.metabolism_kinetics)
 	raw_rxns, all_rxns, kinetics_rxns, all_mols = extract_sim(raw_data.reactions, sim_data)
 
 	# Compare data
@@ -186,10 +193,20 @@ if __name__ == '__main__':
 		writer = csv.writer(f, delimiter='\t')
 		writer.writerow([metadata])
 
-		writer.writerow(['Unknown Reaction ID', 'Possible Reaction Match'])
+		writer.writerow(['Unknown Reaction ID', 'Possible Reaction Match', 'Metabolites', 'Enzyme'])
+		first = []
+		second = []
 		for rxn in sorted(unknown_rxns):
 			matches = [r for r in raw_rxns if rxn in r]
-			writer.writerow([rxn, matches])
+			# Sort reactions that don't have a match first
+			if matches:
+				group = second
+			else:
+				group = first
+			group.append([rxn, matches, rxn_to_met[rxn], rxn_to_enz[rxn]])
+
+		writer.writerows(first)
+		writer.writerows(second)
 
 	## Metabolites
 	with open(METABOLITE_FILE, 'w') as f:

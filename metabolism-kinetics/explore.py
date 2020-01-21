@@ -129,6 +129,7 @@ def extract_sim(reactions, sim_data):
 			have at least one kinetic constraint in the model
 		mols (set[str]): possible molecule IDs (enzymes, metabolites, etc)
 			with no location tag
+		mets (set[str]): metabolites linked to a reaction with no location tag
 		enzs (set[str]): enzymes linked to a reaction with no location tag
 	"""
 
@@ -136,9 +137,11 @@ def extract_sim(reactions, sim_data):
 
 	# Raw reactions data
 	raw_rxns = set()
+	mets = set()
 	enzs = set()
 	for row in reactions:
 		raw_rxns.update([row['reaction id']])
+		mets.update([m[:-3] for m in row['stoichiometry']])
 		enzs.update(row['catalyzed by'])
 
 	# Simulation reactions
@@ -148,7 +151,7 @@ def extract_sim(reactions, sim_data):
 	# Simulation molecules (enzymes and metabolites)
 	mols = set(sim_data.getter._all_mass.keys())
 
-	return raw_rxns, all_rxns, kinetics_rxns, mols, enzs
+	return raw_rxns, all_rxns, kinetics_rxns, mols, mets, enzs
 
 if __name__ == '__main__':
 	# Load data
@@ -162,11 +165,15 @@ if __name__ == '__main__':
 
 	# Extract data of interest
 	new_rxns, new_mets, new_enzs, rxn_to_met, rxn_to_enz = extract_new(raw_data.metabolism_kinetics)
-	raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_enzs = extract_sim(raw_data.reactions, sim_data)
+	raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_mets, raw_enzs = extract_sim(raw_data.reactions, sim_data)
 
 	# Compare data
 	## Remove duplicates that are reverse or multiple enzyme kinetics reactions
 	unique_kinetics = {rxn.strip(' (reverse)').split('__')[0] for rxn in kinetics_rxns}
+	## Find current metabolites that are not represented in the wcm
+	unknown_current_mets = {met for met in raw_mets if met not in all_mols}
+	## Find current enzymes that are not represented in the wcm
+	unknown_current_enzs = {enz for enz in raw_enzs if enz not in all_mols}
 	## Find kinetic reactions in the new data that are not in the current reactions
 	unknown_rxns = {r for r in new_rxns if r not in raw_rxns}
 	## Find kinetic reactions in the new data that have a partial match to current reactions
@@ -176,14 +183,13 @@ if __name__ == '__main__':
 	unknown_mets = {met for met in new_mets if met not in all_mols and met.upper() not in all_mols}
 	## Find enzymes that are not represented in the current wcm
 	unknown_enzs = {enz for enz in new_enzs if enz not in all_mols}
-	## Find current enzymes that are not represented in the wcm
-	unknown_current_enzs = {enz for enz in raw_enzs if enz not in all_mols}
 
 	# Summarize comparisons
 	print('\nCurrent model:')
 	print('\t{} total reactions'.format(len(all_rxns)))
 	print('\t{} reactions with at least one kinetic constraint'.format(len(kinetics_rxns)))
 	print('\t{} unique reactions (either direction) with kinetics'.format(len(unique_kinetics)))
+	print('\t{}/{} current metabolites that are not in molecules'.format(len(unknown_current_mets), len(raw_mets)))
 	print('\t{}/{} current enzymes that are not in molecules'.format(len(unknown_current_enzs), len(raw_enzs)))
 
 	print('\nNew data:')
@@ -231,9 +237,10 @@ if __name__ == '__main__':
 		writer = csv.writer(f, delimiter='\t')
 		writer.writerow([metadata])
 
-		writer.writerow(['Unknown Metabolite ID'])
+		writer.writerow(['Unknown Metabolite ID', 'Metabolite in reactions'])
 		for met in sorted(unknown_mets):
-			writer.writerow([met])
+			met_in_rxns = met in raw_mets
+			writer.writerow([met, met_in_rxns])
 
 	## Enzymes
 	with open(ENZYME_FILE, 'w') as f:
@@ -241,11 +248,11 @@ if __name__ == '__main__':
 		writer = csv.writer(f, delimiter='\t')
 		writer.writerow([metadata])
 
-		writer.writerow(['Unknown Enzyme ID'])
+		writer.writerow(['Unknown Enzyme ID', 'Enzyme in reactions'])
 		for enz in sorted(unknown_enzs):
-			writer.writerow([enz])
+			enz_in_rxns = enz in raw_enzs
+			writer.writerow([enz, enz_in_rxns])
 
 	# TODO
 	# get count of reactions that will be affected by change (kcat only or multiple kcat/km values)
-	# add enzyme in reactions column for enzyme_file
 	import ipdb; ipdb.set_trace()

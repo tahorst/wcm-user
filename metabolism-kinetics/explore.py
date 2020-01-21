@@ -131,6 +131,8 @@ def extract_sim(reactions, sim_data):
 			with no location tag
 		mets (set[str]): metabolites linked to a reaction with no location tag
 		enzs (set[str]): enzymes linked to a reaction with no location tag
+		enz_to_rxn (dict[str, list[str]]): map of each enzyme to reactions it
+			catalyzes
 	"""
 
 	metabolism = sim_data.process.metabolism
@@ -139,10 +141,18 @@ def extract_sim(reactions, sim_data):
 	raw_rxns = set()
 	mets = set()
 	enzs = set()
+	enz_to_rxn = {}
 	for row in reactions:
-		raw_rxns.update([row['reaction id']])
-		mets.update([m[:-3] for m in row['stoichiometry']])
-		enzs.update(row['catalyzed by'])
+		rxn = row['reaction id']
+		stoich = row['stoichiometry']
+		enz = row['catalyzed by']
+
+		raw_rxns.add(rxn)
+		mets.update([m[:-3] for m in stoich])
+
+		for e in enz:
+			enzs.add(e)
+			enz_to_rxn[e] = enz_to_rxn.get(e, []) + [rxn]
 
 	# Simulation reactions
 	all_rxns = set(metabolism.reactionStoich.keys())
@@ -151,7 +161,7 @@ def extract_sim(reactions, sim_data):
 	# Simulation molecules (enzymes and metabolites)
 	mols = set(sim_data.getter._all_mass.keys())
 
-	return raw_rxns, all_rxns, kinetics_rxns, mols, mets, enzs
+	return raw_rxns, all_rxns, kinetics_rxns, mols, mets, enzs, enz_to_rxn
 
 if __name__ == '__main__':
 	# Load data
@@ -164,8 +174,10 @@ if __name__ == '__main__':
 	translation = sd.process.translation
 
 	# Extract data of interest
-	new_rxns, new_mets, new_enzs, rxn_to_met, rxn_to_enz = extract_new(raw_data.metabolism_kinetics)
-	raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_mets, raw_enzs = extract_sim(raw_data.reactions, sim_data)
+	(new_rxns, new_mets, new_enzs, rxn_to_met, rxn_to_enz
+		) = extract_new(raw_data.metabolism_kinetics)
+	(raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_mets, raw_enzs, enz_to_rxn
+		) = extract_sim(raw_data.reactions, sim_data)
 
 	# Compare data
 	## Remove duplicates that are reverse or multiple enzyme kinetics reactions
@@ -213,20 +225,23 @@ if __name__ == '__main__':
 		writer.writerow([metadata])
 
 		writer.writerow(['Unknown Reaction ID', 'Possible Reaction Match',
-			'Metabolites', 'Enzyme', 'Enzyme in model', 'Enzyme in reactions'])
+			'Metabolites', 'Enzyme', 'Enzyme in model',
+			'Reactions catalyzed by enzyme'])
 		first = []
 		second = []
 		for rxn in sorted(unknown_rxns):
 			matches = [r for r in raw_rxns if rxn in r]
 			enz = rxn_to_enz[rxn]
 			enz_in_model = enz in all_mols
-			enz_in_rxns = enz in raw_enzs
+			rxn_with_enz = enz_to_rxn.get(enz, [])
+
 			# Sort reactions that don't have a match first
 			if matches:
 				group = second
 			else:
 				group = first
-			group.append([rxn, matches, rxn_to_met[rxn], enz, enz_in_model, enz_in_rxns])
+
+			group.append([rxn, matches, rxn_to_met[rxn], enz, enz_in_model, rxn_with_enz])
 
 		writer.writerows(first)
 		writer.writerows(second)

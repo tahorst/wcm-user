@@ -77,7 +77,7 @@ def extract_new(metabolism):
 		mets (set[str]): all metabolite IDs
 		enzs (set[str]): all enzyme IDs
 		rxn_to_met (dict[str, list[str]]): map of each reaction to metabolites
-		rxn_to_enz (dict[str, list[str]]): map of each reaction to enzymes
+		rxn_to_enz (dict[str, str]): map of each reaction to enzyme catalyst
 	"""
 
 	rxns = set()
@@ -88,7 +88,7 @@ def extract_new(metabolism):
 	for row in metabolism:
 		rxn = row['reactionID']
 		substrates = row['substrateIDs']
-		enzymes = row['enzymeIDs']
+		enzyme = row['enzymeIDs']
 
 		# Check type formatting
 		if not isinstance(rxn, basestring):
@@ -96,16 +96,19 @@ def extract_new(metabolism):
 		if isinstance(substrates, basestring):
 			print('Invalid substrate: {}'.format(substrates))
 			substrates = [substrates]
-		if isinstance(enzymes, basestring):
-			print('Invalid enzyme: {}'.format(enzymes))
-			enzymes = [enzymes]
+		if isinstance(enzyme, basestring):
+			print('str not list for enzyme: {}'.format(enzyme))
+		else:
+			if len(enzyme) > 1:
+				print('Multiple enzymes, only using first: {}'.format(enzyme))
+			enzyme = enzyme[0]
 
 		rxn_to_met[rxn] = substrates
-		rxn_to_enz[rxn] = enzymes
+		rxn_to_enz[rxn] = enzyme
 
 		rxns.update([row['reactionID']])
 		mets.update(substrates)
-		enzs.update(enzymes)
+		enzs.update([enzyme])
 
 	return rxns, mets, enzs, rxn_to_met, rxn_to_enz
 
@@ -126,19 +129,26 @@ def extract_sim(reactions, sim_data):
 			have at least one kinetic constraint in the model
 		mols (set[str]): possible molecule IDs (enzymes, metabolites, etc)
 			with no location tag
+		enzs (set[str]): enzymes linked to a reaction with no location tag
 	"""
 
 	metabolism = sim_data.process.metabolism
 
+	# Raw reactions data
+	raw_rxns = set()
+	enzs = set()
+	for row in reactions:
+		raw_rxns.update([row['reaction id']])
+		enzs.update(row['catalyzed by'])
+
 	# Simulation reactions
-	raw_rxns = {row['reaction id'] for row in reactions}
 	all_rxns = set(metabolism.reactionStoich.keys())
 	kinetics_rxns = set(metabolism.reactionsToConstraintsDict)
 
-	# Simulation enzymes
+	# Simulation molecules (enzymes and metabolites)
 	mols = set(sim_data.getter._all_mass.keys())
 
-	return raw_rxns, all_rxns, kinetics_rxns, mols
+	return raw_rxns, all_rxns, kinetics_rxns, mols, enzs
 
 if __name__ == '__main__':
 	# Load data
@@ -152,7 +162,7 @@ if __name__ == '__main__':
 
 	# Extract data of interest
 	new_rxns, new_mets, new_enzs, rxn_to_met, rxn_to_enz = extract_new(raw_data.metabolism_kinetics)
-	raw_rxns, all_rxns, kinetics_rxns, all_mols = extract_sim(raw_data.reactions, sim_data)
+	raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_enzs = extract_sim(raw_data.reactions, sim_data)
 
 	# Compare data
 	## Remove duplicates that are reverse or multiple enzyme kinetics reactions
@@ -166,19 +176,22 @@ if __name__ == '__main__':
 	unknown_mets = {met for met in new_mets if met not in all_mols and met.upper() not in all_mols}
 	## Find enzymes that are not represented in the current wcm
 	unknown_enzs = {enz for enz in new_enzs if enz not in all_mols}
+	## Find current enzymes that are not represented in the wcm
+	unknown_current_enzs = {enz for enz in raw_enzs if enz not in all_mols}
 
 	# Summarize comparisons
 	print('\nCurrent model:')
 	print('\t{} total reactions'.format(len(all_rxns)))
 	print('\t{} reactions with at least one kinetic constraint'.format(len(kinetics_rxns)))
 	print('\t{} unique reactions (either direction) with kinetics'.format(len(unique_kinetics)))
+	print('\t{}/{} current enzymes that are not in molecules'.format(len(unknown_current_enzs), len(raw_enzs)))
 
 	print('\nNew data:')
 	print('\t{} unique reactions with kinetics in new kinetics'.format(len(new_rxns)))
-	print('\t{} unknown reactions in raw_data'.format(len(unknown_rxns)))
+	print('\t{} unknown reactions in new kinetics'.format(len(unknown_rxns)))
 	print('\t{} of unknowns with a partial match'.format(len(partial_match_rxns)))
-	print('\t{}/{} unknown metabolites in raw_data'.format(len(unknown_mets), len(new_mets)))
-	print('\t{}/{} unknown enzymes in raw_data'.format(len(unknown_enzs), len(new_enzs)))
+	print('\t{}/{} unknown metabolites in new kinetics'.format(len(unknown_mets), len(new_mets)))
+	print('\t{}/{} unknown enzymes in new kinetics'.format(len(unknown_enzs), len(new_enzs)))
 	print('')
 
 	# Print details of discrepancies
@@ -193,17 +206,21 @@ if __name__ == '__main__':
 		writer = csv.writer(f, delimiter='\t')
 		writer.writerow([metadata])
 
-		writer.writerow(['Unknown Reaction ID', 'Possible Reaction Match', 'Metabolites', 'Enzyme'])
+		writer.writerow(['Unknown Reaction ID', 'Possible Reaction Match',
+			'Metabolites', 'Enzyme', 'Enzyme in model', 'Enzyme in reactions'])
 		first = []
 		second = []
 		for rxn in sorted(unknown_rxns):
 			matches = [r for r in raw_rxns if rxn in r]
+			enz = rxn_to_enz[rxn]
+			enz_in_model = enz in all_mols
+			enz_in_rxns = enz in raw_enzs
 			# Sort reactions that don't have a match first
 			if matches:
 				group = second
 			else:
 				group = first
-			group.append([rxn, matches, rxn_to_met[rxn], rxn_to_enz[rxn]])
+			group.append([rxn, matches, rxn_to_met[rxn], enz, enz_in_model, enz_in_rxns])
 
 		writer.writerows(first)
 		writer.writerows(second)
@@ -230,4 +247,5 @@ if __name__ == '__main__':
 
 	# TODO
 	# get count of reactions that will be affected by change (kcat only or multiple kcat/km values)
+	# add enzyme in reactions column for enzyme_file
 	import ipdb; ipdb.set_trace()

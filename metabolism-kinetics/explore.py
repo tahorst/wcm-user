@@ -169,6 +169,84 @@ def extract_sim(reactions, sim_data):
 
 	return raw_rxns, all_rxns, kinetics_rxns, mols, mets, enzs, met_to_rxn, enz_to_rxn
 
+def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs, stringent_matches):
+	"""
+
+	TODO:
+		- handle enzyme location
+		- handle NAD vs NADP etc double reactions
+		- handle enzyme used for multiple reactions (need to adjust kcat?)
+	"""
+
+	constraints = []
+	for row in raw_data.metabolism_kinetics:
+		# Get relevant entries from row
+		rxn = row['reactionID']
+		mets = row['substrateIDs']
+		enz = row['enzymeIDs']
+		kcat = row['kcat']
+		kms = row['kM']
+		kis = row['kI']
+		direction = row['direction']  # TODO: handle
+		constraint_type = row['rateEquationType']
+
+		# Handle constraint type
+		if constraint_type == 'custom':
+			# TODO: handle
+			pass
+
+		# Handle reaction IDs
+		if rxn in unknown_rxns:
+			if rxn not in stringent_matches:
+				continue
+
+			rxn = stringent_matches[rxn]
+			if len(rxn) > 1:
+				print('Invalid reaction: {}'.format(rxn))
+			rxn = rxn[0]
+
+		# Handle enzyme IDs
+		if len(enz) != 1:
+			print('Invalid enzyme: {}: {}'.format(rxn, enz))
+			continue
+		enz = enz[0]
+		if enz in unknown_enzs:
+			continue
+
+		# Handle metabolite IDs for parameters
+		ks = []
+		## KM parameters
+		for met, k in zip(mets, kms):
+			if met in unknown_mets:
+				continue
+			ks.append(1. * k)
+
+		## KI parameters
+		for met, k in zip(mets[len(kms):], kis):
+			if met in unknown_mets:
+				continue
+			ks.append(1. * k)
+
+		# Should only be one kcat
+		# TODO: handle empty if kcat in 'customParameters' with value in 'customParameterConstantValues'
+		# TODO: split if multiple kcats
+		# TODO: remove kcat if km not matched to metabolite above
+		if len(kcat) != 1:
+			print('Invalid kcat: {}: {}'.format(rxn, kcat))
+			continue
+		kcat = kcat[0]
+
+		new_constraint = {
+			'reaction': rxn,
+			'enzyme': enz,
+			'kcat': 1. * kcat,
+			'k': ks,
+			}
+		constraints.append(new_constraint)
+
+	return constraints
+
+
 if __name__ == '__main__':
 	# Load data
 	raw_data, sim_data = load_data()
@@ -292,6 +370,11 @@ if __name__ == '__main__':
 			enz_in_rxns = enz in raw_enzs
 			writer.writerow([enz, enz_in_rxns])
 
+	new_constraints = create_valid_constraints(raw_data, unknown_rxns,
+		unknown_mets, unknown_enzs, stringent_matches)
+	old_constraints = None  # TODO: pull from sim_data
+
 	# TODO
 	# get count of reactions that will be affected by change (kcat only or multiple kcat/km values)
+	# function to compare new constraints to current constraints
 	import ipdb; ipdb.set_trace()

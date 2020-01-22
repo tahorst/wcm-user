@@ -131,6 +131,8 @@ def extract_sim(reactions, sim_data):
 			with no location tag
 		mets (set[str]): metabolites linked to a reaction with no location tag
 		enzs (set[str]): enzymes linked to a reaction with no location tag
+		met_to_rxn (dict[str, list[str]]): map of each metabolites to reactions
+			that contain it
 		enz_to_rxn (dict[str, list[str]]): map of each enzyme to reactions it
 			catalyzes
 	"""
@@ -141,14 +143,18 @@ def extract_sim(reactions, sim_data):
 	raw_rxns = set()
 	mets = set()
 	enzs = set()
+	met_to_rxn = {}
 	enz_to_rxn = {}
 	for row in reactions:
 		rxn = row['reaction id']
-		stoich = row['stoichiometry']
+		stoich = [m[:-3] for m in row['stoichiometry']]
 		enz = row['catalyzed by']
 
 		raw_rxns.add(rxn)
-		mets.update([m[:-3] for m in stoich])
+		mets.update([m for m in stoich])
+
+		for m in stoich:
+			met_to_rxn[m] = met_to_rxn.get(m, []) + [rxn]
 
 		for e in enz:
 			enzs.add(e)
@@ -161,7 +167,7 @@ def extract_sim(reactions, sim_data):
 	# Simulation molecules (enzymes and metabolites)
 	mols = set(sim_data.getter._all_mass.keys())
 
-	return raw_rxns, all_rxns, kinetics_rxns, mols, mets, enzs, enz_to_rxn
+	return raw_rxns, all_rxns, kinetics_rxns, mols, mets, enzs, met_to_rxn, enz_to_rxn
 
 if __name__ == '__main__':
 	# Load data
@@ -176,7 +182,7 @@ if __name__ == '__main__':
 	# Extract data of interest
 	(new_rxns, new_mets, new_enzs, rxn_to_met, rxn_to_enz
 		) = extract_new(raw_data.metabolism_kinetics)
-	(raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_mets, raw_enzs, enz_to_rxn
+	(raw_rxns, all_rxns, kinetics_rxns, all_mols, raw_mets, raw_enzs, met_to_rxn, enz_to_rxn
 		) = extract_sim(raw_data.reactions, sim_data)
 
 	# Compare data
@@ -191,10 +197,21 @@ if __name__ == '__main__':
 	## Find kinetic reactions in the new data that have a partial match to current reactions
 	## Indicates the need to add more information like specific molecules
 	partial_match_rxns = {rxn for rxn in unknown_rxns if np.any([rxn in r for r in raw_rxns])}
+	## Find partial reaction matches that also match metabolites for more stringent match
+	stringent_matches = {}
+	for rxn in sorted(unknown_rxns):
+		mets = rxn_to_met[rxn]
+		matches = {r for r in raw_rxns if rxn in r}
+		for met in mets:
+			matches = matches.intersection(met_to_rxn.get(met, []))
+
+		if matches:
+			stringent_matches[rxn] = sorted(matches)
 	## Find metabolites that are not represented in the current wcm
 	unknown_mets = {met for met in new_mets if met not in all_mols and met.upper() not in all_mols}
 	## Find enzymes that are not represented in the current wcm
 	unknown_enzs = {enz for enz in new_enzs if enz not in all_mols}
+
 
 	# Summarize comparisons
 	print('\nCurrent model:')
@@ -208,6 +225,7 @@ if __name__ == '__main__':
 	print('\t{} unique reactions with kinetics in new kinetics'.format(len(new_rxns)))
 	print('\t{} unknown reactions in new kinetics'.format(len(unknown_rxns)))
 	print('\t{} of unknowns with a partial match'.format(len(partial_match_rxns)))
+	print('\t{} of unknowns with a partial match with metabolites'.format(len(stringent_matches)))
 	print('\t{}/{} unknown metabolites in new kinetics'.format(len(unknown_mets), len(new_mets)))
 	print('\t{}/{} unknown enzymes in new kinetics'.format(len(unknown_enzs), len(new_enzs)))
 	print('')
@@ -229,22 +247,28 @@ if __name__ == '__main__':
 			'Reactions catalyzed by enzyme'])
 		first = []
 		second = []
+		third = []
 		for rxn in sorted(unknown_rxns):
-			matches = [r for r in raw_rxns if rxn in r]
+			matches = stringent_matches.get(rxn, [])
+			partial_match = np.any([rxn in r for r in raw_rxns])
+			mets = rxn_to_met[rxn]
 			enz = rxn_to_enz[rxn]
 			enz_in_model = enz in all_mols
 			rxn_with_enz = enz_to_rxn.get(enz, [])
 
 			# Sort reactions that don't have a match first
 			if matches:
+				group = third
+			elif partial_match:
 				group = second
 			else:
 				group = first
 
-			group.append([rxn, matches, rxn_to_met[rxn], enz, enz_in_model, rxn_with_enz])
+			group.append([rxn, matches, partial_match, mets, enz, enz_in_model, rxn_with_enz])
 
 		writer.writerows(first)
 		writer.writerows(second)
+		writer.writerows(third)
 
 	## Metabolites
 	with open(METABOLITE_FILE, 'w') as f:

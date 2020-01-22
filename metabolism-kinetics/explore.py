@@ -171,14 +171,33 @@ def extract_sim(reactions, sim_data):
 
 def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs, stringent_matches):
 	"""
+	Generate a new set of constraints directly from the spreadsheet.
+
+	Args:
+		raw_data (KnowledgeBaseEcoli object)
+		unknown_rxns (set[str]): reactions that are not known in the wcm
+		unknown_mets (set[str]): metabolites that are not known in the wcm
+		unknown_enzs (set[str]): enzymes that are not known in the wcm
+		stringent_matches (dict[str, list[str]]): mapping of reaction to
+			expanded reaction name(s) that matches the reaction and metabolites
+
+	Returns:
+		list[dict[str, Any]]: new constraints that can be added
+			'reaction' (str): reaction ID
+			'enzyme' (str): enzyme ID
+			'kcat' (Unum): kcat parameter with units of 1/time
+			'k' (list[Unum]): KM and KI parameters with units of mol/volume
 
 	TODO:
+		- handle metabolites that have no concentration (only kcat)
+		- include km vs ki info as well as associate metabolite
 		- handle enzyme location
 		- handle NAD vs NADP etc double reactions
 		- handle enzyme used for multiple reactions (need to adjust kcat?)
 	"""
 
 	constraints = []
+	skipped = 0
 	for row in raw_data.metabolism_kinetics:
 		# Get relevant entries from row
 		rxn = row['reactionID']
@@ -189,6 +208,8 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 		kis = row['kI']
 		direction = row['direction']  # TODO: handle
 		constraint_type = row['rateEquationType']
+		custom_param_keys = row['customParameters']
+		custom_param_values = row['customParameterConstantValues']
 
 		# Handle constraint type
 		if constraint_type == 'custom':
@@ -198,19 +219,23 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 		# Handle reaction IDs
 		if rxn in unknown_rxns:
 			if rxn not in stringent_matches:
+				skipped += 1
 				continue
 
 			rxn = stringent_matches[rxn]
 			if len(rxn) > 1:
+				# TODO: handle
 				print('Invalid reaction: {}'.format(rxn))
 			rxn = rxn[0]
 
 		# Handle enzyme IDs
 		if len(enz) != 1:
 			print('Invalid enzyme: {}: {}'.format(rxn, enz))
+			skipped += 1
 			continue
 		enz = enz[0]
 		if enz in unknown_enzs:
+			skipped += 1
 			continue
 
 		# Handle metabolite IDs for parameters
@@ -227,22 +252,41 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 				continue
 			ks.append(1. * k)
 
-		# Should only be one kcat
-		# TODO: handle empty if kcat in 'customParameters' with value in 'customParameterConstantValues'
-		# TODO: split if multiple kcats
-		# TODO: remove kcat if km not matched to metabolite above
-		if len(kcat) != 1:
-			print('Invalid kcat: {}: {}'.format(rxn, kcat))
-			continue
-		kcat = kcat[0]
+		# Handle kcat
+		n_kcats = len(kcat)
+		if n_kcats == 0:
+			if 'kcat' not in custom_param_keys:
+				print('Invalid custom kcat: {} {}'.format(rxn, custom_param_keys))
+				skipped += 1
+				continue
+			kcat = 0  # TODO pull value from custom and add units
+		elif n_kcats == 1:
+			kcat = kcat[0]
+		else:
+			if n_kcats != len(mets):
+				print('Invalid kcat: {} {} {}'.format(rxn, kcat, mets))
+			kcat = [k for k, m in zip(kcat, mets) if m not in unknown_mets]
 
-		new_constraint = {
-			'reaction': rxn,
-			'enzyme': enz,
-			'kcat': 1. * kcat,
-			'k': ks,
-			}
-		constraints.append(new_constraint)
+		# Create new constraint(s)
+		if n_kcats > 1:
+			for _kcat, _ks in zip(kcat, ks):
+				new_constraint = {
+					'reaction': rxn,
+					'enzyme': enz,
+					'kcat': 1. * _kcat,
+					'k': [_ks],
+					}
+				constraints.append(new_constraint)
+		else:
+			new_constraint = {
+				'reaction': rxn,
+				'enzyme': enz,
+				'kcat': 1. * kcat,
+				'k': ks,
+				}
+			constraints.append(new_constraint)
+
+	print('Skipped {} constraints.'.format(skipped))
 
 	return constraints
 

@@ -14,6 +14,8 @@ import time
 
 import numpy as np
 
+from wholecell.utils import units
+
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 
@@ -208,7 +210,7 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 		kis = row['kI']
 		direction = row['direction']  # TODO: handle
 		constraint_type = row['rateEquationType']
-		custom_param_keys = row['customParameters']
+		custom_param_keys = row['customParameterConstants']
 		custom_param_values = row['customParameterConstantValues']
 
 		# Handle constraint type
@@ -224,9 +226,16 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 
 			rxn = stringent_matches[rxn]
 			if len(rxn) > 1:
-				# TODO: handle
-				print('Invalid reaction: {}'.format(rxn))
-			rxn = rxn[0]
+				in_different_compartments = np.all([
+					'[CCO-CYTOSOL]' in r or '[CCO-PERI-BAC]' in r
+					for r in rxn
+					])
+				if not in_different_compartments:
+					print('Invalid reaction: {}'.format(rxn))
+					skipped += 1
+					continue
+		if not isinstance(rxn, list):
+			rxn = [rxn]
 
 		# Handle enzyme IDs
 		if len(enz) != 1:
@@ -259,7 +268,7 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 				print('Invalid custom kcat: {} {}'.format(rxn, custom_param_keys))
 				skipped += 1
 				continue
-			kcat = 0  # TODO pull value from custom and add units
+			kcat = custom_param_values[custom_param_keys.index('kcat')] / units.s
 		elif n_kcats == 1:
 			kcat = kcat[0]
 		else:
@@ -268,25 +277,27 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 			kcat = [k for k, m in zip(kcat, mets) if m not in unknown_mets]
 
 		# Create new constraint(s)
-		if n_kcats > 1:
-			for _kcat, _ks in zip(kcat, ks):
+		for _rxn in rxn:
+			if n_kcats > 1:
+				for _kcat, _ks in zip(kcat, ks):
+					new_constraint = {
+						'reaction': _rxn,
+						'enzyme': enz,
+						'kcat': 1. * _kcat,
+						'k': [_ks],
+						}
+					constraints.append(new_constraint)
+			else:
 				new_constraint = {
-					'reaction': rxn,
+					'reaction': _rxn,
 					'enzyme': enz,
-					'kcat': 1. * _kcat,
-					'k': [_ks],
+					'kcat': 1. * kcat,
+					'k': ks,
 					}
 				constraints.append(new_constraint)
-		else:
-			new_constraint = {
-				'reaction': rxn,
-				'enzyme': enz,
-				'kcat': 1. * kcat,
-				'k': ks,
-				}
-			constraints.append(new_constraint)
 
 	print('Skipped {} constraints.'.format(skipped))
+	print('{} new constraints'.format(len(constraints)))
 
 	return constraints
 
@@ -320,6 +331,7 @@ if __name__ == '__main__':
 	## Indicates the need to add more information like specific molecules
 	partial_match_rxns = {rxn for rxn in unknown_rxns if np.any([rxn in r for r in raw_rxns])}
 	## Find partial reaction matches that also match metabolites for more stringent match
+	## TODO: handle constraints specifically since each reaction can have different sets of mets
 	stringent_matches = {}
 	for rxn in sorted(unknown_rxns):
 		mets = rxn_to_met[rxn]
@@ -333,7 +345,6 @@ if __name__ == '__main__':
 	unknown_mets = {met for met in new_mets if met not in all_mols and met.upper() not in all_mols}
 	## Find enzymes that are not represented in the current wcm
 	unknown_enzs = {enz for enz in new_enzs if enz not in all_mols}
-
 
 	# Summarize comparisons
 	print('\nCurrent model:')

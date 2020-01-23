@@ -364,8 +364,8 @@ if __name__ == '__main__':
 		writer = csv.writer(f, delimiter='\t')
 		writer.writerow([metadata])
 
-		writer.writerow(['Unknown Reaction ID', 'Possible Reaction Match',
-			'Metabolites', 'Enzyme', 'Enzyme in model',
+		writer.writerow(['Unknown reaction ID', 'Strict reaction match',
+			'Contains partial match', 'Metabolites', 'Enzyme', 'Enzyme in model',
 			'Reactions catalyzed by enzyme'])
 		first = []
 		second = []

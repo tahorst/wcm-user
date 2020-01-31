@@ -4,4 +4,4 @@ Requires:
 - data/raw_data.cp
 - data/sim_data.cp
 
-Tested with raw_data.cp and sim_data.cp from parca output files in out/manual/kb/ (rawData.cPickle and simData.cPickle) on range-kinetics branch (1f2650fd6) branched from edd286050e with the addition of metabolism_kinetics.tsv flat file.
+Tested with raw_data.cp and sim_data.cp from parca output files in out/manual/kb/ (rawData.cPickle and simData.cPickle) on range-kinetics branch (184e7ba30) branched from edd286050e with the addition of metabolism_kinetics.tsv flat file.

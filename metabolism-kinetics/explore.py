@@ -90,7 +90,7 @@ def extract_new(metabolism):
 	for row in metabolism:
 		rxn = row['reactionID']
 		substrates = row['substrateIDs']
-		enzyme = row['enzymeIDs']
+		enzyme = row['enzymeID']
 
 		# Check type formatting
 		if not isinstance(rxn, basestring):
@@ -98,12 +98,6 @@ def extract_new(metabolism):
 		if isinstance(substrates, basestring):
 			print('Invalid substrate: {}'.format(substrates))
 			substrates = [substrates]
-		if isinstance(enzyme, basestring):
-			print('str not list for enzyme: {}'.format(enzyme))
-		else:
-			if len(enzyme) > 1:
-				print('Multiple enzymes, only using first: {}'.format(enzyme))
-			enzyme = enzyme[0]
 
 		rxn_to_met[rxn] = substrates
 		rxn_to_enz[rxn] = enzyme
@@ -204,7 +198,7 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 		# Get relevant entries from row
 		rxn = row['reactionID']
 		mets = row['substrateIDs']
-		enz = row['enzymeIDs']
+		enz = row['enzymeID']
 		kcat = row['kcat']
 		kms = row['kM']
 		kis = row['kI']
@@ -238,11 +232,6 @@ def create_valid_constraints(raw_data, unknown_rxns, unknown_mets, unknown_enzs,
 			rxn = [rxn]
 
 		# Handle enzyme IDs
-		if len(enz) != 1:
-			print('Invalid enzyme: {}: {}'.format(rxn, enz))
-			skipped += 1
-			continue
-		enz = enz[0]
 		if enz in unknown_enzs:
 			skipped += 1
 			continue

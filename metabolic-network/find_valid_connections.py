@@ -9,7 +9,7 @@ from __future__ import absolute_import, division, print_function
 import cPickle
 import os
 
-from typing import Any, Dict, Iterable, List, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from reconstruction.ecoli.dataclasses.process.metabolism import Metabolism
 
@@ -26,22 +26,30 @@ METABOLITE_FILE = os.path.join(OUT_DIR, 'invalid_metabolites.txt')
 REACTION_FILE = os.path.join(OUT_DIR, 'invalid_reactions.txt')
 
 
-def get_boundaries(metabolism, media='minimal'):
-	# type: (Metabolism, str) -> (Set[str], Set[str])
+def get_boundaries(metabolism, media=None):
+	# type: (Metabolism, Optional[str]) -> (Set[str], Set[str])
 	"""
 	Get source and sink metabolites. Imports are sources. Concentration targets
 	and secretions are sinks.
 
 	Args:
 		metabolism: sim_data metabolism process class
-		media: media label for potential import molecules
+		media: media label for potential import molecules, if None, uses all
+			possible import molecules
 
 	Returns:
 		sources: set of metabolite IDs with location tag that are sources
 		sinks: set of metabolite IDs with location tag that are sinks
 	"""
 
-	sources = set(metabolism.boundary.exchange_data_dict['importExchangeMolecules'][media])
+	imports = metabolism.boundary.exchange_data_dict['importExchangeMolecules']
+	if media is None:
+		sources = set([
+			m for exchange in imports.values()
+			for m in exchange
+			])
+	else:
+		sources = set(imports[media])
 	sinks = set(metabolism.boundary.secretion_exchange_molecules)
 	sinks.update(metabolism.concDict)
 

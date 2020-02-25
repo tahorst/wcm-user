@@ -9,13 +9,21 @@ from __future__ import absolute_import, division, print_function
 import cPickle
 import os
 
-from typing import Dict, List, Set
+from typing import Any, Dict, Iterable, List, Set
 
 from reconstruction.ecoli.dataclasses.process.metabolism import Metabolism
 
 
+# Directories
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
+OUT_DIR = os.path.join(FILE_LOCATION, 'out')
+if not os.path.exists(OUT_DIR):
+	os.mkdir(OUT_DIR)
+
+# Filenames
 SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
+METABOLITE_FILE = os.path.join(OUT_DIR, 'invalid_metabolites.txt')
+REACTION_FILE = os.path.join(OUT_DIR, 'invalid_reactions.txt')
 
 
 def get_boundaries(metabolism, media='minimal'):
@@ -109,14 +117,14 @@ def trace_possible_reactions(start, met_to_rxn, rxn_to_met, excluded_rxns):
 
 	return mets
 
-def prune_reactions(reactions, valid_metabolites):
+def prune_reactions(reactions, valid_mets):
 	# type: (Dict[str, Dict[str, int]], Set[str]) -> Set[str]
 	"""
 	Identify reactions that are not possible because mass balance must exist.
 
 	Args:
 		reactions: sim_data stoichiometry structure
-		valid_metabolites: metabolites that have a path to a source and sink
+		valid_mets: metabolites that have a path to a source and sink
 			so that flux can flow through
 
 	Returns:
@@ -126,20 +134,30 @@ def prune_reactions(reactions, valid_metabolites):
 
 	excluded_rxns = set()
 	for rxn, stoich in reactions.items():
-		if not all([m in valid_metabolites for m in stoich]):
+		if not all([m in valid_mets for m in stoich]):
 			excluded_rxns.add(rxn)
 
 	return excluded_rxns
 
+def save_to_file(path, data):
+	# type: (str, Iterable[Any]) -> None
+	"""Saves data to a file."""
+
+	print('Saving to {}'.format(path))
+	with open(path, 'w') as f:
+		f.write('\n'.join(sorted(data)))
+
 
 if __name__ == '__main__':
 	# Load data to analyze
+	print('Loading data from {}'.format(SIM_DATA_FILE))
 	with open(SIM_DATA_FILE) as f:
 		sim_data = cPickle.load(f)
 	metabolism = sim_data.process.metabolism
 	reactions = metabolism.reactionStoich
 
 	# Extract necessary data
+	print('Analyzing reaction network')
 	sources, sinks = get_boundaries(metabolism)
 	reactant_to_rxn, rxn_to_reactant = get_mappings(reactions, True)
 	product_to_rxn, rxn_to_product = get_mappings(reactions, False)
@@ -166,9 +184,13 @@ if __name__ == '__main__':
 	# Analyze results
 	all_mets = set(reactant_to_rxn.keys() + product_to_rxn.keys())
 	all_rxns = set(rxn_to_reactant.keys() + rxn_to_product.keys())
-	excluded_metabolites = all_mets.difference(valid_mets)
+	excluded_mets = all_mets.difference(valid_mets)
 	valid_rxns = all_rxns.difference(excluded_rxns)
 
 	# Print summary
-	print('{}/{} metabolites are valid'.format(len(valid_mets), len(all_mets)))
-	print('{}/{} reactions are valid'.format(len(valid_rxns), len(all_rxns)))
+	print('\t{}/{} metabolites are valid'.format(len(valid_mets), len(all_mets)))
+	print('\t{}/{} reactions are valid'.format(len(valid_rxns), len(all_rxns)))
+
+	# Save output to files
+	save_to_file(METABOLITE_FILE, excluded_mets)
+	save_to_file(REACTION_FILE, excluded_rxns)

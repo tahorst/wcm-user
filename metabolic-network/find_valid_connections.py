@@ -7,6 +7,7 @@ Find valid reactions and metabolites in reaction network.
 from __future__ import absolute_import, division, print_function
 
 import cPickle
+import csv
 import os
 
 from typing import Any, Dict, Iterable, List, Optional, Set
@@ -22,8 +23,8 @@ if not os.path.exists(OUT_DIR):
 
 # Filenames
 SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
-METABOLITE_FILE = os.path.join(OUT_DIR, 'invalid_metabolites.txt')
-REACTION_FILE = os.path.join(OUT_DIR, 'invalid_reactions.txt')
+METABOLITE_FILE = os.path.join(OUT_DIR, 'invalid_metabolites.tsv')
+REACTION_FILE = os.path.join(OUT_DIR, 'invalid_reactions.tsv')
 
 
 def get_boundaries(metabolism, media=None):
@@ -147,13 +148,16 @@ def prune_reactions(reactions, valid_mets):
 
 	return excluded_rxns
 
-def save_to_file(path, data):
+def save_to_file(path, data, reactants, products):
 	# type: (str, Iterable[Any]) -> None
 	"""Saves data to a file."""
 
 	print('Saving to {}'.format(path))
 	with open(path, 'w') as f:
-		f.write('\n'.join(sorted(data)))
+		writer = csv.writer(f, delimiter='\t')
+		writer.writerow(['Label', 'Reactants', 'Products'])
+		for d in sorted(data):
+			writer.writerow([d, reactants.get(d), products.get(d)])
 
 
 if __name__ == '__main__':
@@ -200,5 +204,5 @@ if __name__ == '__main__':
 	print('\t{}/{} reactions are valid'.format(len(valid_rxns), len(all_rxns)))
 
 	# Save output to files
-	save_to_file(METABOLITE_FILE, excluded_mets)
-	save_to_file(REACTION_FILE, excluded_rxns)
+	save_to_file(METABOLITE_FILE, excluded_mets, reactant_to_rxn, product_to_rxn)
+	save_to_file(REACTION_FILE, excluded_rxns, rxn_to_reactant, rxn_to_product)

@@ -57,13 +57,13 @@ def parse_args():
 
 	parser = argparse.ArgumentParser()
 
-	# parser.add_argument('-a', '--abc',
-	# 	type=int,
-	# 	default=1,
-	# 	help='help')
-	# parser.add_argument('--true',
-	# 	action='store_true',
-	# 	help='help')
+	parser.add_argument('-t', '--timepoint',
+		type=int,
+		default=0,
+		help='Timepoint to analyze. Max value depends on number of timepoints saved in {}.'.format(DATA_DIR))
+	parser.add_argument('-s', '--sim-data',
+		default=SIM_DATA_FILE,
+		help='Path to sim_data cPickle (default: {}).'.format(SIM_DATA_FILE))
 
 	return parser.parse_args()
 
@@ -71,9 +71,9 @@ if __name__ == '__main__':
 	args = parse_args()
 
 	# Load data from files
-	sim_data = load_sim_data()
+	sim_data = load_sim_data(path=args.sim_data)
 	timepoints = load_timepoints()
-	timepoint = timepoints[0]  # TODO: set up loop for all timepoints if desired
+	timepoint = timepoints[args.timepoint]  # TODO: set up loop for all timepoints if desired
 
 	# Create model and extract relevant data
 	model = FluxBalanceAnalysisModel(sim_data)

@@ -10,6 +10,8 @@ import argparse
 import cPickle
 import os
 
+import numpy as np
+
 from models.ecoli.processes.metabolism import FluxBalanceAnalysisModel
 from wholecell.utils import units  # required for proper cPickle load
 
@@ -75,16 +77,23 @@ if __name__ == '__main__':
 	timepoints = load_timepoints()
 	timepoint = timepoints[args.timepoint]  # TODO: set up loop for all timepoints if desired
 
-	# Create model and extract relevant data
-	model = FluxBalanceAnalysisModel(sim_data)
-	water_idx = model.fba.getOutputMoleculeIDs().index('WATER[c]')
+	original = sim_data.process.metabolism.flux_regularization
+	for factor in np.logspace(2, 4, 10):
+		value = original * factor
+		sim_data.process.metabolism.flux_regularization = value
+		print('Flux regularization: {:.2e}'.format(value))
 
-	# TODO: setup loop to modify model to reach a desired output
+		# Create model and extract relevant data
+		model = FluxBalanceAnalysisModel(sim_data)
+		mol_id = 'CPD-8260[c]'
+		mol_idx = model.fba.getOutputMoleculeIDs().index(mol_id)
 
-	# Setup model for timepoint
-	model.set_molecule_levels(*timepoint['set_molecule_levels'])
-	model.set_reaction_bounds(*timepoint['set_reaction_bounds'])
-	model.set_reaction_targets(*timepoint['set_reaction_targets'])
+		# TODO: setup loop to modify model to reach a desired output
 
-	# Solve model and check outputs
-	print('Water change: {:.3f}'.format(model.fba.getOutputMoleculeLevelsChange()[water_idx]))
+		# Setup model for timepoint
+		model.set_molecule_levels(*timepoint['set_molecule_levels'])
+		model.set_reaction_bounds(*timepoint['set_reaction_bounds'])
+		model.set_reaction_targets(*timepoint['set_reaction_targets'])
+
+		# Solve model and check outputs
+		print('\t{} change: {:.3f}'.format(mol_id, model.fba.getOutputMoleculeLevelsChange()[mol_idx]))

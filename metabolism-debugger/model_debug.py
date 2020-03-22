@@ -11,8 +11,10 @@ import cPickle
 import os
 
 import numpy as np
+from typing import Any, Dict, List
 
 from models.ecoli.processes.metabolism import FluxBalanceAnalysisModel
+from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 from wholecell.utils import units  # required for proper cPickle load
 
 
@@ -22,8 +24,15 @@ SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
 
 
 def load_sim_data(path=SIM_DATA_FILE):
+	# type: (str) -> SimulationDataEcoli
 	"""
+	Load simulation data.
 
+	Args:
+		path: path to sim_data cPickle file to load
+
+	Returns:
+		sim_data: simulation data
 	"""
 
 	with open(path) as f:
@@ -31,8 +40,13 @@ def load_sim_data(path=SIM_DATA_FILE):
 	return sim_data
 
 def load_timepoints():
+	# type: () -> List[Dict[str, Any]]
 	"""
+	Load timepoint args for each FBA function from files.
 
+	Returns:
+		all_timepoints: args for FBA functions for each timepoint,
+			dict keys are the same as the function they belong to
 	"""
 
 	all_timepoints = []
@@ -47,6 +61,27 @@ def load_timepoints():
 		all_timepoints.append(data)
 
 	return all_timepoints
+
+def setup_model(sim_data, timepoint):
+	# type: (SimulationDataEcoli, Dict[str, Any]) -> FluxBalanceAnalysisModel
+	"""
+	Setup FBA model with loaded data.
+
+	Args:
+		sim_data: simulation data
+		timepoint: args for FBA functions for a timepoint,
+			dict keys are the same as the function they belong to
+
+	Returns:
+		model: FBA model initialized for the given timepoint
+	"""
+
+	model = FluxBalanceAnalysisModel(sim_data)
+	model.set_molecule_levels(*timepoint['set_molecule_levels'])
+	model.set_reaction_bounds(*timepoint['set_reaction_bounds'])
+	model.set_reaction_targets(*timepoint['set_reaction_targets'])
+
+	return model
 
 def parse_args():
 	# type: () -> argparse.Namespace
@@ -77,23 +112,33 @@ if __name__ == '__main__':
 	timepoints = load_timepoints()
 	timepoint = timepoints[args.timepoint]  # TODO: set up loop for all timepoints if desired
 
-	original = sim_data.process.metabolism.flux_regularization
-	for factor in np.logspace(2, 4, 10):
-		value = original * factor
-		sim_data.process.metabolism.flux_regularization = value
-		print('Flux regularization: {:.2e}'.format(value))
+	# Extract data from sim_data
+	kinetic_constraint_reactions = set(sim_data.process.metabolism.kinetic_constraint_reactions)
+	all_reactions = sorted(sim_data.process.metabolism.reactionStoich.keys())
+	sim_data.process.metabolism.flux_regularization = 7.008e-4
 
-		# Create model and extract relevant data
-		model = FluxBalanceAnalysisModel(sim_data)
-		mol_id = 'CPD-8260[c]'
-		mol_idx = model.fba.getOutputMoleculeIDs().index(mol_id)
+	# Unmodified model
+	original_model = setup_model(sim_data, timepoint)
+
+	# Extract data from original model
+	mol_id = 'CPD-8260[c]'
+	mol_idx = original_model.fba.getOutputMoleculeIDs().index(mol_id)
+	original_mol_change = original_model.fba.getOutputMoleculeLevelsChange()[mol_idx]
+
+	# Iterate model for desired outcomes
+	for rxn in all_reactions:
+		if rxn in kinetic_constraint_reactions:
+			continue
+
+		# Create model
+		model = setup_model(sim_data, timepoint)
+
+		# Iteration specific modifications
+		model.fba._solver.setFlowObjectiveCoeff(rxn, 0)
 
 		# TODO: setup loop to modify model to reach a desired output
 
-		# Setup model for timepoint
-		model.set_molecule_levels(*timepoint['set_molecule_levels'])
-		model.set_reaction_bounds(*timepoint['set_reaction_bounds'])
-		model.set_reaction_targets(*timepoint['set_reaction_targets'])
-
 		# Solve model and check outputs
-		print('\t{} change: {:.3f}'.format(mol_id, model.fba.getOutputMoleculeLevelsChange()[mol_idx]))
+		mol_change = model.fba.getOutputMoleculeLevelsChange()[mol_idx]
+		if mol_change > original_mol_change:
+			print('{}: {} change: {:.3f}'.format(rxn, mol_id, mol_change))

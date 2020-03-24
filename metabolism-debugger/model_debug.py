@@ -23,6 +23,7 @@ DATA_DIR = os.path.join(FILE_LOCATION, 'timepoints')
 SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
 
 ALL_ANALYSIS_OPTIONS = [
+	'adjust-parameter',
 	'increase-molecule',
 	]
 
@@ -75,7 +76,12 @@ def extract_sim_data_args(analysis_type, path):
 
 	# Handle each analysis type
 	kwargs = {}
-	if analysis_type == 'increase-molecule':
+	if analysis_type == 'adjust-parameter':
+		kwargs = {
+			'factors': np.logspace(0, 4, 100),
+			'sim_data_attr': 'process.metabolism.flux_regularization',
+			}
+	elif analysis_type == 'increase-molecule':
 		sim_data.process.metabolism.flux_regularization = 7.008e-4
 		kwargs = {
 			'kinetic_constraint_reactions': set(sim_data.process.metabolism.kinetic_constraint_reactions),
@@ -99,7 +105,14 @@ def extract_model_args(analysis_type, model):
 	"""
 
 	kwargs = {}
-	if analysis_type == 'increase-molecule':
+	if analysis_type == 'adjust-parameter':
+		mol_id = 'CPD-8260[c]'
+		mol_idx = model.fba.getOutputMoleculeIDs().index(mol_id)
+		kwargs = {
+			'mol_id': mol_id,
+			'mol_idx': mol_idx,
+			}
+	elif analysis_type == 'increase-molecule':
 		mol_id = 'CPD-8260[c]'
 		mol_idx = model.fba.getOutputMoleculeIDs().index(mol_id)
 		original_mol_change = model.fba.getOutputMoleculeLevelsChange()[mol_idx]
@@ -148,8 +161,53 @@ def solve_model(analysis_type, sim_data, timepoint, **kwargs):
 		setup loop to modify model to reach a desired output
 	"""
 
-	if analysis_type == 'increase-molecule':
+	if analysis_type == 'adjust-parameter':
+		solve_adjust_parameter(sim_data, timepoint, **kwargs)
+	elif analysis_type == 'increase-molecule':
 		solve_increase_molecule(sim_data, timepoint, **kwargs)
+
+def solve_adjust_parameter(sim_data, timepoint,
+		factors, sim_data_attr,
+		mol_id, mol_idx):
+	"""
+	Solves the model for the 'adjust-parameter' option.  This adjusts the given
+	sim_data attribute by different factors to see the effect on the FBA
+	output molecule of interest.
+
+	Args:
+		sim_data (SimulationDataEcoli): simulation data
+		timepoint (Dict[str, Any]): args for FBA functions for a timepoint,
+			dict keys are the same as the function they belong to
+		factors (Iterable[float]): factors to multiply the original attribute
+			value by
+		sim_data_attr (str): sim_data attribute to adjust, separated by '.' if
+			nested attributes
+		mol_id (str): molecule ID to check for an increase in the change
+			for each iteration
+		mol_idx (int): index of output molecules for mol_id
+	"""
+
+	# Get attribute to adjust
+	attrs = sim_data_attr.split('.')
+	parent_attr = sim_data
+	attr = attrs[-1]
+	if len(attrs) > 1:
+		for a in attrs[:-1]:
+			parent_attr = getattr(parent_attr, a)
+	original_value = getattr(parent_attr, attr)
+
+	# Adjust attribute by each factor
+	for factor in factors:
+		# Iteration specific modifications
+		value = original_value * factor
+		setattr(parent_attr, attr, value)
+
+		# Create model
+		model = setup_model(sim_data, timepoint)
+
+		# Solve model and check outputs
+		mol_change = model.fba.getOutputMoleculeLevelsChange()[mol_idx]
+		print('{}={:.3e}: {} change: {:.3f}'.format(attr, value, mol_id, mol_change))
 
 def solve_increase_molecule(sim_data, timepoint,
 		kinetic_constraint_reactions, all_reactions,

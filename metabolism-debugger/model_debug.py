@@ -10,6 +10,7 @@ import argparse
 import cPickle
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 from typing import Any, Dict, List, Tuple
 
@@ -20,11 +21,15 @@ from wholecell.utils import units  # required for proper cPickle load
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(FILE_LOCATION, 'timepoints')
+OUT_DIR = os.path.join(FILE_LOCATION, 'out')
+if not os.path.exists(OUT_DIR):
+	os.makedirs(OUT_DIR)
 SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
 
 ALL_ANALYSIS_OPTIONS = [
 	'adjust-parameter',
 	'increase-molecule',
+	'optimize-inputs',
 	]
 
 
@@ -165,6 +170,8 @@ def solve_model(analysis_type, sim_data, timepoint, **kwargs):
 		solve_adjust_parameter(sim_data, timepoint, **kwargs)
 	elif analysis_type == 'increase-molecule':
 		solve_increase_molecule(sim_data, timepoint, **kwargs)
+	elif analysis_type == 'optimize-inputs':
+		solve_optimize_inputs(sim_data, timepoint, **kwargs)
 
 def solve_adjust_parameter(sim_data, timepoint,
 		factors, sim_data_attr,
@@ -245,6 +252,109 @@ def solve_increase_molecule(sim_data, timepoint,
 		mol_change = model.fba.getOutputMoleculeLevelsChange()[mol_idx]
 		if mol_change > original_mol_change:
 			print('{}: {} change: {:.3f}'.format(rxn, mol_id, mol_change))
+
+def solve_optimize_inputs(sim_data, timepoint):
+	"""
+	Solves the model for the 'optimize-inputs' option. This finds the changes
+	to inputs that maximizes an objective.
+
+	# TODO: organize like other functions (modularize with data functions)
+	# TODO: change obejctive to minimize (eg target a certain flux outcome)
+	# TODO: test with more timepoints
+	"""
+
+	it = 0
+
+	atol = 1e-6
+	rtol = 1e-3
+	max_it = 1
+
+	# Setup
+	metabolism = sim_data.process.metabolism
+	original_model = setup_model(sim_data, timepoint)
+	objective = original_model.fba.getObjectiveValue()
+
+	## Metabolites
+	all_mols = original_model.metaboliteNamesFromNutrients
+	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
+
+	## TODO: Enzymes
+	# all_enzs = metabolism.catalyst_ids
+	# enz_map = {enz: i for i, enz in enumerate(metabolism.kinetic_constraint_enzymes)}
+
+	objective_updates = np.zeros((len(all_mols), max_it))
+
+	while it < max_it:
+		start_objective = objective
+
+		# Iteration specific modifications
+		for mol_idx, mol in enumerate(all_mols):
+			original_counts = timepoint['set_molecule_levels'][0][mol_idx]
+			sub_idx = mol_map.get(mol)
+			high_counts = int(original_counts * 1.1)
+			low_counts = int(original_counts * 0.9)
+
+			# Test high
+			timepoint['set_molecule_levels'][0][mol_idx] = high_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = high_counts
+			high_model = setup_model(sim_data, timepoint)
+			high_objective = high_model.fba.getObjectiveValue()
+
+			# Test low
+			timepoint['set_molecule_levels'][0][mol_idx] = low_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = low_counts
+			low_model = setup_model(sim_data, timepoint)
+			low_objective = low_model.fba.getObjectiveValue()
+
+			# Update objective
+			if high_objective < objective and high_objective < low_objective:
+				new_counts = high_counts
+				new_objective = high_objective
+			elif low_objective < objective:
+				new_counts = low_counts
+				new_objective = low_objective
+			else:
+				new_counts = original_counts
+				new_objective = objective
+
+			# Update counts
+			change = new_counts - original_counts
+			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
+
+			objective_updates[mol_idx, it] = new_objective - objective
+			objective = new_objective
+
+			# Print status update
+			print('{} updated {} to {} (obj: {:.4e})'.format(mol, change, new_counts, objective))
+
+		it += 1
+
+		# Check objective tolerances for break conditions
+		if objective < atol:
+			break
+		if (start_objective - objective) / objective < rtol:
+			break
+
+	# Analyze results
+	objective_updates[objective_updates == 0] = np.nan
+	mean = -np.nanmean(objective_updates, 1)
+	std = np.nanstd(objective_updates, 1)
+	mean[~np.isfinite(mean)] = 0
+	std[~np.isfinite(std)] = 0
+	sorted_idx = np.argsort(mean)[::-1]
+
+	# Plot results
+	n_mets = 20
+	plt.figure()
+	plt.bar(range(n_mets), mean[sorted_idx[:n_mets]], yerr=std[sorted_idx[:n_mets]])
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]], rotation=90)
+	plt.ylabel('Objective Change')
+	plt.tight_layout()
+	plt.savefig(os.path.join(OUT_DIR, 'metabolite_objective.png'))
 
 def parse_args():
 	# type: () -> argparse.Namespace

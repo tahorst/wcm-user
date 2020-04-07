@@ -28,8 +28,9 @@ SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
 
 ALL_ANALYSIS_OPTIONS = [
 	'adjust-parameter',
+	'gradient-descent',
 	'increase-molecule',
-	'optimize-inputs',
+	'sensitivity',
 	]
 
 
@@ -168,10 +169,12 @@ def solve_model(analysis_type, sim_data, timepoint, **kwargs):
 
 	if analysis_type == 'adjust-parameter':
 		solve_adjust_parameter(sim_data, timepoint, **kwargs)
+	elif analysis_type == 'gradient-descent':
+		solve_gradient_descent(sim_data, timepoint, **kwargs)
 	elif analysis_type == 'increase-molecule':
 		solve_increase_molecule(sim_data, timepoint, **kwargs)
-	elif analysis_type == 'optimize-inputs':
-		solve_optimize_inputs(sim_data, timepoint, **kwargs)
+	elif analysis_type == 'sensitivity':
+		solve_sensitivity(sim_data, timepoint, **kwargs)
 
 def solve_adjust_parameter(sim_data, timepoint,
 		factors, sim_data_attr,
@@ -253,30 +256,100 @@ def solve_increase_molecule(sim_data, timepoint,
 		if mol_change > original_mol_change:
 			print('{}: {} change: {:.3f}'.format(rxn, mol_id, mol_change))
 
-def solve_optimize_inputs(sim_data, timepoint):
+def solve_sensitivity(sim_data, timepoint):
 	"""
-	Solves the model for the 'optimize-inputs' option. This finds the changes
+	Solves the model for the 'sensitivity' option. This finds the sensitivity
+	of an objective to changes to the inputs.
+
+	# TODO: organize like other functions (modularize with data functions)
+	# TODO: simplify repeated code with solve_gradient_descent()
+	# TODO: test with more timepoints
+	"""
+
+	# Optimization parameters
+	objective_initializer = get_glc_uptake
+
+	# Setup
+	metabolism = sim_data.process.metabolism
+	original_model = setup_model(sim_data, timepoint)
+	get_objective = objective_initializer(sim_data, original_model, timepoint)
+	objective = get_objective(original_model)
+
+	## Metabolites
+	all_mols = original_model.metaboliteNamesFromNutrients
+	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
+
+	## TODO: Enzymes
+	# all_enzs = metabolism.catalyst_ids
+	# enz_map = {enz: i for i, enz in enumerate(metabolism.kinetic_constraint_enzymes)}
+
+	objective_updates = np.zeros(len(all_mols))
+
+	# Iteration specific modifications
+	for mol_idx, mol in enumerate(all_mols):
+		original_counts = timepoint['set_molecule_levels'][0][mol_idx]
+		sub_idx = mol_map.get(mol)
+		high_counts = int(original_counts * 1.1)
+		low_counts = int(original_counts * 0.9)
+
+		# Test high
+		timepoint['set_molecule_levels'][0][mol_idx] = high_counts
+		if sub_idx:
+			timepoint['set_reaction_targets'][1][sub_idx] = high_counts
+		high_model = setup_model(sim_data, timepoint)
+		high_objective = get_objective(high_model)
+
+		# Test low
+		timepoint['set_molecule_levels'][0][mol_idx] = low_counts
+		if sub_idx:
+			timepoint['set_reaction_targets'][1][sub_idx] = low_counts
+		low_model = setup_model(sim_data, timepoint)
+		low_objective = get_objective(low_model)
+
+		# Update objective
+		if high_objective < objective and high_objective < low_objective:
+			new_counts = high_counts
+			new_objective = high_objective
+		elif low_objective < objective:
+			new_counts = low_counts
+			new_objective = low_objective
+		else:
+			new_counts = original_counts
+			new_objective = objective
+
+		# Update counts
+		change = new_counts - original_counts
+		timepoint['set_molecule_levels'][0][mol_idx] = original_counts
+		if sub_idx:
+			timepoint['set_reaction_targets'][1][sub_idx] = original_counts
+
+		objective_updates[mol_idx] = new_objective - objective
+
+		# Print status update
+		print('{} updated {} to {} (obj: {:.4e})'.format(mol, change, new_counts, new_objective))
+
+	# Analyze results
+	sorted_idx = np.argsort(objective_updates)
+
+	# Plot results
+	n_mets = 20
+	plt.figure()
+	plt.bar(range(n_mets), -objective_updates[sorted_idx[:n_mets]])
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]], rotation=90)
+	plt.ylabel('Objective Change')
+	plt.tight_layout()
+	plt.savefig(os.path.join(OUT_DIR, 'sensitivity.png'))
+
+def solve_gradient_descent(sim_data, timepoint):
+	"""
+	Solves the model for the 'gradient-descent' option. This finds the changes
 	to inputs that maximizes an objective.
 
 	# TODO: organize like other functions (modularize with data functions)
-	# TODO: change obejctive to minimize (eg target a certain flux outcome)
+	# TODO: simplify repeated code with solve_sensitivity()
 	# TODO: test with more timepoints
-	# TODO: use gradient descent
+	# TODO: implement actual gradient descent
 	"""
-
-	# Objectives to use
-	def get_objective_value(sim_data, model, timepoint):
-		return lambda model: model.fba.getObjectiveValue()
-
-	def get_glc_uptake(sim_data, model, timepoint):
-		mol_id = 'GLC[p]'
-		gdcw_basis = 12 * units.mmol / units.g / units.h
-
-		mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
-		conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
-		target = (gdcw_basis * conversion).asNumber()
-
-		return lambda model: (-model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
 
 	# Optimization parameters
 	atol = 1e-6
@@ -293,10 +366,6 @@ def solve_optimize_inputs(sim_data, timepoint):
 	## Metabolites
 	all_mols = original_model.metaboliteNamesFromNutrients
 	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
-
-	## TODO: Enzymes
-	# all_enzs = metabolism.catalyst_ids
-	# enz_map = {enz: i for i, enz in enumerate(metabolism.kinetic_constraint_enzymes)}
 
 	objective_updates = np.zeros((len(all_mols), max_it))
 
@@ -368,7 +437,21 @@ def solve_optimize_inputs(sim_data, timepoint):
 	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]], rotation=90)
 	plt.ylabel('Objective Change')
 	plt.tight_layout()
-	plt.savefig(os.path.join(OUT_DIR, 'metabolite_objective.png'))
+	plt.savefig(os.path.join(OUT_DIR, 'gradient_descent.png'))
+
+# Objectives to use
+def get_objective_value(sim_data, model, timepoint):
+	return lambda model: model.fba.getObjectiveValue()
+
+def get_glc_uptake(sim_data, model, timepoint):
+	mol_id = 'GLC[p]'
+	gdcw_basis = 12 * units.mmol / units.g / units.h
+
+	mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
+	conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
+	target = (gdcw_basis * conversion).asNumber()
+
+	return lambda model: (-model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
 
 def parse_args():
 	# type: () -> argparse.Namespace

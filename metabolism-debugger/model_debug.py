@@ -259,15 +259,17 @@ def solve_increase_molecule(sim_data, timepoint,
 def solve_sensitivity(sim_data, timepoint):
 	"""
 	Solves the model for the 'sensitivity' option. This finds the sensitivity
-	of an objective to changes to the inputs.
+	of an objective to changes to the inputs. If sensitivity is positive, then
+	increasing counts of a given molecule will increase the objective.
 
 	# TODO: organize like other functions (modularize with data functions)
 	# TODO: simplify repeated code with solve_gradient_descent()
 	# TODO: test with more timepoints
 	"""
 
-	# Optimization parameters
+	# Sensitivity parameters
 	objective_initializer = get_glc_uptake
+	factors = [-0.1, -0.05, -0.01, 0.01, 0.05, 0.1]  # Test fractional change in counts, keep > -1
 
 	# Setup
 	metabolism = sim_data.process.metabolism
@@ -283,60 +285,60 @@ def solve_sensitivity(sim_data, timepoint):
 	# all_enzs = metabolism.catalyst_ids
 	# enz_map = {enz: i for i, enz in enumerate(metabolism.kinetic_constraint_enzymes)}
 
-	objective_updates = np.zeros(len(all_mols))
+	objective_updates = np.zeros((len(all_mols), len(factors)))
 
-	# Iteration specific modifications
+	# Get sensitivity of objective to changes in counts for each molecule
 	for mol_idx, mol in enumerate(all_mols):
 		original_counts = timepoint['set_molecule_levels'][0][mol_idx]
 		sub_idx = mol_map.get(mol)
-		high_counts = int(original_counts * 1.1)
-		low_counts = int(original_counts * 0.9)
+		for factor_idx, factor in enumerate(factors):
+			# Update to new counts
+			new_counts = int(original_counts * (1 + factor))
+			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
 
-		# Test high
-		timepoint['set_molecule_levels'][0][mol_idx] = high_counts
-		if sub_idx:
-			timepoint['set_reaction_targets'][1][sub_idx] = high_counts
-		high_model = setup_model(sim_data, timepoint)
-		high_objective = get_objective(high_model)
+			# Solve for objective value
+			model = setup_model(sim_data, timepoint)
+			new_objective = get_objective(model)
 
-		# Test low
-		timepoint['set_molecule_levels'][0][mol_idx] = low_counts
-		if sub_idx:
-			timepoint['set_reaction_targets'][1][sub_idx] = low_counts
-		low_model = setup_model(sim_data, timepoint)
-		low_objective = get_objective(low_model)
+			# Save results
+			objective_updates[mol_idx, factor_idx] = (new_objective - objective) / factor
 
-		# Update objective
-		if high_objective < objective and high_objective < low_objective:
-			new_counts = high_counts
-			new_objective = high_objective
-		elif low_objective < objective:
-			new_counts = low_counts
-			new_objective = low_objective
-		else:
-			new_counts = original_counts
-			new_objective = objective
-
-		# Update counts
-		change = new_counts - original_counts
+		# Revert counts to original
 		timepoint['set_molecule_levels'][0][mol_idx] = original_counts
 		if sub_idx:
 			timepoint['set_reaction_targets'][1][sub_idx] = original_counts
 
-		objective_updates[mol_idx] = new_objective - objective
-
 		# Print status update
-		print('{} updated {} to {} (obj: {:.4e})'.format(mol, change, new_counts, new_objective))
+		print('{} sensitivity: {:.2e} +/- {:.2e}'.format(mol, objective_updates[mol_idx, :].mean(), objective_updates[mol_idx, :].std()))
 
 	# Analyze results
-	sorted_idx = np.argsort(objective_updates)
+	mean = objective_updates.mean(1)
+	std = objective_updates.std(1)
+	sorted_idx = np.argsort(mean)
 
 	# Plot results
 	n_mets = 20
-	plt.figure()
-	plt.bar(range(n_mets), -objective_updates[sorted_idx[:n_mets]])
-	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]], rotation=90)
-	plt.ylabel('Objective Change')
+	plt.figure(figsize=(8.5, 11))
+
+	## Low sensitivity subplot
+	plt.subplot(2, 1, 1)
+	plt.bar(range(n_mets), mean[sorted_idx[:n_mets]], yerr=std[sorted_idx[:n_mets]])
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]],
+		rotation=45, fontsize=8, ha='right')
+	plt.yticks(fontsize=8)
+	plt.ylabel('Sensitivity', fontsize=10)
+
+	## High sensitivity subplot
+	plt.subplot(2, 1, 2)
+	plt.bar(range(n_mets), mean[sorted_idx[-n_mets:]], yerr=std[sorted_idx[-n_mets:]])
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[-n_mets:]],
+		rotation=45, fontsize=8, ha='right')
+	plt.yticks(fontsize=8)
+	plt.ylabel('Sensitivity', fontsize=10)
+
+	## Save plot
 	plt.tight_layout()
 	plt.savefig(os.path.join(OUT_DIR, 'sensitivity.png'))
 
@@ -434,8 +436,9 @@ def solve_gradient_descent(sim_data, timepoint):
 	n_mets = 20
 	plt.figure()
 	plt.bar(range(n_mets), mean[sorted_idx[:n_mets]], yerr=std[sorted_idx[:n_mets]])
-	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]], rotation=90)
-	plt.ylabel('Objective Change')
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]],
+		rotation=45, fontsize=8, ha='right')
+	plt.ylabel('Objective Change', fontsize=10)
 	plt.tight_layout()
 	plt.savefig(os.path.join(OUT_DIR, 'gradient_descent.png'))
 

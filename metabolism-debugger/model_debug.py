@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typing import Any, Dict, List, Tuple
 
-from models.ecoli.processes.metabolism import FluxBalanceAnalysisModel
+from models.ecoli.processes.metabolism import CONC_UNITS, FluxBalanceAnalysisModel
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 from wholecell.utils import units  # required for proper cPickle load
 
@@ -261,18 +261,34 @@ def solve_optimize_inputs(sim_data, timepoint):
 	# TODO: organize like other functions (modularize with data functions)
 	# TODO: change obejctive to minimize (eg target a certain flux outcome)
 	# TODO: test with more timepoints
+	# TODO: use gradient descent
 	"""
 
-	it = 0
+	# Objectives to use
+	def get_objective_value(sim_data, model, timepoint):
+		return lambda model: model.fba.getObjectiveValue()
 
+	def get_glc_uptake(sim_data, model, timepoint):
+		mol_id = 'GLC[p]'
+		gdcw_basis = 12 * units.mmol / units.g / units.h
+
+		mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
+		conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
+		target = (gdcw_basis * conversion).asNumber()
+
+		return lambda model: (-model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
+
+	# Optimization parameters
 	atol = 1e-6
 	rtol = 1e-3
 	max_it = 1
+	objective_initializer = get_glc_uptake
 
 	# Setup
 	metabolism = sim_data.process.metabolism
 	original_model = setup_model(sim_data, timepoint)
-	objective = original_model.fba.getObjectiveValue()
+	get_objective = objective_initializer(sim_data, original_model, timepoint)
+	objective = get_objective(original_model)
 
 	## Metabolites
 	all_mols = original_model.metaboliteNamesFromNutrients
@@ -284,7 +300,7 @@ def solve_optimize_inputs(sim_data, timepoint):
 
 	objective_updates = np.zeros((len(all_mols), max_it))
 
-	while it < max_it:
+	for it in range(max_it):
 		start_objective = objective
 
 		# Iteration specific modifications
@@ -299,14 +315,14 @@ def solve_optimize_inputs(sim_data, timepoint):
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = high_counts
 			high_model = setup_model(sim_data, timepoint)
-			high_objective = high_model.fba.getObjectiveValue()
+			high_objective = get_objective(high_model)
 
 			# Test low
 			timepoint['set_molecule_levels'][0][mol_idx] = low_counts
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = low_counts
 			low_model = setup_model(sim_data, timepoint)
-			low_objective = low_model.fba.getObjectiveValue()
+			low_objective = get_objective(low_model)
 
 			# Update objective
 			if high_objective < objective and high_objective < low_objective:
@@ -330,8 +346,6 @@ def solve_optimize_inputs(sim_data, timepoint):
 
 			# Print status update
 			print('{} updated {} to {} (obj: {:.4e})'.format(mol, change, new_counts, objective))
-
-		it += 1
 
 		# Check objective tolerances for break conditions
 		if objective < atol:

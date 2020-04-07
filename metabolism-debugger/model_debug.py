@@ -268,7 +268,7 @@ def solve_sensitivity(sim_data, timepoint):
 	"""
 
 	# Sensitivity parameters
-	objective_initializer = get_glc_uptake
+	objective_initializer = get_combined
 	factors = [-0.1, -0.05, -0.01, 0.01, 0.05, 0.1]  # Test fractional change in counts, keep > -1
 
 	# Setup
@@ -444,9 +444,13 @@ def solve_gradient_descent(sim_data, timepoint):
 
 # Objectives to use
 def get_objective_value(sim_data, model, timepoint):
+	"""FBA objective"""
+
 	return lambda model: model.fba.getObjectiveValue()
 
 def get_glc_uptake(sim_data, model, timepoint):
+	"""L1 glc uptake compared to target"""
+
 	mol_id = 'GLC[p]'
 	gdcw_basis = 12 * units.mmol / units.g / units.h
 
@@ -454,7 +458,29 @@ def get_glc_uptake(sim_data, model, timepoint):
 	conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
 	target = (gdcw_basis * conversion).asNumber()
 
-	return lambda model: (-model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
+	return lambda model: np.abs(-model.fba.getExternalExchangeFluxes()[mol_idx] - target)
+
+def get_water_export(sim_data, model, timepoint):
+	"""ReLU water export"""
+
+	mol_id = 'WATER[p]'
+	mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
+
+	return lambda model: max(0, model.fba.getExternalExchangeFluxes()[mol_idx])
+
+def get_combined(sim_data, model, timepoint):
+	"""
+	Combined glc and water
+
+	TODO:
+	- generalize to any combo
+	- add weights
+	"""
+
+	glc = get_glc_uptake(sim_data, model, timepoint)
+	water = get_water_export(sim_data, model, timepoint)
+
+	return lambda model: glc(model) + water(model)
 
 def parse_args():
 	# type: () -> argparse.Namespace

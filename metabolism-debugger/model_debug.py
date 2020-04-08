@@ -296,7 +296,7 @@ def solve_sensitivity(args, sim_data, timepoint):
 	# all_enzs = metabolism.catalyst_ids
 	# enz_map = {enz: i for i, enz in enumerate(metabolism.kinetic_constraint_enzymes)}
 
-	objective_updates = np.zeros((len(all_mols), len(factors)))
+	objective_updates = np.zeros((len(factors), len(all_mols)))
 
 	# Get sensitivity of objective to changes in counts for each molecule
 	for mol_idx, mol in enumerate(all_mols):
@@ -314,7 +314,7 @@ def solve_sensitivity(args, sim_data, timepoint):
 			new_objective = get_objective(model)
 
 			# Save results
-			objective_updates[mol_idx, factor_idx] = (new_objective - objective) / factor
+			objective_updates[factor_idx, mol_idx] = (new_objective - objective) / factor
 
 		# Revert counts to original
 		timepoint['set_molecule_levels'][0][mol_idx] = original_counts
@@ -322,11 +322,11 @@ def solve_sensitivity(args, sim_data, timepoint):
 			timepoint['set_reaction_targets'][1][sub_idx] = original_counts
 
 		# Print status update
-		print('{} sensitivity: {:.2g} +/- {:.2g}'.format(mol, objective_updates[mol_idx, :].mean(), objective_updates[mol_idx, :].std()))
+		print('{} sensitivity: {:.2g} +/- {:.2g}'.format(mol, objective_updates[:, mol_idx].mean(), objective_updates[:, mol_idx].std()))
 
 	# Analyze results
-	mean = objective_updates.mean(1)
-	std = objective_updates.std(1)
+	mean = objective_updates.mean(0)
+	std = objective_updates.std(0)
 	sorted_idx = np.argsort(mean)
 
 	# Plot results
@@ -371,7 +371,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	"""
 
 	# Optimization parameters
-	lr = 1e2
+	lr = 50
 	atol = 1e-4
 	rtol = 1e-2
 	max_it = 10
@@ -387,10 +387,11 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	all_mols = original_model.metaboliteNamesFromNutrients
 	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
 
-	objective_updates = np.zeros((len(all_mols), max_it))
+	objective_values = np.zeros((max_it, len(all_mols) + 1))
 
 	for it in range(max_it):
 		old_objective = objective
+		objective_values[it, 0] = old_objective
 
 		# Iteration specific modifications
 		for mol_idx, mol in enumerate(all_mols):
@@ -413,20 +414,17 @@ def solve_gradient_descent(args, sim_data, timepoint):
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
 
-			# Record old objective
-			objective_updates[mol_idx, it] = objective
-
 			# Objective with new counts
 			model = setup_model(sim_data, timepoint)
 			objective = get_objective(model)
 
-			# Subtract new objective for difference with update to counts
-			objective_updates[mol_idx, it] -= objective
+			# Save new objective value
+			objective_values[it, mol_idx + 1] = objective
 
 			# Print status update
 			print('{} updated {} to {} (obj: {:.4g})'.format(mol, change, new_counts, objective))
 
-		print('*** Iteration {}: {:.3g} -> {:.3g}'.format(it + 1, old_objective, objective))
+		print('*** Epoch {}: {:.3g} -> {:.3g}'.format(it + 1, old_objective, objective))
 
 		# Check objective tolerances for break conditions
 		if objective < atol:
@@ -435,20 +433,45 @@ def solve_gradient_descent(args, sim_data, timepoint):
 			break
 
 	# Analyze results
+	## Objective changes associated with each input
+	objective_updates = np.diff(objective_values)
 	objective_updates[objective_updates == 0] = np.nan
-	mean = -np.nanmean(objective_updates, 1)
-	std = np.nanstd(objective_updates, 1)
+	mean = np.nanmean(objective_updates, 0)
+	std = np.nanstd(objective_updates, 0)
 	mean[~np.isfinite(mean)] = 0
 	std[~np.isfinite(std)] = 0
-	sorted_idx = np.argsort(mean)[::-1]
+	sorted_idx = np.argsort(mean)
+
+	## Objective value over time
+	objective_trace = np.hstack((objective_values[0, 0], objective_values[:, 1:].reshape(-1)))
+	objective_trace = np.log10(objective_trace[objective_trace != 0])
+	epoch_length = objective_values.shape[1] - 1
+	n_epochs = len(objective_trace) // epoch_length
 
 	# Plot results
 	n_mets = 20
-	plt.figure()
+	plt.figure(figsize=(8.5, 11))
+
+	## Plot biggest changes in correct direction (lowering objective)
+	plt.subplot(3, 1, 1)
 	plt.bar(range(n_mets), mean[sorted_idx[:n_mets]], yerr=std[sorted_idx[:n_mets]])
 	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]],
 		rotation=45, fontsize=8, ha='right')
-	plt.ylabel('Objective Change', fontsize=10)
+	plt.ylabel('Average Objective Change', fontsize=10)
+
+	## Plot biggest changes in the wrong direction (increasing objective)
+	plt.subplot(3, 1, 2)
+	plt.bar(range(n_mets), mean[sorted_idx[-n_mets:]], yerr=std[sorted_idx[-n_mets:]])
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[-n_mets:]],
+		rotation=45, fontsize=8, ha='right')
+	plt.ylabel('Average Objective Change', fontsize=10)
+
+	## Plot objective trace
+	plt.subplot(3, 1, 3)
+	plt.plot(range(len(objective_trace)), objective_trace)
+	plt.xticks(np.linspace(0, n_epochs*epoch_length, n_epochs+1), np.linspace(0, n_epochs, n_epochs+1))
+	plt.xlabel('Epoch', fontsize=10)
+	plt.ylabel('Objective', fontsize=10)
 
 	## Save plot
 	plt.tight_layout()
@@ -463,7 +486,6 @@ def get_objective_value(sim_data, model, timepoint):
 
 def get_exchange_flux_target(sim_data, model, timepoint, mol_id='GLC[p]', gdcw_target=-12):
 	"""L2 exchange target for any molecule (positive flux is export)"""
-
 
 	mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
 	conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS

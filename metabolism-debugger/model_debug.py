@@ -151,32 +151,35 @@ def setup_model(sim_data, timepoint):
 
 	return model
 
-def solve_model(analysis_type, sim_data, timepoint, **kwargs):
-	# type: (str, SimulationDataEcoli, Dict[str, Any], **Any) -> None
+def solve_model(args, sim_data, timepoint, **kwargs):
+	# type: (argparse.Namespace, SimulationDataEcoli, Dict[str, Any], **Any) -> None
 	"""
 	Solves the FBA model for the desired analysis.
 
 	Args:
-		analysis_type: label from ALL_ANALYSIS_OPTIONS to indicate which
-			analysis to perform
+		args: parsed command line args
 		sim_data: simulation data
 		timepoint: args for FBA functions for a timepoint,
 			dict keys are the same as the function they belong to
-
-	TODO:
-		setup loop to modify model to reach a desired output
+		kwargs: solver specific args
 	"""
 
-	if analysis_type == 'adjust-parameter':
-		solve_adjust_parameter(sim_data, timepoint, **kwargs)
-	elif analysis_type == 'gradient-descent':
-		solve_gradient_descent(sim_data, timepoint, **kwargs)
-	elif analysis_type == 'increase-molecule':
-		solve_increase_molecule(sim_data, timepoint, **kwargs)
-	elif analysis_type == 'sensitivity':
-		solve_sensitivity(sim_data, timepoint, **kwargs)
+	analysis_type = args.analysis
 
-def solve_adjust_parameter(sim_data, timepoint,
+	if analysis_type == 'adjust-parameter':
+		solver = solve_adjust_parameter
+	elif analysis_type == 'gradient-descent':
+		solver = solve_gradient_descent
+	elif analysis_type == 'increase-molecule':
+		solver = solve_increase_molecule
+	elif analysis_type == 'sensitivity':
+		solver = solve_sensitivity
+	else:
+		raise ValueError('Unrecognized analysis type: {}'.format(analysis_type))
+
+	solver(args, sim_data, timepoint, **kwargs)
+
+def solve_adjust_parameter(args, sim_data, timepoint,
 		factors, sim_data_attr,
 		mol_id, mol_idx):
 	"""
@@ -185,6 +188,7 @@ def solve_adjust_parameter(sim_data, timepoint,
 	output molecule of interest.
 
 	Args:
+		args (argparse.Namespace): parsed command line args
 		sim_data (SimulationDataEcoli): simulation data
 		timepoint (Dict[str, Any]): args for FBA functions for a timepoint,
 			dict keys are the same as the function they belong to
@@ -219,7 +223,7 @@ def solve_adjust_parameter(sim_data, timepoint,
 		mol_change = model.fba.getOutputMoleculeLevelsChange()[mol_idx]
 		print('{}={:.3e}: {} change: {:.3f}'.format(attr, value, mol_id, mol_change))
 
-def solve_increase_molecule(sim_data, timepoint,
+def solve_increase_molecule(args, sim_data, timepoint,
 		kinetic_constraint_reactions, all_reactions,
 		mol_id, mol_idx, original_mol_change):
 	"""
@@ -229,6 +233,7 @@ def solve_increase_molecule(sim_data, timepoint,
 	disabled.
 
 	Args:
+		args (argparse.Namespace): parsed command line args
 		sim_data (SimulationDataEcoli): simulation data
 		timepoint (Dict[str, Any]): args for FBA functions for a timepoint,
 			dict keys are the same as the function they belong to
@@ -256,11 +261,17 @@ def solve_increase_molecule(sim_data, timepoint,
 		if mol_change > original_mol_change:
 			print('{}: {} change: {:.3f}'.format(rxn, mol_id, mol_change))
 
-def solve_sensitivity(sim_data, timepoint):
+def solve_sensitivity(args, sim_data, timepoint):
 	"""
 	Solves the model for the 'sensitivity' option. This finds the sensitivity
 	of an objective to changes to the inputs. If sensitivity is positive, then
 	increasing counts of a given molecule will increase the objective.
+
+	Args:
+		args (argparse.Namespace): parsed command line args
+		sim_data (SimulationDataEcoli): simulation data
+		timepoint (Dict[str, Any]): args for FBA functions for a timepoint,
+			dict keys are the same as the function they belong to
 
 	# TODO: organize like other functions (modularize with data functions)
 	# TODO: simplify repeated code with solve_gradient_descent()
@@ -342,10 +353,16 @@ def solve_sensitivity(sim_data, timepoint):
 	plt.tight_layout()
 	plt.savefig(os.path.join(OUT_DIR, 'sensitivity.png'))
 
-def solve_gradient_descent(sim_data, timepoint):
+def solve_gradient_descent(args, sim_data, timepoint):
 	"""
 	Solves the model for the 'gradient-descent' option. This finds the changes
 	to inputs that maximizes an objective.
+
+	Args:
+		args (argparse.Namespace): parsed command line args
+		sim_data (SimulationDataEcoli): simulation data
+		timepoint (Dict[str, Any]): args for FBA functions for a timepoint,
+			dict keys are the same as the function they belong to
 
 	# TODO: organize like other functions (modularize with data functions)
 	# TODO: simplify repeated code with solve_sensitivity()
@@ -502,4 +519,4 @@ if __name__ == '__main__':
 
 	# Iterate model for desired outcomes
 	solver_args = dict(sim_data_args, **model_args)
-	solve_model(args.analysis, sim_data, timepoint, **solver_args)
+	solve_model(args, sim_data, timepoint, **solver_args)

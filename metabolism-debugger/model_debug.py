@@ -351,7 +351,8 @@ def solve_sensitivity(args, sim_data, timepoint):
 
 	## Save plot
 	plt.tight_layout()
-	plt.savefig(os.path.join(OUT_DIR, 'sensitivity.png'))
+	filename = 'sensitivity{}.png'.format('_{}'.format(args.label) if args.label else '')
+	plt.savefig(os.path.join(OUT_DIR, filename))
 
 def solve_gradient_descent(args, sim_data, timepoint):
 	"""
@@ -448,8 +449,11 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]],
 		rotation=45, fontsize=8, ha='right')
 	plt.ylabel('Objective Change', fontsize=10)
+
+	## Save plot
 	plt.tight_layout()
-	plt.savefig(os.path.join(OUT_DIR, 'gradient_descent.png'))
+	filename = 'gradient_descent{}.png'.format('_{}'.format(args.label) if args.label else '')
+	plt.savefig(os.path.join(OUT_DIR, filename))
 
 # Objectives to use
 def get_objective_value(sim_data, model, timepoint):
@@ -502,6 +506,9 @@ def parse_args():
 	parser.add_argument('-a', '--analysis',
 		default=ALL_ANALYSIS_OPTIONS[0],
 		help='Analysis type to perform. Possible values: {}'.format(ALL_ANALYSIS_OPTIONS))
+	parser.add_argument('-l', '--label',
+		default=None,
+		help='Optional label for output filenames.')
 
 	return parser.parse_args()
 

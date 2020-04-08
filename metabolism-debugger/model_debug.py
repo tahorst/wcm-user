@@ -311,7 +311,7 @@ def solve_sensitivity(sim_data, timepoint):
 			timepoint['set_reaction_targets'][1][sub_idx] = original_counts
 
 		# Print status update
-		print('{} sensitivity: {:.2e} +/- {:.2e}'.format(mol, objective_updates[mol_idx, :].mean(), objective_updates[mol_idx, :].std()))
+		print('{} sensitivity: {:.2g} +/- {:.2g}'.format(mol, objective_updates[mol_idx, :].mean(), objective_updates[mol_idx, :].std()))
 
 	# Analyze results
 	mean = objective_updates.mean(1)
@@ -350,14 +350,14 @@ def solve_gradient_descent(sim_data, timepoint):
 	# TODO: organize like other functions (modularize with data functions)
 	# TODO: simplify repeated code with solve_sensitivity()
 	# TODO: test with more timepoints
-	# TODO: implement actual gradient descent
 	"""
 
 	# Optimization parameters
+	lr = 1e2
 	atol = 1e-6
 	rtol = 1e-3
-	max_it = 1
-	objective_initializer = get_glc_uptake
+	max_it = 100
+	objective_initializer = get_combined
 
 	# Setup
 	metabolism = sim_data.process.metabolism
@@ -372,56 +372,48 @@ def solve_gradient_descent(sim_data, timepoint):
 	objective_updates = np.zeros((len(all_mols), max_it))
 
 	for it in range(max_it):
-		start_objective = objective
+		old_objective = objective
 
 		# Iteration specific modifications
 		for mol_idx, mol in enumerate(all_mols):
-			original_counts = timepoint['set_molecule_levels'][0][mol_idx]
+			# Adjust molecule counts
+			old_counts = timepoint['set_molecule_levels'][0][mol_idx]
 			sub_idx = mol_map.get(mol)
-			high_counts = int(original_counts * 1.1)
-			low_counts = int(original_counts * 0.9)
-
-			# Test high
-			timepoint['set_molecule_levels'][0][mol_idx] = high_counts
+			test_counts = old_counts + 1
+			timepoint['set_molecule_levels'][0][mol_idx] = test_counts
 			if sub_idx:
-				timepoint['set_reaction_targets'][1][sub_idx] = high_counts
-			high_model = setup_model(sim_data, timepoint)
-			high_objective = get_objective(high_model)
+				timepoint['set_reaction_targets'][1][sub_idx] = test_counts
 
-			# Test low
-			timepoint['set_molecule_levels'][0][mol_idx] = low_counts
-			if sub_idx:
-				timepoint['set_reaction_targets'][1][sub_idx] = low_counts
-			low_model = setup_model(sim_data, timepoint)
-			low_objective = get_objective(low_model)
+			# Objective with adjusted counts
+			model = setup_model(sim_data, timepoint)
+			new_objective = get_objective(model)
 
-			# Update objective
-			if high_objective < objective and high_objective < low_objective:
-				new_counts = high_counts
-				new_objective = high_objective
-			elif low_objective < objective:
-				new_counts = low_counts
-				new_objective = low_objective
-			else:
-				new_counts = original_counts
-				new_objective = objective
-
-			# Update counts
-			change = new_counts - original_counts
+			# Update counts based on gradient
+			new_counts = int(max(0, old_counts - lr * old_counts * (new_objective - objective)))
+			change = new_counts - old_counts
 			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
 
-			objective_updates[mol_idx, it] = new_objective - objective
-			objective = new_objective
+			# Record old objective
+			objective_updates[mol_idx, it] = objective
+
+			# Objective with new counts
+			model = setup_model(sim_data, timepoint)
+			objective = get_objective(model)
+
+			# Subtract new objective for difference with update to counts
+			objective_updates[mol_idx, it] -= objective
 
 			# Print status update
-			print('{} updated {} to {} (obj: {:.4e})'.format(mol, change, new_counts, objective))
+			print('{} updated {} to {} (obj: {:.4g})'.format(mol, change, new_counts, objective))
+
+		print('*** Iteration {}: {:.3g} -> {:.3g}'.format(it + 1, old_objective, objective))
 
 		# Check objective tolerances for break conditions
 		if objective < atol:
 			break
-		if (start_objective - objective) / objective < rtol:
+		if (old_objective - objective) / objective < rtol:
 			break
 
 	# Analyze results
@@ -449,7 +441,7 @@ def get_objective_value(sim_data, model, timepoint):
 	return lambda model: model.fba.getObjectiveValue()
 
 def get_glc_uptake(sim_data, model, timepoint):
-	"""L1 glc uptake compared to target"""
+	"""L2 glc uptake compared to target"""
 
 	mol_id = 'GLC[p]'
 	gdcw_basis = 12 * units.mmol / units.g / units.h
@@ -458,15 +450,15 @@ def get_glc_uptake(sim_data, model, timepoint):
 	conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
 	target = (gdcw_basis * conversion).asNumber()
 
-	return lambda model: np.abs(-model.fba.getExternalExchangeFluxes()[mol_idx] - target)
+	return lambda model: (-model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
 
 def get_water_export(sim_data, model, timepoint):
-	"""ReLU water export"""
+	"""L2 water export"""
 
 	mol_id = 'WATER[p]'
 	mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
 
-	return lambda model: max(0, model.fba.getExternalExchangeFluxes()[mol_idx])
+	return lambda model: max(0, model.fba.getExternalExchangeFluxes()[mol_idx])**2
 
 def get_combined(sim_data, model, timepoint):
 	"""

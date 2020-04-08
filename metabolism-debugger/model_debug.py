@@ -354,9 +354,9 @@ def solve_gradient_descent(sim_data, timepoint):
 
 	# Optimization parameters
 	lr = 1e2
-	atol = 1e-6
-	rtol = 1e-3
-	max_it = 100
+	atol = 1e-4
+	rtol = 1e-2
+	max_it = 10
 	objective_initializer = get_combined
 
 	# Setup
@@ -440,25 +440,15 @@ def get_objective_value(sim_data, model, timepoint):
 
 	return lambda model: model.fba.getObjectiveValue()
 
-def get_glc_uptake(sim_data, model, timepoint):
-	"""L2 glc uptake compared to target"""
+def get_exchange_flux_target(sim_data, model, timepoint, mol_id='GLC[p]', gdcw_target=-12):
+	"""L2 exchange target for any molecule (positive flux is export)"""
 
-	mol_id = 'GLC[p]'
-	gdcw_basis = 12 * units.mmol / units.g / units.h
 
 	mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
 	conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
-	target = (gdcw_basis * conversion).asNumber()
+	target = (gdcw_target * units.mmol / units.g / units.h * conversion).asNumber()
 
-	return lambda model: (-model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
-
-def get_water_export(sim_data, model, timepoint):
-	"""L2 water export"""
-
-	mol_id = 'WATER[p]'
-	mol_idx = model.fba.getExternalMoleculeIDs().index(mol_id)
-
-	return lambda model: max(0, model.fba.getExternalExchangeFluxes()[mol_idx])**2
+	return lambda model: (model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
 
 def get_combined(sim_data, model, timepoint):
 	"""
@@ -469,8 +459,8 @@ def get_combined(sim_data, model, timepoint):
 	- add weights
 	"""
 
-	glc = get_glc_uptake(sim_data, model, timepoint)
-	water = get_water_export(sim_data, model, timepoint)
+	glc = get_exchange_flux_target(sim_data, model, timepoint, mol_id='GLC[p]', gdcw_target=-12)
+	water = get_exchange_flux_target(sim_data, model, timepoint, mol_id='WATER[p]', gdcw_target=-25)
 
 	return lambda model: glc(model) + water(model)
 

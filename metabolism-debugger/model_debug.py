@@ -305,11 +305,9 @@ def solve_sensitivity(args, sim_data, timepoint):
 		for factor_idx, factor in enumerate(factors):
 			# Update to new counts
 			new_counts = int(original_counts * (1 + factor))
-			# timepoint['set_molecule_levels'][0][mol_idx] = new_counts
+			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
-			else:
-				continue
 
 			# Solve for objective value
 			model = setup_model(sim_data, timepoint)
@@ -319,7 +317,7 @@ def solve_sensitivity(args, sim_data, timepoint):
 			objective_updates[factor_idx, mol_idx] = (new_objective - objective) / factor
 
 		# Revert counts to original
-		# timepoint['set_molecule_levels'][0][mol_idx] = original_counts
+		timepoint['set_molecule_levels'][0][mol_idx] = original_counts
 		if sub_idx:
 			timepoint['set_reaction_targets'][1][sub_idx] = original_counts
 
@@ -373,7 +371,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	"""
 
 	# Optimization parameters
-	lr = 50000
+	lr = 50
 	atol = 1e-4
 	rtol = 1e-2
 	max_it = 10
@@ -386,7 +384,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	objective = get_objective(original_model)
 
 	## Metabolites
-	all_mols = metabolism.kinetic_constraint_substrates
+	all_mols = original_model.metaboliteNamesFromNutrients
 	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
 
 	objective_values = np.zeros((max_it, len(all_mols) + 1))
@@ -401,7 +399,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 			old_counts = timepoint['set_molecule_levels'][0][mol_idx]
 			sub_idx = mol_map.get(mol)
 			test_counts = old_counts + 1
-			# timepoint['set_molecule_levels'][0][mol_idx] = test_counts
+			timepoint['set_molecule_levels'][0][mol_idx] = test_counts
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = test_counts
 
@@ -412,7 +410,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 			# Update counts based on gradient
 			new_counts = int(max(0, old_counts - lr * old_counts * (new_objective - objective)))
 			change = new_counts - old_counts
-			# timepoint['set_molecule_levels'][0][mol_idx] = new_counts
+			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
 			if sub_idx:
 				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
 

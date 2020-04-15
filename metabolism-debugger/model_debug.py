@@ -15,6 +15,7 @@ import numpy as np
 from typing import Any, Dict, List, Tuple
 
 from models.ecoli.processes.metabolism import CONC_UNITS, FluxBalanceAnalysisModel
+from reconstruction.ecoli.dataclasses.process.metabolism import REVERSE_TAG
 from reconstruction.ecoli.simulation_data import SimulationDataEcoli
 from wholecell.utils import units  # required for proper cPickle load
 
@@ -279,7 +280,7 @@ def solve_sensitivity(args, sim_data, timepoint):
 	"""
 
 	# Sensitivity parameters
-	objective_initializer = get_combined
+	objective_initializer = get_internal_flux_target
 	factors = [-0.1, -0.05, -0.01, 0.01, 0.05, 0.1]  # Test fractional change in counts, keep > -1
 
 	# Setup
@@ -375,7 +376,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	atol = 1e-4
 	rtol = 1e-2
 	max_it = 10
-	objective_initializer = get_combined
+	objective_initializer = get_internal_flux_target
 
 	# Setup
 	metabolism = sim_data.process.metabolism
@@ -492,6 +493,16 @@ def get_exchange_flux_target(sim_data, model, timepoint, mol_id='GLC[p]', gdcw_t
 	target = (gdcw_target * units.mmol / units.g / units.h * conversion).asNumber()
 
 	return lambda model: (model.fba.getExternalExchangeFluxes()[mol_idx] - target)**2
+
+def get_internal_flux_target(sim_data, model, timepoint, rxn='MALATE-DEH-RXN', gdcw_target=3.5):
+	"""L2 flux target for any reaction flux"""
+
+	rxns = [r for r in sim_data.process.metabolism.reactionStoich if r.startswith(rxn)]
+	direction = np.array([-1. if r.endswith(REVERSE_TAG) else 1. for r in rxns])
+	conversion = timepoint['set_molecule_levels'][2] / CONC_UNITS
+	target = (gdcw_target * units.mmol / units.g / units.h * conversion).asNumber()
+
+	return lambda model: (direction.dot(model.fba.getReactionFluxes(rxns)) - target)**2
 
 def get_combined(sim_data, model, timepoint):
 	"""

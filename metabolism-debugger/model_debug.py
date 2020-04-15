@@ -280,7 +280,7 @@ def solve_sensitivity(args, sim_data, timepoint):
 
 	# Sensitivity parameters
 	objective_initializer = get_combined
-	factors = [1]  # Test fractional change in counts, keep > -1
+	factors = [-0.1, -0.05, -0.01, 0.01, 0.05, 0.1]  # Test fractional change in counts, keep > -1
 
 	# Setup
 	metabolism = sim_data.process.metabolism
@@ -289,7 +289,8 @@ def solve_sensitivity(args, sim_data, timepoint):
 	objective = get_objective(original_model)
 
 	## Metabolites
-	all_mols = sorted(metabolism.reactionStoich.keys())
+	all_mols = original_model.metaboliteNamesFromNutrients
+	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
 
 	## TODO: Enzymes
 	# all_enzs = metabolism.catalyst_ids
@@ -299,15 +300,26 @@ def solve_sensitivity(args, sim_data, timepoint):
 
 	# Get sensitivity of objective to changes in counts for each molecule
 	for mol_idx, mol in enumerate(all_mols):
+		original_counts = timepoint['set_molecule_levels'][0][mol_idx]
+		sub_idx = mol_map.get(mol)
 		for factor_idx, factor in enumerate(factors):
+			# Update to new counts
+			new_counts = int(original_counts * (1 + factor))
+			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
+
 			# Solve for objective value
 			model = setup_model(sim_data, timepoint)
-			model.fba._solver.setFlowObjectiveCoeff(mol, 0)
 			new_objective = get_objective(model)
-			print(mol, new_objective)
 
 			# Save results
 			objective_updates[factor_idx, mol_idx] = (new_objective - objective) / factor
+
+		# Revert counts to original
+		timepoint['set_molecule_levels'][0][mol_idx] = original_counts
+		if sub_idx:
+			timepoint['set_reaction_targets'][1][sub_idx] = original_counts
 
 		# Print status update
 		print('{} sensitivity: {:.2g} +/- {:.2g}'.format(mol, objective_updates[:, mol_idx].mean(), objective_updates[:, mol_idx].std()))
@@ -362,7 +374,7 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	lr = 50
 	atol = 1e-4
 	rtol = 1e-2
-	max_it = 3
+	max_it = 10
 	objective_initializer = get_combined
 
 	# Setup
@@ -372,49 +384,47 @@ def solve_gradient_descent(args, sim_data, timepoint):
 	objective = get_objective(original_model)
 
 	## Metabolites
-	iter_id = sorted(metabolism.reactionStoich.keys())
-	flux_reg = 1e-4
-	sim_data.process.metabolism.flux_regularization = flux_reg
+	all_mols = original_model.metaboliteNamesFromNutrients
+	mol_map = {mol: i for i, mol in enumerate(metabolism.kinetic_constraint_substrates)}
 
-	objective_values = np.zeros((max_it, len(iter_id) + 1))
+	objective_values = np.zeros((max_it, len(all_mols) + 1))
 
-	disabled = set()
-
-	print('Starting objective: {:.4g}'.format(objective))
 	for it in range(max_it):
 		old_objective = objective
 		objective_values[it, 0] = old_objective
 
 		# Iteration specific modifications
-		for mol_idx, mol in enumerate(iter_id):
+		for mol_idx, mol in enumerate(all_mols):
+			# Adjust molecule counts
+			old_counts = timepoint['set_molecule_levels'][0][mol_idx]
+			sub_idx = mol_map.get(mol)
+			test_counts = old_counts + 1
+			timepoint['set_molecule_levels'][0][mol_idx] = test_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = test_counts
+
 			# Objective with adjusted counts
 			model = setup_model(sim_data, timepoint)
-			for rxn in disabled:
-				model.fba._solver.setFlowObjectiveCoeff(rxn, 0)
-			if mol in disabled:
-				model.fba._solver.setFlowObjectiveCoeff(mol, flux_reg)
-			else:
-				model.fba._solver.setFlowObjectiveCoeff(mol, 0)
 			new_objective = get_objective(model)
 
-			if new_objective < objective:
-				if mol in disabled:
-					disabled.remove(mol)
-					print('{} removed: {:.4g}'.format(mol, new_objective))
-				else:
-					disabled.add(mol)
-					print('{} added: {:.4g}'.format(mol, new_objective))
+			# Update counts based on gradient
+			new_counts = int(max(0, old_counts - lr * old_counts * (new_objective - objective)))
+			change = new_counts - old_counts
+			timepoint['set_molecule_levels'][0][mol_idx] = new_counts
+			if sub_idx:
+				timepoint['set_reaction_targets'][1][sub_idx] = new_counts
 
-				# Objective with new counts
-				objective = new_objective
+			# Objective with new counts
+			model = setup_model(sim_data, timepoint)
+			objective = get_objective(model)
 
 			# Save new objective value
 			objective_values[it, mol_idx + 1] = objective
 
-		print('*** Epoch {}: {:.3g} -> {:.3g}'.format(it + 1, old_objective, objective))
+			# Print status update
+			print('{} updated {} to {} (obj: {:.4g})'.format(mol, change, new_counts, objective))
 
-		for rxn in disabled:
-			print(rxn)
+		print('*** Epoch {}: {:.3g} -> {:.3g}'.format(it + 1, old_objective, objective))
 
 		# Check objective tolerances for break conditions
 		if objective < atol:
@@ -440,19 +450,19 @@ def solve_gradient_descent(args, sim_data, timepoint):
 
 	# Plot results
 	n_mets = 20
-	plt.figure(figsize=(8.5, 22))
+	plt.figure(figsize=(8.5, 11))
 
 	## Plot biggest changes in correct direction (lowering objective)
 	plt.subplot(3, 1, 1)
 	plt.bar(range(n_mets), mean[sorted_idx[:n_mets]], yerr=std[sorted_idx[:n_mets]])
-	plt.xticks(range(n_mets), np.array(iter_id)[sorted_idx[:n_mets]],
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[:n_mets]],
 		rotation=45, fontsize=8, ha='right')
 	plt.ylabel('Average Objective Change', fontsize=10)
 
 	## Plot biggest changes in the wrong direction (increasing objective)
 	plt.subplot(3, 1, 2)
 	plt.bar(range(n_mets), mean[sorted_idx[-n_mets:]], yerr=std[sorted_idx[-n_mets:]])
-	plt.xticks(range(n_mets), np.array(iter_id)[sorted_idx[-n_mets:]],
+	plt.xticks(range(n_mets), np.array(all_mols)[sorted_idx[-n_mets:]],
 		rotation=45, fontsize=8, ha='right')
 	plt.ylabel('Average Objective Change', fontsize=10)
 

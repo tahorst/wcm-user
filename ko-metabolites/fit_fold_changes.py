@@ -219,14 +219,27 @@ if __name__ == '__main__':
 	W1, W2, b2, W3, K = init_network(TEST_REACTIONS, TEST_ENZYMES)
 
 	lr = 0.01
-	for fc, ko in zip(fcs, kos):
-		W3_ko = apply_ko(ko, K, W3)
-		loss, a1, s2, a2, a3 = forward(fc, W1, W2, b2, W3_ko)
-		dW1, dW2, db2 = backward(fc, W1, W2, b2, W3_ko, loss, a1, s2, a2, a3)
+	n_epochs = 50
+	for epoch in range(n_epochs):
+		for fc, ko in zip(fcs, kos):
+			W3_ko = apply_ko(ko, K, W3)
+			loss, a1, s2, a2, a3 = forward(fc, W1, W2, b2, W3_ko)
+			dW1, dW2, db2 = backward(fc, W1, W2, b2, W3_ko, loss, a1, s2, a2, a3)
 
-		# TODO: check values non-negative after update?
-		W1 -= lr * dW1
-		W2 -= lr * dW2
-		b2 -= lr * db2
+			# TODO: check values non-negative after update?
+			W1 -= lr * dW1
+			W2 -= lr * dW2
+			b2 -= lr * db2
+
+		print('Epoch {}: total loss = {:.4f}'.format(epoch, loss.sum()))
+
+	print('Concentrations:')
+	print(np.diag(W1))
+
+	print('vmax:')
+	print(b2)
+
+	print('KM:')
+	print(W2)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

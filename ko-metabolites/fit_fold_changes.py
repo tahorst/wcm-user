@@ -2,6 +2,11 @@
 
 """
 Use metabolite fold change data from gene KOs to fit kinetic parameters.
+
+TODO:
+	- handle multiple enzymes for same reaction from model
+	- handle metabolites in reaction network but without fold change data
+	- handle KOs not in reaction network
 """
 
 from __future__ import absolute_import, division, print_function
@@ -16,10 +21,30 @@ import numpy as np
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 
 # Values to test with before real data
-N_TEST_SAMPLES = 10
-N_TEST_METABOLITES = 5
-N_TEST_ENZYMES = 6
-N_TEST_REACTIONS = 7
+## Structure based on sim_data.process.metabolism.reactionStoich
+TEST_REACTIONS = {
+	'r1f': {'a': -1, 'b': 1},
+	'r1r': {'b': -1, 'a': 1},
+	'r2': {'a': -1, 'c': 1},
+	'r3': {'c': -1, 'd': -1, 'b': 1, 'e': 1},
+	'r4f': {'b': -1, 'd': 1},
+	'r4r': {'d': -1, 'b': 1},
+	'r5': {'e': -1, 'd': 1},
+	}
+## Structure based on sim_data.process.metabolism.reactionCatalysts
+TEST_ENZYMES = {
+	'r1f': ['e1'],
+	'r1r': ['e2'],
+	'r2': ['e3'],
+	'r3': ['e4'],
+	'r4f': ['e5'],
+	'r4r': ['e5'],
+	'r5': ['e6'],
+	}
+N_TEST_METABOLITES = len({m for stoich in TEST_REACTIONS.values() for m in stoich})
+N_TEST_ENZYMES = len({e for enzymes in TEST_ENZYMES.values() for e in enzymes})
+N_TEST_REACTIONS = len(TEST_REACTIONS)
+N_TEST_SAMPLES = N_TEST_ENZYMES + 1
 
 
 def load_data():
@@ -36,20 +61,55 @@ def load_data():
 
 	return fcs, kos
 
-def init_network():
+def init_network(reactions, enzymes):
 	"""
 	Create W1, W2, b2, W3, K.
 
 	TODO:
-		- update for example data
-		- load from reaction network
+		- initialize values for W1, W2, b2
+		- add metabolite inhibition for W2 (or equivalent matrix)
 	"""
 
-	W1 = np.eye(N_TEST_METABOLITES)
-	W2 = np.zeros((N_TEST_REACTIONS, N_TEST_METABOLITES))
-	b2 = np.ones((N_TEST_REACTIONS))
-	W3 = np.zeros((N_TEST_METABOLITES, N_TEST_REACTIONS))
-	K = np.zeros((N_TEST_REACTIONS, N_TEST_ENZYMES))
+	# IDs for matrix setup
+	reaction_ids = reactions.keys()
+	metabolite_ids = sorted({m for stoich in reactions.values() for m in stoich})
+	enzyme_ids = sorted({e for es in enzymes.values() for e in es})
+
+	# Quick index lookups
+	metabolite_idx = {m: i for i, m in enumerate(metabolite_ids)}
+	enzyme_idx = {e: i for i, e in enumerate(enzyme_ids)}
+
+	# Dimensions for matrix setup
+	n_reactions = len(reaction_ids)
+	n_metabolites = len(metabolite_ids)
+	n_enzymes = len(enzyme_ids)
+
+	# W1
+	W1 = np.eye(n_metabolites)  # TODO: initialize to better value
+
+	# W2 and W3
+	W2 = np.zeros((n_reactions, n_metabolites))
+	W3 = np.zeros((n_metabolites, n_reactions))
+	for i, rxn in enumerate(reaction_ids):
+		for met, stoich in reactions[rxn].items():
+			j = metabolite_idx[met]
+
+			# Stoich for mass balance layer
+			W3[j, i] = stoich
+
+			# Only include reactants in rate equations
+			if stoich < 0:
+				W2[i, j] = 1  # TODO: initialize to better value
+
+	# b2
+	b2 = np.ones((n_reactions))  # TODO: initialize to better value
+
+	# K
+	K = np.zeros((n_reactions, n_enzymes))
+	for i, rxn in enumerate(reaction_ids):
+		for enzyme in enzymes[rxn]:
+			j = enzyme_idx[enzyme]
+			K[i, j] = 1
 
 	return W1, W2, b2, W3, K
 
@@ -156,7 +216,7 @@ if __name__ == '__main__':
 	args = parse_args()
 
 	fcs, kos = load_data()
-	W1, W2, b2, W3, K = init_network()
+	W1, W2, b2, W3, K = init_network(TEST_REACTIONS, TEST_ENZYMES)
 
 	lr = 0.01
 	for fc, ko in zip(fcs, kos):

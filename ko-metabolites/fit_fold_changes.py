@@ -52,12 +52,27 @@ def load_data():
 	Get fold change and KO data.
 
 	TODO:
-		- update for example data
+		- sample example data from actual ODE solution with noise
 		- load full dataset
+		- align ids with order in init_network()
 	"""
 
-	fcs = np.ones((N_TEST_SAMPLES, N_TEST_METABOLITES))
-	kos = np.ones((N_TEST_SAMPLES, N_TEST_ENZYMES))
+	# N_TEST_SAMPLES x N_TEST_METABOLITES
+	fcs = np.array([
+		[1.01, 0.99, 1.03, 0.95, 1.02],
+		[1.2, 0.5, 1.1, 0.8, 0.9],
+		[0.8, 1.3, 0.95, 1.1, 1.05],
+		[1.2, 1.1, 0.01, 1.3, 0.01],
+		[1.1, 0.8, 1.6, 0.7, 0.01],
+		[1.3, 1.2, 1.4, 0.3, 0.5],
+		[1.05, 0.95, 1.1, 2.1, 0.4],
+		])
+
+	# N_TEST_SAMPLES x N_TEST_ENZYMES
+	kos = np.vstack((
+		np.ones(N_TEST_ENZYMES),
+		np.eye(N_TEST_ENZYMES)
+		))
 
 	return fcs, kos
 
@@ -219,7 +234,7 @@ if __name__ == '__main__':
 	W1, W2, b2, W3, K = init_network(TEST_REACTIONS, TEST_ENZYMES)
 
 	lr = 0.01
-	n_epochs = 50
+	n_epochs = 500
 	for epoch in range(n_epochs):
 		for fc, ko in zip(fcs, kos):
 			W3_ko = apply_ko(ko, K, W3)

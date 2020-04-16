@@ -103,7 +103,7 @@ def backward(fc, W1, W2, b2, W3, loss, a1, s2, a2, a3):
 
 	TODO:
 		- copy down forward code except for loss calc
-		- verify derivatives with test input to double check correct dimensions
+		- verify derivatives with test input to double check correct dimension math
 		- optimize tile functions?
 	"""
 
@@ -120,7 +120,12 @@ def backward(fc, W1, W2, b2, W3, loss, a1, s2, a2, a3):
 	dW2 = np.tile((da2 * b2s22)[:, None], (1, n_metabolites)) * np.tile(a1, (n_reactions, 1)) * (W2 != 0)
 
 	# dL/dW1
-	dW1 = da2.dot(np.tile(b2s22[:, None], (1, n_metabolites)) / (np.tile(a1**2, (n_reactions, 1)) * W2)) * np.diag(fc)
+	denom = (np.tile(a1**2, (n_reactions, 1)) * W2)
+	num = np.zeros_like(denom)
+	active_mask = denom != 0
+	num[active_mask] = 1 / denom[active_mask]
+	da1 = da2.dot(np.tile(b2s22[:, None], (1, n_metabolites)) * num)
+	dW1 = da1 * np.diag(fc)
 
 	return dW1, dW2, db2
 

@@ -215,13 +215,18 @@ def parse_args():
 
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument('-a', '--abc',
+	parser.add_argument('-l', '--learning-rate',
+		type=float,
+		default=0.01,
+		help='Specify learning rate for training.')
+	parser.add_argument('-e', '--epochs',
 		type=int,
-		default=1,
-		help='help')
-	parser.add_argument('--true',
-		action='store_true',
-		help='help')
+		default=500,
+		help='Number of epochs to run.')
+	parser.add_argument('-u', '--update-every',
+		type=int,
+		default=10,
+		help='Number of epochs to run before printing an update.')
 
 	return parser.parse_args()
 
@@ -233,9 +238,17 @@ if __name__ == '__main__':
 	fcs, kos = load_data()
 	W1, W2, b2, W3, K = init_network(TEST_REACTIONS, TEST_ENZYMES)
 
-	lr = 0.01
-	n_epochs = 500
-	for epoch in range(n_epochs):
+	# Learning parameters
+	lr = args.learning_rate
+	n_epochs = args.epochs
+	update_every = args.update_every
+
+	# Find starting loss
+	loss, _, _, _, _ = forward(np.ones(fcs.shape[1]), W1, W2, b2, W3)
+	print('Initial loss: {:.4f}'.format(loss.sum()))
+
+	# Backpropagation to learn model parameters
+	for epoch in range(1, n_epochs + 1):
 		for fc, ko in zip(fcs, kos):
 			W3_ko = apply_ko(ko, K, W3)
 			loss, a1, s2, a2, a3 = forward(fc, W1, W2, b2, W3_ko)
@@ -246,8 +259,10 @@ if __name__ == '__main__':
 			W2 -= lr * dW2
 			b2 -= lr * db2
 
-		print('Epoch {}: total loss = {:.4f}'.format(epoch, loss.sum()))
+		if epoch % update_every == 0:
+			print('Epoch {}: total loss = {:.4f}'.format(epoch, loss.sum()))
 
+	# Print final state of parameters
 	print('Concentrations:')
 	print(np.diag(W1))
 

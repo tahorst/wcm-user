@@ -186,20 +186,21 @@ def backward(fc, W1, W2, b2, W3, loss, a1, s2, a2, a3):
 	n_metabolites = len(a1)
 	n_reactions = len(s2)
 	da2 = a3.dot(W3)
-	b2s22 = b2 * s2**2
+	b2s2 = b2 * s2
 
 	# dL/db2
 	db2 = da2 * s2
 
 	# dL/dW2
-	dW2 = np.tile((da2 * b2s22)[:, None], (1, n_metabolites)) * np.tile(a1, (n_reactions, 1)) * (W2 != 0)
+	dW2 = -np.tile((da2 * b2s2)[:, None], (1, n_metabolites)) / (W2 + np.tile(a1, (n_reactions, 1))) * (W2 != 0)
 
 	# dL/dW1
-	denom = (np.tile(a1**2, (n_reactions, 1)) * W2)
+	a1_tile = np.tile(a1, (n_reactions, 1))
+	denom = a1_tile * (W2 + a1_tile)
 	num = np.zeros_like(denom)
 	active_mask = denom != 0
-	num[active_mask] = 1 / denom[active_mask]
-	da1 = da2.dot(np.tile(b2s22[:, None], (1, n_metabolites)) * num)
+	num[active_mask] = (W2 / denom)[active_mask]
+	da1 = da2.dot(np.tile(b2s2[:, None], (1, n_metabolites)) * num)
 	dW1 = da1 * np.diag(fc)
 
 	return dW1, dW2, db2

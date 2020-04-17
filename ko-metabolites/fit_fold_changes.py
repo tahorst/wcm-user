@@ -71,7 +71,7 @@ def load_data():
 	# N_TEST_SAMPLES x N_TEST_ENZYMES
 	kos = np.vstack((
 		np.ones(N_TEST_ENZYMES),
-		np.eye(N_TEST_ENZYMES)
+		-1 * (np.eye(N_TEST_ENZYMES) - 1)
 		))
 
 	return fcs, kos

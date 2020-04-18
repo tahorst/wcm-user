@@ -17,47 +17,24 @@ import time
 
 import numpy as np
 
+from ode_network import REACTIONS, ENZYMES
+
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 
-# Values to test with before real data
-## Structure based on sim_data.process.metabolism.reactionStoich
-TEST_REACTIONS = {
-	'r1f': {'a': -1, 'b': 1},
-	'r1r': {'b': -1, 'a': 1},
-	'r2': {'a': -1, 'c': 1},
-	'r3': {'c': -1, 'd': -1, 'b': 1, 'e': 1},
-	'r4f': {'b': -1, 'd': 1},
-	'r4r': {'d': -1, 'b': 1},
-	'r5': {'e': -1, 'd': 1},
-	}
-## Structure based on sim_data.process.metabolism.reactionCatalysts
-TEST_ENZYMES = {
-	'r1f': ['e1'],
-	'r1r': ['e2'],
-	'r2': ['e3'],
-	'r3': ['e4'],
-	'r4f': ['e5'],
-	'r4r': ['e5'],
-	'r5': ['e6'],
-	}
-N_TEST_METABOLITES = len({m for stoich in TEST_REACTIONS.values() for m in stoich})
-N_TEST_ENZYMES = len({e for enzymes in TEST_ENZYMES.values() for e in enzymes})
-N_TEST_REACTIONS = len(TEST_REACTIONS)
-N_TEST_SAMPLES = N_TEST_ENZYMES + 1
 
-
-def load_data():
+def load_test_data():
 	"""
-	Get fold change and KO data.
-
-	TODO:
-		- sample example data from actual ODE solution with noise
-		- load full dataset
-		- align ids with order in init_network()
+	Load made up test data.
 	"""
 
-	# N_TEST_SAMPLES x N_TEST_METABOLITES
+	# Test reaction network
+	reactions = REACTIONS
+
+	# Test reaction catalysts
+	enzymes = ENZYMES
+
+	# n samples x m metabolites
 	fcs = np.array([
 		[1.01, 0.99, 1.03, 0.95, 1.02],
 		[1.2, 0.5, 1.1, 0.8, 0.9],
@@ -68,13 +45,29 @@ def load_data():
 		[1.05, 0.95, 1.1, 2.1, 0.4],
 		])
 
-	# N_TEST_SAMPLES x N_TEST_ENZYMES
+	# n samples x m enzymes
+	n_enzymes = len({e for es in enzymes.values() for e in es})
 	kos = np.vstack((
-		np.ones(N_TEST_ENZYMES),
-		-1 * (np.eye(N_TEST_ENZYMES) - 1)
+		np.ones(n_enzymes),
+		-1 * (np.eye(n_enzymes) - 1)
 		))
 
-	return fcs, kos
+	return reactions, enzymes, fcs, kos
+
+def load_data(test=True):
+	"""
+	Get reaction network, fold change data and KO data.
+
+	TODO:
+		- sample example data from actual ODE solution with noise
+		- load full dataset
+		- align ids with order in init_network()
+	"""
+
+	if test:
+		return load_test_data()
+	else:
+		raise NotImplementedError('Need to implement real data. Try running with test data option: -t')
 
 def init_network(reactions, enzymes):
 	"""
@@ -216,6 +209,12 @@ def parse_args():
 
 	parser = argparse.ArgumentParser()
 
+	# Data parameters
+	parser.add_argument('-t', '--test_data',
+		action='store_true',
+		help='If set, loads test data, otherwise loads actual data.')
+
+	# Learning parameters
 	parser.add_argument('-l', '--learning-rate',
 		type=float,
 		default=0.01,
@@ -236,8 +235,8 @@ if __name__ == '__main__':
 
 	args = parse_args()
 
-	fcs, kos = load_data()
-	W1, W2, b2, W3, K = init_network(TEST_REACTIONS, TEST_ENZYMES)
+	reactions, enzymes, fcs, kos = load_data(args.test_data)
+	W1, W2, b2, W3, K = init_network(reactions, enzymes)
 
 	# Learning parameters
 	lr = args.learning_rate

@@ -25,49 +25,61 @@ if not os.path.exists(OUTPUT_DIR):
 REACTIONS = {
 	'r1f': {'a': -1, 'b': 1},
 	'r1r': {'b': -1, 'a': 1},
-	'r2': {'a': -1, 'c': 1},
-	'r3': {'c': -1, 'd': -1, 'b': 1, 'e': 1},
+	'r2f': {'a': -1, 'c': 1},
+	'r2r': {'c': -1, 'a': 1},
+	'r3f': {'c': -1, 'd': -1, 'b': 1, 'e': 1},
+	'r3r': {'b': -1, 'e': -1, 'c': 1, 'd': 1},
 	'r4f': {'b': -1, 'd': 1},
 	'r4r': {'d': -1, 'b': 1},
-	'r5': {'e': -1, 'd': 1},
+	'r5f': {'e': -1, 'd': 1},
+	'r5r': {'d': -1, 'e': 1},
 	}
 ## Structure based on sim_data.process.metabolism.reactionCatalysts
 ENZYMES = {
 	'r1f': ['e1'],
 	'r1r': ['e2'],
-	'r2': ['e3'],
-	'r3': ['e4'],
+	'r2f': ['e3'],
+	'r2r': ['e3'],
+	'r3f': ['e4'],
+	'r3r': ['e4'],
 	'r4f': ['e5'],
 	'r4r': ['e5'],
-	'r5': ['e6'],
+	'r5f': ['e6'],
+	'r5r': ['e7'],
 	}
 ## Example K_M values for reactants in the reaction network
 K_M = {
 	'r1f': {'a': 10.},
 	'r1r': {'b': 30.},
-	'r2': {'a': 5.},
-	'r3': {'c': 1., 'd': 5.},
+	'r2f': {'a': 5.},
+	'r2r': {'c': 0.5},
+	'r3f': {'c': 1., 'd': 5.},
+	'r3r': {'b': 2., 'e': 10.},
 	'r4f': {'b': 5.},
 	'r4r': {'d': 3.},
-	'r5': {'e': 15.},
+	'r5f': {'e': 1.},
+	'r5r': {'d': 20.},
 	}
 ## Example k_cat values for reactions in the reaction network
 K_CAT = {
-	'r1f': 20.,
+	'r1f': 2.,
 	'r1r': 1.,
-	'r2': 3.,
-	'r3': 10.,
+	'r2f': 3.,
+	'r2r': 0.3,
+	'r3f': 10.,
+	'r3r': 1.,
 	'r4f': 12.,
 	'r4r': 5.,
-	'r5': 8.,
+	'r5f': 8.,
+	'r5r': 0.5,
 	}
 # Starting metabolite concentrations
 METABOLITE_CONC = {
-	'a': 8.736e-3,
-	'b': 1.455,
-	'c': 1.263e-4,
-	'd': 3.536,
-	'e': 1.962e-4,
+	'a': 1.,
+	'b': 1.,
+	'c': 1.,
+	'd': 1.,
+	'e': 1.,
 	}
 # Starting enzyme concentrations
 ENZYME_CONC = {
@@ -77,13 +89,14 @@ ENZYME_CONC = {
 	'e4': 10.,
 	'e5': 0.1,
 	'e6': 50.,
+	'e7': 5.,
 	}
 METABOLITES = sorted(METABOLITE_CONC)
 METABOLITE_INDEX = {m: i for i, m in enumerate(METABOLITES)}
 N_METABOLITES = len(METABOLITES)
 
 
-def dcdt(c, t):
+def dcdt(c, t, ko=None):
 	"""
 	Find change in metabolite concentrations.
 	"""
@@ -91,7 +104,13 @@ def dcdt(c, t):
 	dc = np.zeros(N_METABOLITES)
 
 	for rxn, stoich in REACTIONS.items():
-		rate = K_CAT[rxn] * ENZYME_CONC[ENZYMES[rxn][0]]
+		enzyme = ENZYMES[rxn][0]
+
+		# Skip reaction if enzyme is knocked out
+		if ko is not None and enzyme == ko:
+			continue
+
+		rate = K_CAT[rxn] * ENZYME_CONC[enzyme]
 		for met, km in K_M[rxn].items():
 			conc = c[METABOLITE_INDEX[met]]
 			rate *= conc / (km + conc)
@@ -134,13 +153,17 @@ if __name__ == '__main__':
 	# Solve reaction network
 	co = np.array([METABOLITE_CONC[c] for c in METABOLITES])
 	t = np.linspace(0, 100, 10001)
-	sol = odeint(dcdt, co, t)
 
-	# Plot results
-	plot_solution(t, sol, args.output)
+	for ko in ENZYME_CONC:
+		print('Knockout: {}'.format(ko))
+		sol = odeint(dcdt, co, t, args=(ko,))
 
-	# Report results
-	c_final = sol[-1, :]
-	print(c_final)
+		# Plot results
+		filename = '{}_{}'.format(args.output, ko)
+		plot_solution(t, sol, filename)
+
+		# Report results
+		c_final = sol[-1, :]
+		print(c_final)
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

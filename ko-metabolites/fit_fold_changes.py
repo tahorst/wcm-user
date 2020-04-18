@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from ode_network import REACTIONS, ENZYMES
+from ode_network import REACTIONS, REACTION_ENZYMES
 
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
@@ -32,7 +32,7 @@ def load_test_data():
 	reactions = REACTIONS
 
 	# Test reaction catalysts
-	enzymes = ENZYMES
+	enzymes = REACTION_ENZYMES
 
 	# n samples x m metabolites
 	fcs = np.array([

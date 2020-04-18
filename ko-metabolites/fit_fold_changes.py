@@ -61,7 +61,6 @@ def load_data(test=True):
 	Get reaction network, fold change data and KO data.
 
 	TODO:
-		- sample example data from actual ODE solution with noise
 		- load full dataset
 		- align ids with order in init_network()
 	"""
@@ -81,7 +80,7 @@ def init_network(reactions, enzymes):
 	"""
 
 	# IDs for matrix setup
-	reaction_ids = reactions.keys()
+	reaction_ids = sorted(reactions.keys())
 	metabolite_ids = sorted({m for stoich in reactions.values() for m in stoich})
 	enzyme_ids = sorted({e for es in enzymes.values() for e in es})
 
@@ -245,10 +244,6 @@ if __name__ == '__main__':
 	n_epochs = args.epochs
 	update_every = args.update_every
 
-	# Find starting loss
-	loss, _, _, _, _ = forward(np.ones(fcs.shape[1]), W1, W2, b2, W3)
-	print('Initial loss: {:.4f}'.format(loss.sum()))
-
 	# Backpropagation to learn model parameters
 	for epoch in range(1, n_epochs + 1):
 		for fc, ko in zip(fcs, kos):
@@ -261,7 +256,7 @@ if __name__ == '__main__':
 			W2 -= lr * dW2
 			b2 -= lr * db2
 
-		if epoch % update_every == 0:
+		if epoch == 1 or epoch % update_every == 0:
 			print('Epoch {}: total loss = {:.4f}'.format(epoch, loss.sum()))
 
 	# Print final state of parameters

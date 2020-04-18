@@ -120,13 +120,25 @@ def dcdt(c, t, ko=None):
 
 	return dc
 
-def plot_solution(t, sol, filename):
+def plot_solution(t, sol, ref, label, condition):
 	"""
 	Plot concentration traces over time.
 	"""
 
 	plt.figure()
-	plt.plot(t, sol)
+
+	# Plot data
+	plt.semilogy(t, sol)
+	plt.gca().set_prop_cycle(None)
+	plt.semilogy([t[0], t[-1]], np.vstack((ref, ref)), '--', linewidth=1)
+
+	# Format plot
+	plt.legend(METABOLITES)
+	plt.xlabel('Time')
+	plt.ylabel('Concentration')
+
+	# Save plot
+	filename = '{}_{}'.format(label, condition)
 	plt.savefig(os.path.join(OUTPUT_DIR, filename + '.png'))
 
 def parse_args():
@@ -150,20 +162,36 @@ if __name__ == '__main__':
 	start = time.time()
 	args = parse_args()
 
-	# Solve reaction network
+	np.set_printoptions(precision=3)
+
+	# Variables
 	co = np.array([METABOLITE_CONC[c] for c in METABOLITES])
 	t = np.linspace(0, 100, 10001)
 
-	for ko in ENZYME_CONC:
-		print('Knockout: {}'.format(ko))
-		sol = odeint(dcdt, co, t, args=(ko,))
+	# WT simulation
+	print('Wildtype:')
+	sol = odeint(dcdt, co, t)
 
-		# Plot results
-		filename = '{}_{}'.format(args.output, ko)
-		plot_solution(t, sol, filename)
+	## Report results
+	wt_final = sol[-1, :]
+	print('  Concentrations: {}'.format(wt_final))
+
+	## Plot results
+	plot_solution(t, sol, wt_final, args.output, 'wt')
+
+	# KO simulations
+	for ko in sorted(ENZYME_CONC):
+		print('\nKnockout {}:'.format(ko))
+		sol = odeint(dcdt, co, t, args=(ko,))
 
 		# Report results
 		c_final = sol[-1, :]
-		print(c_final)
+		fc = c_final / wt_final
+		print('  Concentrations: {}'.format(c_final))
+		print('  Fold changes: {}'.format(fc))
+
+		# Plot results
+		plot_solution(t, sol, wt_final, args.output, ko)
+
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

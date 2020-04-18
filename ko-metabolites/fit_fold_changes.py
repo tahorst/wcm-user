@@ -12,12 +12,14 @@ TODO:
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import csv
+import json
 import os
 import time
 
 import numpy as np
 
-from ode_network import REACTIONS, REACTION_ENZYMES
+from ode_network import DATA_DIR, REACTIONS, REACTION_ENZYMES
 
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
@@ -28,29 +30,29 @@ def load_test_data():
 	Load made up test data.
 	"""
 
-	# Test reaction network
+	# Reaction network from ODE simulation
 	reactions = REACTIONS
 
-	# Test reaction catalysts
+	# Reaction catalysts from ODE simulation
 	enzymes = REACTION_ENZYMES
 
-	# n samples x m metabolites
-	fcs = np.array([
-		[1.01, 0.99, 1.03, 0.95, 1.02],
-		[1.2, 0.5, 1.1, 0.8, 0.9],
-		[0.8, 1.3, 0.95, 1.1, 1.05],
-		[1.2, 1.1, 0.01, 1.3, 0.01],
-		[1.1, 0.8, 1.6, 0.7, 0.01],
-		[1.3, 1.2, 1.4, 0.3, 0.5],
-		[1.05, 0.95, 1.1, 2.1, 0.4],
-		])
+	# Load output data from ODE simulation
+	with open(os.path.join(DATA_DIR, 'ode.tsv')) as f:
+		reader = csv.reader(f, delimiter='\t', quoting=csv.QUOTE_NONE)
 
-	# n samples x m enzymes
-	n_enzymes = len({e for es in enzymes.values() for e in es})
-	kos = np.vstack((
-		np.ones(n_enzymes),
-		-1 * (np.eye(n_enzymes) - 1)
-		))
+		headers = reader.next()
+		while(headers[0].startswith('#')):
+			headers = reader.next()
+
+		kos = []
+		fcs = []
+		for row in reader:
+			kos.append(json.loads(row[0]))
+			fcs.append(json.loads(row[1]))
+
+	# Convert lists to numpy arrays
+	fcs = np.array(fcs)
+	kos = np.array(kos)
 
 	return reactions, enzymes, fcs, kos
 

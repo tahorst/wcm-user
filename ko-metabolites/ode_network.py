@@ -103,12 +103,15 @@ N_METABOLITES = len(METABOLITES)
 N_ENZYMES = len(ENZYMES)
 
 
-def dcdt(c, t, ko=None):
+def dcdt(c, t, ko=None, noise=None):
 	"""
 	Find change in metabolite concentrations.
 	"""
 
 	dc = np.zeros(N_METABOLITES)
+
+	if noise is None:
+		noise = {}
 
 	for rxn, stoich in REACTIONS.items():
 		enzyme = REACTION_ENZYMES[rxn][0]
@@ -117,7 +120,7 @@ def dcdt(c, t, ko=None):
 		if ko is not None and enzyme == ko:
 			continue
 
-		rate = K_CAT[rxn] * ENZYME_CONC[enzyme]
+		rate = K_CAT[rxn] * ENZYME_CONC[enzyme] * noise.get(enzyme, 1)
 		for met, km in K_M[rxn].items():
 			conc = c[METABOLITE_INDEX[met]]
 			rate *= conc / (km + conc)
@@ -127,7 +130,14 @@ def dcdt(c, t, ko=None):
 
 	return dc
 
-def save_results(writer, ko=None, fc=None):
+def make_noise():
+	"""
+	Create noise for enzyme expression to use in dcdt.
+	"""
+
+	return {e: n for e, n in zip(ENZYMES, np.random.lognormal(0, 0.2, N_ENZYMES))}
+
+def save_results(writer, ko, fc):
 	"""
 	Save a row to the open tsv writer.
 	"""
@@ -135,8 +145,6 @@ def save_results(writer, ko=None, fc=None):
 	ko_array = np.ones(N_ENZYMES)
 	if ko is not None:
 		ko_array[ENZYME_INDEX[ko]] = 0
-	if fc is None:
-		fc = np.ones(N_METABOLITES)
 	writer.writerow([ko_array.tolist(), fc.tolist()])
 
 def plot_solution(t, sol, ref, label, condition):
@@ -159,6 +167,7 @@ def plot_solution(t, sol, ref, label, condition):
 	# Save plot
 	filename = '{}_{}'.format(label, condition)
 	plt.savefig(os.path.join(OUTPUT_DIR, filename + '.png'))
+	plt.close('all')
 
 def parse_args():
 	# type: () -> argparse.Namespace
@@ -182,6 +191,7 @@ if __name__ == '__main__':
 	args = parse_args()
 
 	np.set_printoptions(precision=3)
+	np.random.seed(0)
 
 	# tsv output file
 	output_filename = os.path.join(DATA_DIR, args.output + '.tsv')
@@ -191,36 +201,50 @@ if __name__ == '__main__':
 	writer.writerow(['# FC for each metabolite compared to wt condition'])
 	writer.writerow(['KO', 'FC'])
 
+	# Parameters
+	n_replicates = 5
+
 	# Variables
 	co = np.array([METABOLITE_CONC[c] for c in METABOLITES])
 	t = np.linspace(0, 100, 10001)
 
 	# WT simulation
 	print('Wildtype:')
-	sol = odeint(dcdt, co, t)
+	ko = None
 
-	## Report results
-	wt_final = sol[-1, :]
-	print('  Concentrations: {}'.format(wt_final))
-	save_results(writer)
+	## Simulate each replicate for WT
+	wt_sol = []
+	for it in range(n_replicates):
+		sol = odeint(dcdt, co, t, args=(ko, make_noise()))
 
-	## Plot results
-	plot_solution(t, sol, wt_final, args.output, 'wt')
+		# Report results
+		wt_sol.append(sol)
+		print('  Concentrations: {}'.format(sol[-1, :]))
+
+	## Analyze WT with averaged replicate final concentrations
+	wt_final = np.mean([sol[-1, :] for sol in wt_sol], axis=0)
+	for i, sol in enumerate(wt_sol):
+		# Save results
+		fc = sol[-1, :] / wt_final
+		save_results(writer, ko, fc)
+
+		# Plot results
+		plot_solution(t, sol, wt_final, args.output, 'wt_{}'.format(i))
 
 	# KO simulations
 	for ko in ENZYMES:
 		print('\nKnockout {}:'.format(ko))
-		sol = odeint(dcdt, co, t, args=(ko,))
+		for it in range(n_replicates):
+			sol = odeint(dcdt, co, t, args=(ko, make_noise()))
 
-		# Report results
-		c_final = sol[-1, :]
-		fc = c_final / wt_final
-		print('  Concentrations: {}'.format(c_final))
-		print('  Fold changes: {}'.format(fc))
-		save_results(writer, ko, fc)
+			# Report results
+			c_final = sol[-1, :]
+			fc = c_final / wt_final
+			print('  Concentrations: {}'.format(c_final))
+			print('  Fold changes: {}'.format(fc))
+			save_results(writer, ko, fc)
 
-		# Plot results
-		plot_solution(t, sol, wt_final, args.output, ko)
-
+			# Plot results
+			plot_solution(t, sol, wt_final, args.output, '{}_{}'.format(ko, it))
 
 	print('Completed in {:.2f} min'.format((time.time() - start) / 60))

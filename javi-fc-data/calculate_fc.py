@@ -54,6 +54,7 @@ def load_src():
 	for tf, regulated in data.items():
 		tf_data = {}
 		for gene, fcs in regulated.items():
+			fcs = np.abs(fcs)  # Bad!! - ignores annotated condition comparison regulation direction
 			tf_data[gene] = {
 				'mean': np.mean(fcs),
 				'std': np.std(fcs, ddof=1),
@@ -85,7 +86,7 @@ def load_wcm():
 		regulated_gene = line[1].strip()
 		mean = float(line[2])
 		std = float(line[3])
-		sign = np.sign(float(line[5]))
+		sign = 1  # np.sign(float(line[5]))
 
 		if tf not in data:
 			data[tf] = {}
@@ -111,6 +112,9 @@ def compare_data(src_data, wcm_data):
 	Notes:
 		dictionary structure for both inputs:
 			{TF gene name: {regulated gene: {'mean': mean, 'std': std}}}
+
+	TODO:
+		check regulation not included in both wcm and src data
 	"""
 
 	# Track statistics
@@ -126,18 +130,29 @@ def compare_data(src_data, wcm_data):
 		direction_discrepancies[tf] = 0
 
 		for gene, data in regulation.items():
-			mean1 = np.round(data['mean'], 2)
+			mean1 = data['mean']
 			mean2 = wcm_data.get(tf, {}).get(gene, {}).get('mean', 0)
-			if mean1 != mean2:
+			if np.abs(mean1 - mean2) > 0.01 and mean2 != 0:
 				if np.sign(mean1) != np.sign(mean2):
 					direction_discrepancies[tf] += 1
 				discrepancies[tf] += 1
 				print('{} -> {}: {:.2f} vs {:.2f}'.format(tf, gene, mean1, mean2))
 
 	# Print summary statistics for each TF
+	total_direction_discrepancies = 0
+	total_discrepancies = 0
+	total_interactions = 0
 	print('\nTF: opposite direction, different mean, total')
-	for tf in total_regulation:
-		print('{:5s}: {:3} {:3} {:3}'.format(tf, direction_discrepancies[tf], discrepancies[tf], total_regulation[tf]))
+	for tf, total in total_regulation.items():
+		tf_dir_disc = direction_discrepancies[tf]
+		tf_disc = discrepancies[tf]
+
+		total_direction_discrepancies += tf_dir_disc
+		total_discrepancies += tf_disc
+		total_interactions += total
+
+		print('{:5s}: {:3} {:3} {:3}'.format(tf, tf_dir_disc, tf_disc, total))
+	print('Total: {:3} {:3} {:3}'.format(total_direction_discrepancies, total_discrepancies, total_interactions))
 
 
 if __name__ == '__main__':

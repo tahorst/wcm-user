@@ -6,6 +6,7 @@ File sources:
 - gene_names.tsv: data/EcoMAC/geneName.tsv (from EcoliFoldChanges repo - 8580aae)
 - fold_changes.tsv: reconstruction/ecoli/flat/foldChanges.tsv (from wcEcoli repo - 143cf74856)
 - fc_single_shift.tsv: output/fc_single_shift.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 5497086)
+- fc_all_shifts.tsv: output/fc_all_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 5497086)
 
 Running:
 - `./calculate_fc.py`: attempts to use best information available (regulation direction discrepancies)

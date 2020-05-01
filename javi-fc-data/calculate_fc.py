@@ -4,6 +4,8 @@
 Aggregate data from Javi's repo to compare to foldChanges.tsv included in wcm.
 """
 
+from __future__ import division, print_function
+
 import argparse
 import csv
 import os
@@ -15,7 +17,8 @@ from typing import Dict, List, Tuple
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 SRC_FILE = os.path.join(FILE_LOCATION, 'kb.tsv')
 WCM_FILE = os.path.join(FILE_LOCATION, 'fold_changes.tsv')
-NEW_FILE = os.path.join(FILE_LOCATION, 'fc_single_shift.tsv')
+SINGLE_SHIFT_FILE = os.path.join(FILE_LOCATION, 'fc_single_shift.tsv')
+ALL_SHIFTS_FILE = os.path.join(FILE_LOCATION, 'fc_all_shifts.tsv')
 SHIFTS_FILE = os.path.join(FILE_LOCATION, 'shifts.tsv')
 GENES_FILES = os.path.join(FILE_LOCATION, 'gene_names.tsv')
 
@@ -117,17 +120,20 @@ def load_wcm(attempt_match):
 
 	return data
 
-def load_new():
-	# type: () -> Dict[str, Dict[str, Dict[str, float]]]
+def load_new(filename):
+	# type: (str) -> Dict[str, Dict[str, Dict[str, float]]]
 	"""
 	Loads and extracts gene regulation data from new processing of the raw data.
+
+	Args:
+		filename: tsv file from new fold change analysis to load
 
 	Returns:
 		data: mean for each regulatory pair
 			{TF gene name: {regulated gene: {'mean': mean, 'std': std}}}
 	"""
 
-	raw_data = load_file(NEW_FILE)[1:]
+	raw_data = load_file(filename)[1:]
 
 	data = {}
 	for line in raw_data:
@@ -168,14 +174,15 @@ def load_shifts():
 
 	return shifts
 
-def compare_data(data1, data2, verbose=True):
-	# type: (Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, float]]], bool) -> None
+def compare_data(data1, data2, desc, verbose=True):
+	# type: (Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, float]]], str, bool) -> None
 	"""
 	Compares regulation from source data to wcm data.
 
 	Args:
 		data1: mean and standard deviation for each regulatory pair
 		data2: mean and standard deviation for each regulatory pair
+		desc: description for comparison
 		verbose: if True, prints additional regulation information
 
 	Notes:
@@ -191,6 +198,8 @@ def compare_data(data1, data2, verbose=True):
 	discrepancies = {}
 	direction_discrepancies = {}
 	no_match = {}
+
+	print('\n*** {} ***'.format(desc))
 
 	# Print regulation that is different in the datasets
 	if verbose:
@@ -212,13 +221,15 @@ def compare_data(data1, data2, verbose=True):
 					print('{} -> {}: {:.2f} vs {:.2f}'.format(tf, gene, mean1, mean2))
 			elif mean2 == 0:
 				no_match[tf] += 1
+	if verbose:
+		print()
 
 	# Print summary statistics for each TF
 	total_direction_discrepancies = 0
 	total_discrepancies = 0
 	total_no_match = 0
 	total_interactions = 0
-	print('\nTF: opposite direction, different mean, not in second dataset, total')
+	print('TF: opposite direction, different mean, not in second dataset, total')
 	for tf, total in total_regulation.items():
 		tf_dir_disc = direction_discrepancies[tf]
 		tf_disc = discrepancies[tf]
@@ -258,7 +269,9 @@ if __name__ == '__main__':
 
 	src_data = load_src(args.match)
 	wcm_data = load_wcm(args.match)
-	new_data = load_new()
+	single_shift_data = load_new(SINGLE_SHIFT_FILE)
+	all_shifts_data = load_new(ALL_SHIFTS_FILE)
 
-	compare_data(src_data, wcm_data, args.verbose)
-	compare_data(wcm_data, new_data, args.verbose)
+	compare_data(src_data, wcm_data, 'Javi repo vs wcm', args.verbose)
+	compare_data(wcm_data, single_shift_data, 'wcm vs new single shift', args.verbose)
+	compare_data(wcm_data, all_shifts_data, 'wcm vs new all shifts', args.verbose)

@@ -190,6 +190,7 @@ def compare_data(data1, data2, verbose=True):
 	total_regulation = {}
 	discrepancies = {}
 	direction_discrepancies = {}
+	no_match = {}
 
 	# Print regulation that is different in the datasets
 	if verbose:
@@ -198,6 +199,7 @@ def compare_data(data1, data2, verbose=True):
 		total_regulation[tf] = len(regulation)
 		discrepancies[tf] = 0
 		direction_discrepancies[tf] = 0
+		no_match[tf] = 0
 
 		for gene, data in regulation.items():
 			mean1 = data['mean']
@@ -208,23 +210,28 @@ def compare_data(data1, data2, verbose=True):
 				discrepancies[tf] += 1
 				if verbose:
 					print('{} -> {}: {:.2f} vs {:.2f}'.format(tf, gene, mean1, mean2))
+			elif mean2 == 0:
+				no_match[tf] += 1
 
 	# Print summary statistics for each TF
 	total_direction_discrepancies = 0
 	total_discrepancies = 0
+	total_no_match = 0
 	total_interactions = 0
-	print('\nTF: opposite direction, different mean, total')
+	print('\nTF: opposite direction, different mean, not in second dataset, total')
 	for tf, total in total_regulation.items():
 		tf_dir_disc = direction_discrepancies[tf]
 		tf_disc = discrepancies[tf]
+		tf_no_match = no_match[tf]
 
 		total_direction_discrepancies += tf_dir_disc
 		total_discrepancies += tf_disc
+		total_no_match += tf_no_match
 		total_interactions += total
 
 		if verbose:
-			print('{:5s}: {:3} {:3} {:3}'.format(tf, tf_dir_disc, tf_disc, total))
-	print('Total: {:3} {:3} {:3}'.format(total_direction_discrepancies, total_discrepancies, total_interactions))
+			print('{:5s}: {:3} {:3} {:3} {:3}'.format(tf, tf_dir_disc, tf_disc, tf_no_match, total))
+	print('Total: {:3} {:3} {:3} {:3}'.format(total_direction_discrepancies, total_discrepancies, total_no_match, total_interactions))
 
 def parse_args():
 	# type: () -> argparse.Namespace

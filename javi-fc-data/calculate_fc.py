@@ -15,6 +15,7 @@ from typing import Dict, List, Tuple
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 SRC_FILE = os.path.join(FILE_LOCATION, 'kb.tsv')
 WCM_FILE = os.path.join(FILE_LOCATION, 'fold_changes.tsv')
+NEW_FILE = os.path.join(FILE_LOCATION, 'fc_single_shift.tsv')
 SHIFTS_FILE = os.path.join(FILE_LOCATION, 'shifts.tsv')
 GENES_FILES = os.path.join(FILE_LOCATION, 'gene_names.tsv')
 
@@ -116,6 +117,35 @@ def load_wcm(attempt_match):
 
 	return data
 
+def load_new():
+	# type: () -> Dict[str, Dict[str, Dict[str, float]]]
+	"""
+	Loads and extracts gene regulation data from new processing of the raw data.
+
+	Returns:
+		data: mean for each regulatory pair
+			{TF gene name: {regulated gene: {'mean': mean, 'std': std}}}
+	"""
+
+	raw_data = load_file(NEW_FILE)[1:]
+
+	data = {}
+	for line in raw_data:
+		# Columns of interest
+		tf = line[0]
+		regulated_gene = line[1]
+		fc = float(line[2])
+
+		if tf not in data:
+			data[tf] = {}
+
+		data[tf][regulated_gene] = {
+			'mean': fc,
+			'std': 0,
+			}
+
+	return data
+
 def load_shifts():
 	# type: () -> Dict[Tuple[str], Dict[str, int]]
 	"""
@@ -138,23 +168,22 @@ def load_shifts():
 
 	return shifts
 
-def compare_data(src_data, wcm_data):
-	# type: (Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, float]]]) -> None
+def compare_data(data1, data2, verbose=True):
+	# type: (Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, float]]], bool) -> None
 	"""
 	Compares regulation from source data to wcm data.
 
 	Args:
-		src_data: mean and standard deviation for each regulatory pair in
-			the source data
-		wcm_data: mean and standard deviation for each regulatory pair in
-			the whole-cell model
+		data1: mean and standard deviation for each regulatory pair
+		data2: mean and standard deviation for each regulatory pair
+		verbose: if True, prints additional regulation information
 
 	Notes:
 		dictionary structure for both inputs:
 			{TF gene name: {regulated gene: {'mean': mean, 'std': std}}}
 
 	TODO:
-		check regulation not included in both wcm and src data
+		check regulation not included in both datasets
 	"""
 
 	# Track statistics
@@ -162,21 +191,23 @@ def compare_data(src_data, wcm_data):
 	discrepancies = {}
 	direction_discrepancies = {}
 
-	# Print regulation that is different from source and wcm
-	print('TF -> regulated gene: source vs wcm')
-	for tf, regulation in src_data.items():
+	# Print regulation that is different in the datasets
+	if verbose:
+		print('TF -> regulated gene: data1 vs data2')
+	for tf, regulation in data1.items():
 		total_regulation[tf] = len(regulation)
 		discrepancies[tf] = 0
 		direction_discrepancies[tf] = 0
 
 		for gene, data in regulation.items():
 			mean1 = data['mean']
-			mean2 = wcm_data.get(tf, {}).get(gene, {}).get('mean', 0)
+			mean2 = data2.get(tf, {}).get(gene, {}).get('mean', 0)
 			if np.abs(mean1 - mean2) > 0.01 and mean2 != 0:
 				if np.sign(mean1) != np.sign(mean2):
 					direction_discrepancies[tf] += 1
 				discrepancies[tf] += 1
-				print('{} -> {}: {:.2f} vs {:.2f}'.format(tf, gene, mean1, mean2))
+				if verbose:
+					print('{} -> {}: {:.2f} vs {:.2f}'.format(tf, gene, mean1, mean2))
 
 	# Print summary statistics for each TF
 	total_direction_discrepancies = 0
@@ -191,7 +222,8 @@ def compare_data(src_data, wcm_data):
 		total_discrepancies += tf_disc
 		total_interactions += total
 
-		print('{:5s}: {:3} {:3} {:3}'.format(tf, tf_dir_disc, tf_disc, total))
+		if verbose:
+			print('{:5s}: {:3} {:3} {:3}'.format(tf, tf_dir_disc, tf_disc, total))
 	print('Total: {:3} {:3} {:3}'.format(total_direction_discrepancies, total_discrepancies, total_interactions))
 
 def parse_args():
@@ -208,6 +240,9 @@ def parse_args():
 	parser.add_argument('-m', '--match',
 		action='store_true',
 		help='If set, processes source data to best match wcm.')
+	parser.add_argument('-v', '--verbose',
+		action='store_true',
+		help='If set, prints more information.')
 
 	return parser.parse_args()
 
@@ -216,5 +251,7 @@ if __name__ == '__main__':
 
 	src_data = load_src(args.match)
 	wcm_data = load_wcm(args.match)
+	new_data = load_new()
 
-	compare_data(src_data, wcm_data)
+	compare_data(src_data, wcm_data, args.verbose)
+	compare_data(wcm_data, new_data, args.verbose)

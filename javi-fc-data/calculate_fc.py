@@ -4,16 +4,19 @@
 Aggregate data from Javi's repo to compare to foldChanges.tsv included in wcm.
 """
 
+import argparse
 import csv
 import os
 
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 SRC_FILE = os.path.join(FILE_LOCATION, 'kb.tsv')
 WCM_FILE = os.path.join(FILE_LOCATION, 'fold_changes.tsv')
+SHIFTS_FILE = os.path.join(FILE_LOCATION, 'shifts.tsv')
+GENES_FILES = os.path.join(FILE_LOCATION, 'gene_names.tsv')
 
 
 def load_file(filename):
@@ -24,10 +27,14 @@ def load_file(filename):
 		reader = csv.reader(f, delimiter='\t')
 		return list(reader)
 
-def load_src():
-	# type: () -> Dict[str, Dict[str, Dict[str, float]]]
+def load_src(attempt_match):
+	# type: (bool) -> Dict[str, Dict[str, Dict[str, float]]]
 	"""
 	Loads and extracts gene regulation data from the source data.
+
+	Args:
+		attempt_match: if True, handles data in way that was most likely the
+			original processing, otherwise uses expected directionality
 
 	Returns:
 		data: mean and standard deviation for each regulatory pair
@@ -35,26 +42,30 @@ def load_src():
 	"""
 
 	raw_data = load_file(SRC_FILE)
+	shifts = load_shifts()
 
 	# Extract fold changes from data
 	data = {}
 	for line in raw_data:
 		# Columns of interest
+		condition = (line[4], line[5])
 		tf = line[7]
 		regulated_gene = line[9]
 		magnitude = float(line[10])
 
 		if tf not in data:
 			data[tf] = {}
+		direction = shifts[condition][tf]
 
-		data[tf][regulated_gene] = data[tf].get(regulated_gene, []) + [magnitude]
+		data[tf][regulated_gene] = data[tf].get(regulated_gene, []) + [direction * magnitude]
 
 	# Calculate mean and std from data
 	processed_data = {}
 	for tf, regulated in data.items():
 		tf_data = {}
 		for gene, fcs in regulated.items():
-			fcs = np.abs(fcs)  # Bad!! - ignores annotated condition comparison regulation direction
+			if attempt_match:
+				fcs = np.abs(fcs)  # Bad!! - ignores annotated condition comparison regulation direction
 			tf_data[gene] = {
 				'mean': np.mean(fcs),
 				'std': np.std(fcs, ddof=1),
@@ -63,10 +74,14 @@ def load_src():
 
 	return processed_data
 
-def load_wcm():
-	# type: () -> Dict[str, Dict[str, Dict[str, float]]]
+def load_wcm(attempt_match):
+	# type: (bool) -> Dict[str, Dict[str, Dict[str, float]]]
 	"""
 	Loads and extracts gene regulation data from the whole-cell model.
+
+	Args:
+		attempt_match: if True, handles data in way that was most likely the
+			original processing, otherwise uses expected directionality
 
 	Returns:
 		data: mean and standard deviation for each regulatory pair
@@ -86,7 +101,10 @@ def load_wcm():
 		regulated_gene = line[1].strip()
 		mean = float(line[2])
 		std = float(line[3])
-		sign = 1  # np.sign(float(line[5]))
+		if attempt_match:
+			sign = 1
+		else:
+			sign = np.sign(float(line[5]))
 
 		if tf not in data:
 			data[tf] = {}
@@ -97,6 +115,28 @@ def load_wcm():
 			}
 
 	return data
+
+def load_shifts():
+	# type: () -> Dict[Tuple[str], Dict[str, int]]
+	"""
+	Load TF regulation information for each shift.
+
+	Returns:
+		shifts: gene regulation direction for each condition
+			1 for active TF in condition1 vs condition2
+			-1 for active TF in condition2 vs condition1
+			{(condition1, condition2): {TF1: 1, TF2: -1, ...}}
+	"""
+
+	genes = {int(line[0]): line[2] for line in load_file(GENES_FILES)}
+	shifts = {}
+	for line in load_file(SHIFTS_FILE):
+		condition = (line[1], line[2])
+
+		gene_dir = {genes[np.abs(int(v))]: np.sign(int(v)) for v in line[12:26] if v != '0'}
+		shifts[condition] = gene_dir
+
+	return shifts
 
 def compare_data(src_data, wcm_data):
 	# type: (Dict[str, Dict[str, Dict[str, float]]], Dict[str, Dict[str, Dict[str, float]]]) -> None
@@ -154,9 +194,27 @@ def compare_data(src_data, wcm_data):
 		print('{:5s}: {:3} {:3} {:3}'.format(tf, tf_dir_disc, tf_disc, total))
 	print('Total: {:3} {:3} {:3}'.format(total_direction_discrepancies, total_discrepancies, total_interactions))
 
+def parse_args():
+	# type: () -> argparse.Namespace
+	"""
+	Parses arguments from the command line.
+
+	Returns:
+		values of variables parsed from the command line
+	"""
+
+	parser = argparse.ArgumentParser()
+
+	parser.add_argument('-m', '--match',
+		action='store_true',
+		help='If set, processes source data to best match wcm.')
+
+	return parser.parse_args()
 
 if __name__ == '__main__':
-	src_data = load_src()
-	wcm_data = load_wcm()
+	args = parse_args()
+
+	src_data = load_src(args.match)
+	wcm_data = load_wcm(args.match)
 
 	compare_data(src_data, wcm_data)

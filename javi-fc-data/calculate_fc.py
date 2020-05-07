@@ -19,6 +19,7 @@ SRC_FILE = os.path.join(FILE_LOCATION, 'kb.tsv')
 WCM_FILE = os.path.join(FILE_LOCATION, 'fold_changes.tsv')
 SINGLE_SHIFT_FILE = os.path.join(FILE_LOCATION, 'fc_single_shift.tsv')
 ALL_SHIFTS_FILE = os.path.join(FILE_LOCATION, 'fc_all_shifts.tsv')
+AGGREGATE_SHIFTS_FILE = os.path.join(FILE_LOCATION, 'fc_aggregated_shifts.tsv')
 SHIFTS_FILE = os.path.join(FILE_LOCATION, 'shifts.tsv')
 GENES_FILES = os.path.join(FILE_LOCATION, 'gene_names.tsv')
 
@@ -271,7 +272,9 @@ if __name__ == '__main__':
 	wcm_data = load_wcm(args.match)
 	single_shift_data = load_new(SINGLE_SHIFT_FILE)
 	all_shifts_data = load_new(ALL_SHIFTS_FILE)
+	aggregate_shifts_data = load_new(AGGREGATE_SHIFTS_FILE)
 
 	compare_data(src_data, wcm_data, 'Javi repo vs wcm', args.verbose)
 	compare_data(wcm_data, single_shift_data, 'wcm vs new single shift', args.verbose)
 	compare_data(wcm_data, all_shifts_data, 'wcm vs new all shifts', args.verbose)
+	compare_data(wcm_data, aggregate_shifts_data, 'wcm vs new aggregated shifts', args.verbose)

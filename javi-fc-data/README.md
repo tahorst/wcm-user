@@ -5,9 +5,9 @@ File sources:
 - shifts.tsv: data/EcoMAC/experimentalShift.tsv (from EcoliFoldChanges repo - 8580aae)
 - gene_names.tsv: data/EcoMAC/geneName.tsv (from EcoliFoldChanges repo - 8580aae)
 - fold_changes.tsv: reconstruction/ecoli/flat/foldChanges.tsv (from wcEcoli repo - 143cf74856)
-- fc_single_shift.tsv: output/fc_single_shift.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 5497086)
-- fc_all_shifts.tsv: output/fc_all_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 5497086)
-- fc_aggregated_shifts.tsv: output/fc_aggregated_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - e354afd)
+- fc_single_shift.tsv: output/fc_single_shift.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 7824581)
+- fc_all_shifts.tsv: output/fc_all_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 7824581)
+- fc_aggregated_shifts.tsv: output/fc_aggregated_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 7824581)
 
 Running:
 - `./calculate_fc.py`: attempts to use best information available (regulation direction discrepancies)

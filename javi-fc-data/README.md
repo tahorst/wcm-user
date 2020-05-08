@@ -7,7 +7,7 @@ File sources:
 - fold_changes.tsv: reconstruction/ecoli/flat/foldChanges.tsv (from wcEcoli repo - 143cf74856)
 - fc_single_shift.tsv: output/fc_single_shift.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 5497086)
 - fc_all_shifts.tsv: output/fc_all_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 5497086)
-- fc_aggregated_shifts.tsv: output/fc_aggregated_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - 8199e3f)
+- fc_aggregated_shifts.tsv: output/fc_aggregated_shifts.tsv (from running src/condition_graph.py in FoldChangeExplorer repo - e354afd)
 
 Running:
 - `./calculate_fc.py`: attempts to use best information available (regulation direction discrepancies)

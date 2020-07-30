@@ -8,8 +8,7 @@ import numpy as np
 import scipy
 
 
-def nca_criteria_check(A, tfs):
-    # type: (np.ndarray, np.ndarray) -> (np.ndarray, np.ndarray)
+def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarray):
     """
     Check criteria for the A matrix of NCA (E = AP).
     - full column rank in A
@@ -24,7 +23,7 @@ def nca_criteria_check(A, tfs):
         tfs: updated TF IDs corresponding to the new A
     """
 
-    print('A shape: {}'.format(A.shape))
+    print(f'A shape: {A.shape}')
 
     # Filter out TFs that did not match any known genes for regulation (empty columns)
     col_sum = np.sum(A != 0, axis=0)
@@ -32,7 +31,7 @@ def nca_criteria_check(A, tfs):
         tf_idx_with_regulation = np.where(col_sum != 0)[0]
         print('Removing empty columns for TFs:')
         for tf in tfs[col_sum == 0]:
-            print('\t{}'.format(tf))
+            print(f'\t{tf}')
         A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation])
 
     n_cols = A.shape[1]
@@ -48,7 +47,7 @@ def nca_criteria_check(A, tfs):
             sub_rank = np.linalg.matrix_rank(A[:, mask])
             if sub_rank == rank:
                 dependent.append(i)
-                print('\t{}'.format(tfs[i]))
+                print(f'\t{tfs[i]}')
 
         # Check for dependent columns with LU decomposition and remove
         # _, _, U = scipy.linalg.lu(A)
@@ -78,7 +77,7 @@ def nca_criteria_check(A, tfs):
                 # TODO: turn into function with same code above
                 print('Removing empty columns from reduced matrix for TFs:')
                 for tf in tfs[~tf_idx_with_regulation]:
-                    print('\t{}'.format(tf))
+                    print(f'\t{tf}')
                 A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation])
             else:
                 # TODO; turn into function with same code above
@@ -91,7 +90,7 @@ def nca_criteria_check(A, tfs):
                     new_rank = np.linalg.matrix_rank(rows_removed[:, col_mask])
                     if new_rank == sub_rank:
                         dependent.append(j)
-                        print('\t{}'.format(tfs[j]))
+                        print(f'\t{tfs[j]}')
 
                 dependent = np.array(dependent)
                 mask = np.ones(n_cols, bool)
@@ -101,8 +100,7 @@ def nca_criteria_check(A, tfs):
 
     return A, tfs
 
-def fast_nca(E, A):
-    # type: (np.ndarray, np.ndarray) -> (np.ndarray, np.ndarray)
+def fast_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
     """
     Perform FastNCA on dataset E with network connectivity specified by A for the
     problem: E = AP. Based on matlab implementation from Chang et al. 2008.
@@ -130,7 +128,8 @@ def fast_nca(E, A):
     next_update = status_step
     for i in range(n_cols):
         if (i + 1) / n_cols >= next_update:
-            print('{:.0f}% complete...'.format(np.floor((i + 1) / n_cols * 100)))
+            complete = np.floor((i + 1) / n_cols * 100)
+            print(f'{complete:.0f}% complete...')
             next_update += status_step
 
         U0 = U[A[:, i] == 0, :]
@@ -147,8 +146,7 @@ def fast_nca(E, A):
 
     return A_hat, P_hat
 
-def robust_nca(E, A):
-    # type: (np.ndarray, np.ndarray) -> (np.ndarray, np.ndarray)
+def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
     """
     Perform ROBNCA on dataset E with network connectivity specified by A for the
     problem: E = AP. Based on method in Noor et al. Bioinformatics. 2013.
@@ -172,7 +170,8 @@ def robust_nca(E, A):
     next_update = status_step
     for it in range(n_iters):
         if (it + 1) / n_iters >= next_update:
-            print('{:.0f}% complete...'.format(np.floor((it + 1) / n_iters * 100)))
+            complete = np.floor((it + 1) / n_iters * 100)
+            print(f'{complete:.0f}% complete...')
             next_update += status_step
 
         # Update S

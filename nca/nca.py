@@ -9,10 +9,10 @@ import scipy.linalg
 
 
 # Function names of the different NCA methods that have been implemented below
-METHODS = ['fast_nca', 'robust_nca']
+METHODS = ['robust_nca', 'fast_nca']
 
 
-def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarray):
+def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
     """
     Check criteria for the A matrix of NCA (E = AP).
     - full column rank in A
@@ -21,29 +21,33 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarra
     Args:
         A: initial A matrix for NCA algorithm (n genes, m TFs)
         tfs: IDs of transcription factors for each column in A
+        verbose: If set, prints updates about removed columns
 
     Returns:
         A: updated A matrix with columns removed to satisfy NCA criteria
         tfs: updated TF IDs corresponding to the new A
     """
 
-    print(f'A shape: {A.shape}')
+    if verbose:
+        print(f'A shape: {A.shape}')
 
     # Filter out TFs that did not match any known genes for regulation (empty columns)
     col_sum = np.sum(A != 0, axis=0)
     if np.any(col_sum == 0):
         tf_idx_with_regulation = np.where(col_sum != 0)[0]
-        print('Removing empty columns for TFs:')
-        for tf in tfs[col_sum == 0]:
-            print(f'\t{tf}')
-        A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation])
+        if verbose:
+            print('Removing empty columns for TFs:')
+            for tf in tfs[col_sum == 0]:
+                print(f'\t{tf}')
+        A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation], verbose=verbose)
 
     n_cols = A.shape[1]
 
     # Check if not full rank A matrix
     rank = np.linalg.matrix_rank(A)
     if rank < n_cols:
-        print('A matrix is not full rank because of TFs:')
+        if verbose:
+            print('A matrix is not full rank because of TFs:')
         dependent = []
         for i in range(n_cols):
             mask = np.ones(n_cols, bool)
@@ -51,7 +55,8 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarra
             sub_rank = np.linalg.matrix_rank(A[:, mask])
             if sub_rank == rank:
                 dependent.append(i)
-                print(f'\t{tfs[i]}')
+                if verbose:
+                    print(f'\t{tfs[i]}')
 
         # Check for dependent columns with LU decomposition and remove
         # _, _, U = scipy.linalg.lu(A)
@@ -60,7 +65,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarra
         dependent = np.array(dependent)
         mask = np.ones(n_cols, bool)
         mask[dependent] = False
-        A, tfs = nca_criteria_check(A[:, mask], tfs[mask])
+        A, tfs = nca_criteria_check(A[:, mask], tfs[mask], verbose=verbose)
         rank = np.linalg.matrix_rank(A)
         n_cols = A.shape[1]
 
@@ -79,13 +84,15 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarra
             tf_idx_with_regulation[i] = True
             if not np.all(tf_idx_with_regulation):
                 # TODO: turn into function with same code above
-                print('Removing empty columns from reduced matrix for TFs:')
-                for tf in tfs[~tf_idx_with_regulation]:
-                    print(f'\t{tf}')
-                A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation])
+                if verbose:
+                    print('Removing empty columns from reduced matrix for TFs:')
+                    for tf in tfs[~tf_idx_with_regulation]:
+                        print(f'\t{tf}')
+                A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation], verbose=verbose)
             else:
                 # TODO; turn into function with same code above
-                print('Reduced matrix is not full rank because of TFs:')
+                if verbose:
+                    print('Reduced matrix is not full rank because of TFs:')
                 rows_removed = A[row_mask, :]
                 dependent = []
                 for j in range(n_cols):
@@ -94,12 +101,13 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarra
                     new_rank = np.linalg.matrix_rank(rows_removed[:, col_mask])
                     if new_rank == sub_rank:
                         dependent.append(j)
-                        print(f'\t{tfs[j]}')
+                        if verbose:
+                            print(f'\t{tfs[j]}')
 
                 dependent = np.array(dependent)
                 mask = np.ones(n_cols, bool)
                 mask[dependent] = False
-                A, tfs = nca_criteria_check(A[:, mask], tfs[mask])
+                A, tfs = nca_criteria_check(A[:, mask], tfs[mask], verbose=verbose)
             break
 
     return A, tfs

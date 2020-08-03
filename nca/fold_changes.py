@@ -5,6 +5,7 @@ Use Network Component Analysis (NCA) to determine TF regulatory impacts on
 each gene based on expression in all conditions.
 """
 
+import argparse
 import csv
 import os
 
@@ -21,7 +22,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'out')
 if not os.path.exists(OUTPUT_DIR):
     os.mkdir(OUTPUT_DIR)
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, 'nca_results.tsv')
+RESULTS_FILE_TEMPLATE = os.path.join(OUTPUT_DIR, '{}nca_results.tsv')
 
 # RegulonDB related
 REGULON_DB_DIR = os.path.join(DATA_DIR, 'regulon-db')
@@ -103,9 +104,12 @@ def load_seq_data() -> np.ndarray:
 
     return np.hstack(seq_data).astype(np.float64)
 
-def load_tf_gene_interactions() -> Dict[str, Dict[str, str]]:
+def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, str]]:
     """
     Load regulonDB TF-gene interactions.
+
+    Args:
+        verbose: If True, prints warnings about loaded data
 
     Returns:
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
@@ -136,7 +140,7 @@ def load_tf_gene_interactions() -> Dict[str, Dict[str, str]]:
 
         # Store new data
         genes = tf_genes.get(tf, {})
-        if genes.get(gene, direction) != direction:
+        if verbose and genes.get(gene, direction) != direction:
             print(f'Inconsistent regulatory effects for {tf} on {gene}')  # TODO: handle?
         genes[gene] = direction
         tf_genes[tf] = genes
@@ -146,6 +150,7 @@ def load_tf_gene_interactions() -> Dict[str, Dict[str, str]]:
 def create_tf_map(
         gene_names: np.ndarray,
         tf_genes: Dict[str, Dict[str, str]],
+        verbose: bool = True,
         ) -> (np.ndarray, np.ndarray):
     """
     Create an initial map reflecting the known regulatory network topology between
@@ -155,6 +160,7 @@ def create_tf_map(
     Args:
         gene_names: gene IDs corresponding to each row of expression matrix
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+        verbose: If True, prints warnings about loaded data
 
     Returns:
         mapping: matrix representing network links between TFs and genes (n genes, m TFs)
@@ -173,7 +179,8 @@ def create_tf_map(
     for j, (tf, genes) in enumerate(sorted(tf_genes.items())):
         for gene, direction in genes.items():
             if gene not in gene_idx:
-                print(f'Unknown gene: {gene}')
+                if verbose:
+                    print(f'Unknown gene: {gene}')
                 continue
 
             mapping[gene_idx[gene], j] = np.random.rand() + 1
@@ -186,7 +193,7 @@ def save_regulation(
         A: np.ndarray,
         genes: np.ndarray,
         tfs: np.ndarray,
-        filename: str = OUTPUT_FILE,
+        filename: str,
         ) -> None:
     """
     Save the results of NCA to a file showing each TF/gene pair.
@@ -205,16 +212,49 @@ def save_regulation(
         for tf_idx, gene_idx in zip(*relation_idx):
             writer.writerow([tfs[tf_idx], genes[gene_idx], A[gene_idx, tf_idx]])
 
+def parse_args() -> argparse.Namespace:
+    """Parse command line args for options to run."""
+
+    parser = argparse.ArgumentParser()
+
+    default_nca = nca.METHODS[0]
+
+    parser.add_argument('-f', '--force',
+        action='store_true',
+        help='If set, force a rerun of identifying the initial TF map, otherwise use cached values.')
+    parser.add_argument('-l', '--label',
+        help='Label prepended to output files for identification.')
+    parser.add_argument('-m', '--method',
+        choices=nca.METHODS,
+        default=default_nca,
+        help=f'NCA method to use, defined in nca.py (default: {default_nca}).')
+    parser.add_argument('-v', '--verbose',
+        action='store_true',
+        help='If set, prints status updates for creating initial network map.')
+
+    return parser.parse_args()
+
 
 if __name__ == '__main__':
+    args = parse_args()
+
     # TODO: normalize seq data or only use EcoMAC data for now
+    print('Loading data from files...')
     seq_data = load_seq_data()
     genes = load_gene_names()
-    tf_genes = load_tf_gene_interactions()
+    tf_genes = load_tf_gene_interactions(verbose=args.verbose)
 
-    # TODO: cache results for faster testing
-    initial_tf_map, tfs = create_tf_map(genes, tf_genes)
-    initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs)
+    no_cache = True  # TODO: check if files exist
+    if args.force or no_cache:
+        print('Creating initial network mapping...')
+        initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
+        initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
+        # TODO: save cache
+    else:
+        print('Loading cached initial network mapping...')
+        # TODO: load cache
+        raise NotImplementedError('Need to save and load cache.')
 
-    A, P = nca.robust_nca(seq_data, initial_tf_map)
-    save_regulation(A, genes, tfs)
+    A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
+    output_file = RESULTS_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
+    save_regulation(A, genes, tfs, output_file)

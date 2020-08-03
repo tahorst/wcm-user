@@ -5,7 +5,11 @@ NCA methods to use to solve E = AP given E and specified network connections in 
 """
 
 import numpy as np
-import scipy
+import scipy.linalg
+
+
+# Function names of the different NCA methods that have been implemented below
+METHODS = ['fast_nca', 'robust_nca']
 
 
 def nca_criteria_check(A: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarray):
@@ -142,7 +146,7 @@ def fast_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
         a[A[:, i] == 0] = 0
         A_hat[:, i] = a / np.sum(np.abs(a)) * np.sum(A[:, i] != 0)
 
-    P_hat = np.linalg.lstsq(A_hat, E_approx)[0]
+    P_hat = np.linalg.lstsq(A_hat, E_approx, rcond=None)[0]
 
     return A_hat, P_hat
 

@@ -5,8 +5,6 @@ Plot outputs from NCA on a test data set with figure comparison from
 https://www.eee.hku.hk/~cqchang/gNCA-fig.pdf.
 """
 
-from __future__ import division
-
 import csv
 import os
 
@@ -27,12 +25,15 @@ if not os.path.exists(OUTPUT_DIR):
     os.mkdir(OUTPUT_DIR)
 
 
-def test_nca() -> None:
+def test_nca(method: str) -> None:
     """
     Plots TFAs to match results from Chang et al. Bioinformatics. 2008. Fig 5.
+
+    Args:
+        method: NCA method to use (function must be defined in nca.py)
     """
 
-    def plot_output(P, start, samples, label):
+    def plot_output(P, start, samples, label, method):
         tfs = np.array([1, 8, 9, 14, 15, 21, 30, 32, 33, 34, 35])
         data = P[tfs, start:start+samples]
         n_tfs = data.shape[0]
@@ -43,7 +44,7 @@ def test_nca() -> None:
             ax.plot(range(len(tf)), tf)
 
         plt.tight_layout()
-        plt.savefig(os.path.join(OUTPUT_DIR, '{}.png'.format(label)))
+        plt.savefig(os.path.join(OUTPUT_DIR, f'{method}_{label}.png'))
         plt.close('all')
 
     with open(NCA_TEST_EXPRESSION_FILE) as f:
@@ -54,13 +55,14 @@ def test_nca() -> None:
         reader = csv.reader(f, delimiter='\t')
         topology = np.array(list(reader), float)
 
-    A, P = nca.robust_nca(expression, topology)
+    A, P = getattr(nca, method)(expression, topology)
 
-    plot_output(P, 0, 14, 'elutriation')
-    plot_output(P, 14, 18, 'alpha')
-    plot_output(P, 32, 24, 'cdc')
-    plot_output(P, 56, 13, 'cycle')
+    plot_output(P, 0, 14, 'elutriation', method)
+    plot_output(P, 14, 18, 'alpha', method)
+    plot_output(P, 32, 24, 'cdc', method)
+    plot_output(P, 56, 13, 'cycle', method)
 
 
 if __name__ == '__main__':
-    test_nca()
+    for method in nca.METHODS:
+        test_nca(method)

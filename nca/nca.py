@@ -175,8 +175,10 @@ def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
     print('Solving with ROBNCA...')
     n_tfs = A.shape[1]
     A_est = A.copy()
+    outliers = np.zeros_like(E)
     zero_mask = A == 0
 
+    lambda_ = 0.7  # parameter that can be tuned for sparsity to determine outliers
     n_iters = 100
     status_step = 0.1
     next_update = status_step
@@ -187,25 +189,24 @@ def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
             next_update += status_step
 
         # Update S
-        # TODO:
-        #  - use calculated X instead of E
-        S = np.linalg.inv(A_est.T.dot(A_est)).dot(A_est.T).dot(E)
+        X = E - outliers
+        S = np.linalg.inv(A_est.T.dot(A_est)).dot(A_est.T).dot(X)
 
         # Update A
-        # TODO:
-        #  - check if need to calculate an estimate of E with outlier instead of original E
         Qinv = np.linalg.inv(S.dot(S.T))
-        Xtilde = S.T.dot(A.T)
         for col, a in enumerate(A_est):
             zero_idx = np.where(a == 0)[0]
             Cn = np.zeros((len(zero_idx), n_tfs))
             Cn[range(len(zero_idx)), zero_idx] = 1
             psi = Cn.dot(Qinv).dot(Cn.T)
-            w = S.dot(Xtilde[:, col])
-            A_est[col, :] = Qinv.dot(w - Cn.T.dot(psi).dot(Cn).dot(Qinv).dot(w))
+            w = S.dot(X.T[:, col])
+            A_est[col, :] = Qinv.dot(w - Cn.T.dot(np.linalg.inv(psi)).dot(Cn).dot(Qinv).dot(w))
         A_est[zero_mask] = 0
 
-        # TODO: Update outliers
+        # Update outliers
+        B = E - A_est.dot(S)
+        norm = np.linalg.norm(B, axis=0)
+        outliers = B * np.fmax(0, (norm - lambda_ / 2)) / norm
 
     P_est = S
     return A_est, P_est

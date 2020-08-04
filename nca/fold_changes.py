@@ -111,7 +111,7 @@ def load_seq_data() -> np.ndarray:
 
     return np.hstack(seq_data).astype(np.float64)
 
-def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, str]]:
+def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, int]]:
     """
     Load regulonDB TF-gene interactions.
 
@@ -120,6 +120,9 @@ def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, str]]
 
     Returns:
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+            regulatory direction is 1 for positive regulation
+            regulatory direction is -1 for negative regulation
+            regulatory direction is 0 for unknown or conflicting regulation
     """
 
     data = load_regulon_db_file(TF_GENE_FILE)
@@ -141,22 +144,25 @@ def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, str]]
         elif effect == 'repressor':
             direction = -1
         elif effect == 'unknown':
-            direction = 1  # TODO: handle this differently?
+            direction = 0
         else:
             raise ValueError(f'Unknown TF effect: {effect}')
 
         # Store new data
         genes = tf_genes.get(tf, {})
-        if verbose and genes.get(gene, direction) != direction:
-            print(f'Inconsistent regulatory effects for {tf} on {gene}')  # TODO: handle?
-        genes[gene] = direction
+        if genes.get(gene, direction) != direction:
+            if verbose:
+                print(f'Inconsistent regulatory effects for {tf} on {gene}')
+            genes[gene] = 0
+        else:
+            genes[gene] = direction
         tf_genes[tf] = genes
 
     return tf_genes
 
 def create_tf_map(
         gene_names: np.ndarray,
-        tf_genes: Dict[str, Dict[str, str]],
+        tf_genes: Dict[str, Dict[str, int]],
         verbose: bool = True,
         ) -> (np.ndarray, np.ndarray):
     """
@@ -219,6 +225,62 @@ def save_regulation(
         for tf_idx, gene_idx in zip(*relation_idx):
             writer.writerow([tfs[tf_idx], genes[gene_idx], A[gene_idx, tf_idx]])
 
+def match_statistics(
+        tf_genes: Dict[str, Dict[str, int]],
+        A: np.ndarray,
+        genes: np.ndarray,
+        tfs: np.ndarray,
+        ) -> None:
+    """
+    Assess the accuracy of NCA results by printing statistics about how well
+    the regulation direction is captured.
+
+    Args:
+        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+        A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        genes: IDs for each gene corresponding to rows in A (n genes)
+        tfs: names of each TF corresponding to columns in A (m TFs)
+
+    TODO:
+        - add fit error
+        - stats for each TF
+    """
+
+    # Variable to track stats
+    annotated_neg = 0
+    correct_neg = 0
+    annotated_pos = 0
+    correct_pos = 0
+    ambiguous = 0
+
+    # Check each entry in the mapping matrix against the annotated data
+    for i, j in zip(*np.where(A)):
+        gene = genes[i]
+        tf = tfs[j]
+        annotated = tf_genes.get(tf, {}).get(gene)
+
+        if annotated:
+            predicted = A[i, j]
+
+            if annotated > 0:
+                annotated_pos += 1
+                if predicted > 0:
+                    correct_pos += 1
+            else:
+                annotated_neg += 1
+                if predicted < 0:
+                    correct_neg += 1
+        elif annotated == 0:
+            ambiguous += 1
+
+    # Print statistics
+    correct = correct_neg + correct_pos
+    total = annotated_neg + annotated_pos
+    print(f'Overall matches: {correct}/{total} ({100*correct/total:.1f}%)')
+    print(f'Negative regulation matches: {correct_neg}/{annotated_neg} ({100*correct_neg/annotated_neg:.1f}%)')
+    print(f'Positive regulation matches: {correct_pos}/{annotated_pos} ({100*correct_pos/annotated_pos:.1f}%)')
+    print(f'Number of ambiguous regulatory interactions: {ambiguous}')
+
 def parse_args() -> argparse.Namespace:
     """Parse command line args for options to run."""
 
@@ -271,3 +333,7 @@ if __name__ == '__main__':
     # Save results
     output_file = RESULTS_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
     save_regulation(A, genes, tfs, output_file)
+
+    # Assess results of analysis
+    # TODO: allow option to directly load the results instead of running NCA
+    match_statistics(tf_genes, A, genes, tfs)

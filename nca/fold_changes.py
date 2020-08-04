@@ -225,6 +225,38 @@ def save_regulation(
         for tf_idx, gene_idx in zip(*relation_idx):
             writer.writerow([tfs[tf_idx], genes[gene_idx], A[gene_idx, tf_idx]])
 
+def load_regulation(filename: str) -> (np.ndarray, np.ndarray, np.ndarray):
+    """
+    Load the results of a previous NCA run saved to file with save_regulation.
+    Return values should match the arguments passed to save_regulation.
+
+    Args:
+        filename: path to saved NCA results
+
+    Returns:
+        A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        genes: IDs for each gene corresponding to rows in A (n genes)
+        tfs: names of each TF corresponding to columns in A (m TFs)
+    """
+
+    with open(filename) as f:
+        reader = csv.reader(f, delimiter='\t')
+        headers = next(reader)
+        data = np.array(list(reader))
+
+    genes = data[:, headers.index('Gene')]
+    tfs = data[:, headers.index('TF')]
+    fcs = data[:, headers.index('FC')].astype(float)
+
+    # Recreate A matrix
+    A = np.zeros((len(genes), len(tfs)))
+    gene_idx = {gene: idx for idx, gene in enumerate(genes)}
+    tf_idx = {tf: idx for idx, tf in enumerate(tfs)}
+    for gene, tf, fc in zip(genes, tfs, fcs):
+        A[gene_idx[gene], tf_idx[tf]] = fc
+
+    return A, genes, tfs
+
 def match_statistics(
         tf_genes: Dict[str, Dict[str, int]],
         A: np.ndarray,
@@ -300,6 +332,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-v', '--verbose',
         action='store_true',
         help='If set, prints status updates for creating initial network map.')
+    parser.add_argument('-a', '--analysis',
+        help='Path to saved regulation data to just run analysis on. Will skip NCA.')
 
     return parser.parse_args()
 
@@ -313,27 +347,30 @@ if __name__ == '__main__':
     genes = load_gene_names()
     tf_genes = load_tf_gene_interactions(verbose=args.verbose)
 
-    # Create or load network mapping and TF IDs
-    no_cache = not (os.path.exists(NETWORK_CACHE_FILE) and os.path.exists(TF_CACHE_FILE))
-    if args.force or no_cache:
-        print('Creating initial network mapping...')
-        initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
-        initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
+    if args.analysis is None:
+        # Create or load network mapping and TF IDs
+        no_cache = not (os.path.exists(NETWORK_CACHE_FILE) and os.path.exists(TF_CACHE_FILE))
+        if args.force or no_cache:
+            print('Creating initial network mapping...')
+            initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
+            initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
 
-        np.save(NETWORK_CACHE_FILE, initial_tf_map)
-        np.save(TF_CACHE_FILE, tfs)
+            np.save(NETWORK_CACHE_FILE, initial_tf_map)
+            np.save(TF_CACHE_FILE, tfs)
+        else:
+            print('Loading cached initial network mapping...')
+            initial_tf_map = np.load(NETWORK_CACHE_FILE)
+            tfs = np.load(TF_CACHE_FILE)
+
+        # Solve NCA problem
+        A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
+
+        # Save results
+        output_file = RESULTS_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
+        save_regulation(A, genes, tfs, output_file)
     else:
-        print('Loading cached initial network mapping...')
-        initial_tf_map = np.load(NETWORK_CACHE_FILE)
-        tfs = np.load(TF_CACHE_FILE)
-
-    # Solve NCA problem
-    A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
-
-    # Save results
-    output_file = RESULTS_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
-    save_regulation(A, genes, tfs, output_file)
+        print('Loading regulation results without running NCA...')
+        A, genes, tfs = load_regulation(args.analysis)
 
     # Assess results of analysis
-    # TODO: allow option to directly load the results instead of running NCA
     match_statistics(tf_genes, A, genes, tfs)

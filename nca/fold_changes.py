@@ -9,6 +9,7 @@ import argparse
 import csv
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 from typing import Dict, List
 
@@ -23,6 +24,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, 'out')
 if not os.path.exists(OUTPUT_DIR):
     os.mkdir(OUTPUT_DIR)
 RESULTS_FILE_TEMPLATE = os.path.join(OUTPUT_DIR, '{}nca_results.tsv')
+HISTOGRAM_FILE_TEMPLATE = os.path.join(OUTPUT_DIR, '{}histogram.png')
 
 # Cached results
 CACHE_DIR = os.path.join(OUTPUT_DIR, 'cached')
@@ -313,6 +315,66 @@ def match_statistics(
     print(f'Positive regulation matches: {correct_pos}/{annotated_pos} ({100*correct_pos/annotated_pos:.1f}%)')
     print(f'Number of ambiguous regulatory interactions: {ambiguous}')
 
+def plot_results(
+        tf_genes: Dict[str, Dict[str, int]],
+        A: np.ndarray,
+        genes: np.ndarray,
+        tfs: np.ndarray,
+        filename: str,
+        ) -> None:
+    """
+    Plot NCA results for easier inspection.
+
+    Args:
+        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+        A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        genes: IDs for each gene corresponding to rows in A (n genes)
+        tfs: names of each TF corresponding to columns in A (m TFs)
+        filename: path to file to save the plot
+    """
+
+    def plot(series, label, color):
+        mean = sum(series) / len(series)
+        plt.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
+        plt.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
+
+    annotated_neg = []
+    annotated_pos = []
+    annotated_amb = []
+
+    # Check each entry in the mapping matrix against the annotated data
+    for i, j in zip(*np.where(A)):
+        gene = genes[i]
+        tf = tfs[j]
+        annotated = tf_genes.get(tf, {}).get(gene)
+
+        if annotated is not None:
+            predicted = A[i, j]
+
+            if annotated > 0:
+                annotated_pos.append(predicted)
+            elif annotated < 0:
+                annotated_neg.append(predicted)
+            else:
+                annotated_amb.append(predicted)
+
+    hist_range = (
+        np.floor(min(min(annotated_neg), min(annotated_pos), min(annotated_amb))),
+        np.ceil(max(max(annotated_neg), max(annotated_pos), max(annotated_amb))),
+    )
+    n_bins = int(np.ceil(5*(hist_range[1] - hist_range[0])))
+    cmap = plt.get_cmap('tab10')
+
+    plt.figure()
+
+    plot(annotated_neg, 'Negative', cmap(0))
+    plot(annotated_pos, 'Positive', cmap(1))
+    plot(annotated_amb, 'Ambiguous', cmap(2))
+
+    plt.legend(fontsize=8, frameon=False)
+    plt.tight_layout()
+    plt.savefig(filename)
+
 def parse_args() -> argparse.Namespace:
     """Parse command line args for options to run."""
 
@@ -374,3 +436,5 @@ if __name__ == '__main__':
 
     # Assess results of analysis
     match_statistics(tf_genes, A, genes, tfs)
+    histogram_file = HISTOGRAM_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
+    plot_results(tf_genes, A, genes, tfs, histogram_file)

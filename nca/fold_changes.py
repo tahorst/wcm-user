@@ -24,6 +24,13 @@ if not os.path.exists(OUTPUT_DIR):
     os.mkdir(OUTPUT_DIR)
 RESULTS_FILE_TEMPLATE = os.path.join(OUTPUT_DIR, '{}nca_results.tsv')
 
+# Cached results
+CACHE_DIR = os.path.join(OUTPUT_DIR, 'cached')
+if not os.path.exists(CACHE_DIR):
+    os.mkdir(CACHE_DIR)
+NETWORK_CACHE_FILE = os.path.join(CACHE_DIR, 'network.npy')
+TF_CACHE_FILE = os.path.join(CACHE_DIR, 'tfs.npy')
+
 # RegulonDB related
 REGULON_DB_DIR = os.path.join(DATA_DIR, 'regulon-db')
 REGULON_DB_SCRIPT = os.path.join(BASE_DIR, 'download_regulondb.sh')
@@ -244,17 +251,23 @@ if __name__ == '__main__':
     genes = load_gene_names()
     tf_genes = load_tf_gene_interactions(verbose=args.verbose)
 
-    no_cache = True  # TODO: check if files exist
+    # Create or load network mapping and TF IDs
+    no_cache = not (os.path.exists(NETWORK_CACHE_FILE) and os.path.exists(TF_CACHE_FILE))
     if args.force or no_cache:
         print('Creating initial network mapping...')
         initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
         initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
-        # TODO: save cache
+
+        np.save(NETWORK_CACHE_FILE, initial_tf_map)
+        np.save(TF_CACHE_FILE, tfs)
     else:
         print('Loading cached initial network mapping...')
-        # TODO: load cache
-        raise NotImplementedError('Need to save and load cache.')
+        initial_tf_map = np.load(NETWORK_CACHE_FILE)
+        tfs = np.load(TF_CACHE_FILE)
 
+    # Solve NCA problem
     A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
+
+    # Save results
     output_file = RESULTS_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
     save_regulation(A, genes, tfs, output_file)

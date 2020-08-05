@@ -23,15 +23,13 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 OUTPUT_DIR = os.path.join(BASE_DIR, 'out')
 if not os.path.exists(OUTPUT_DIR):
     os.mkdir(OUTPUT_DIR)
-RESULTS_FILE_TEMPLATE = os.path.join(OUTPUT_DIR, '{}nca_results.tsv')
-HISTOGRAM_FILE_TEMPLATE = os.path.join(OUTPUT_DIR, '{}histogram.png')
+REGULATION_FILE = 'regulation.tsv'
+ACTIVITY_FILE = 'activity.tsv'
+HISTOGRAM_FILE = 'histogram.png'
 
 # Cached results
-CACHE_DIR = os.path.join(OUTPUT_DIR, 'cached')
-if not os.path.exists(CACHE_DIR):
-    os.mkdir(CACHE_DIR)
-NETWORK_CACHE_FILE = os.path.join(CACHE_DIR, 'network.npy')
-TF_CACHE_FILE = os.path.join(CACHE_DIR, 'tfs.npy')
+NETWORK_CACHE_FILE = 'network.npy'
+TF_CACHE_FILE = 'tfs.npy'
 
 # RegulonDB related
 REGULON_DB_DIR = os.path.join(DATA_DIR, 'regulon-db')
@@ -151,6 +149,7 @@ def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, int]]
             raise ValueError(f'Unknown TF effect: {effect}')
 
         # Store new data
+        tf = f'{tf}-{effect}'
         genes = tf_genes.get(tf, {})
         if genes.get(gene, direction) != direction:
             if verbose:
@@ -206,42 +205,53 @@ def create_tf_map(
 
 def save_regulation(
         A: np.ndarray,
+        P: np.ndarray,
         genes: np.ndarray,
         tfs: np.ndarray,
-        filename: str,
+        output_dir: str,
         ) -> None:
     """
     Save the results of NCA to a file showing each TF/gene pair.
 
     Args:
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        P: TF activity for each condition
         genes: IDs for each gene corresponding to rows in A (n genes)
         tfs: names of each TF corresponding to columns in A (m TFs)
-        filename: path to output file to save data to
+        output_dir: path to directory to save the output
     """
 
+    # Regulation data (TF-gene pairs)
     relation_idx = np.where(A.T)
-    with open(filename, 'w') as f:
+    with open(os.path.join(output_dir, REGULATION_FILE), 'w') as f:
         writer = csv.writer(f, delimiter='\t')
         writer.writerow(['TF', 'Gene', 'FC'])
         for tf_idx, gene_idx in zip(*relation_idx):
             writer.writerow([tfs[tf_idx], genes[gene_idx], A[gene_idx, tf_idx]])
 
-def load_regulation(filename: str) -> (np.ndarray, np.ndarray, np.ndarray):
+    # Activity data (TF in each condition)
+    with open(os.path.join(output_dir, ACTIVITY_FILE), 'w') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(['Condition:'] + list(range(P.shape[1])))
+        for tf, activity in zip(tfs, P):
+            writer.writerow([tf] + list(activity))
+
+def load_regulation(directory: str) -> (np.ndarray, np.ndarray, np.ndarray):
     """
     Load the results of a previous NCA run saved to file with save_regulation.
     Return values should match the arguments passed to save_regulation.
 
     Args:
-        filename: path to saved NCA results
+        directory: path to folder containing saved NCA results
 
     Returns:
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        P: TF activity for each condition
         genes: IDs for each gene corresponding to rows in A (n genes)
         tfs: names of each TF corresponding to columns in A (m TFs)
     """
 
-    with open(filename) as f:
+    with open(os.path.join(directory, REGULATION_FILE)) as f:
         reader = csv.reader(f, delimiter='\t')
         headers = next(reader)
         data = np.array(list(reader))
@@ -257,7 +267,13 @@ def load_regulation(filename: str) -> (np.ndarray, np.ndarray, np.ndarray):
     for gene, tf, fc in zip(genes, tfs, fcs):
         A[gene_idx[gene], tf_idx[tf]] = fc
 
-    return A, genes, tfs
+    # Recreate P matrix
+    with open(os.path.join(directory, ACTIVITY_FILE)) as f:
+        reader = csv.reader(f, delimiter='\t')
+        next(reader)  # strip headers
+        P = np.array(list(reader))[1:, :].astype(float)
+
+    return A, P, genes, tfs
 
 def match_statistics(
         tf_genes: Dict[str, Dict[str, int]],
@@ -320,7 +336,7 @@ def plot_results(
         A: np.ndarray,
         genes: np.ndarray,
         tfs: np.ndarray,
-        filename: str,
+        output_dir: str,
         ) -> None:
     """
     Plot NCA results for easier inspection.
@@ -330,7 +346,7 @@ def plot_results(
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
         genes: IDs for each gene corresponding to rows in A (n genes)
         tfs: names of each TF corresponding to columns in A (m TFs)
-        filename: path to file to save the plot
+        output_dir: path to directory to save the plot
     """
 
     def plot(series, label, color):
@@ -373,7 +389,7 @@ def plot_results(
 
     plt.legend(fontsize=8, frameon=False)
     plt.tight_layout()
-    plt.savefig(filename)
+    plt.savefig(os.path.join(output_dir, HISTOGRAM_FILE))
 
 def parse_args() -> argparse.Namespace:
     """Parse command line args for options to run."""
@@ -381,12 +397,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     default_nca = nca.METHODS[0]
+    default_label = 'nca-results'
 
     parser.add_argument('-f', '--force',
         action='store_true',
         help='If set, force a rerun of identifying the initial TF map, otherwise use cached values.')
     parser.add_argument('-l', '--label',
-        help='Label prepended to output files for identification.')
+        default=default_label,
+        help=f'Label for output directory to save results to (default: {default_label}).')
     parser.add_argument('-m', '--method',
         choices=nca.METHODS,
         default=default_nca,
@@ -395,46 +413,59 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='If set, prints status updates for creating initial network map.')
     parser.add_argument('-a', '--analysis',
-        help='Path to saved regulation data to just run analysis on. Will skip NCA.')
+        help='Path to directory containing saved regulation data to just run analysis on. Will skip NCA.')
+    parser.add_argument('-c', '--cache',
+        help='Path to cache directory to load network files. Defaults to output directory if not specified.')
 
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
+    output_dir = os.path.join(OUTPUT_DIR, args.label)
+    os.makedirs(output_dir, exist_ok=True)
 
     # TODO: normalize seq data or only use EcoMAC data for now
     print('Loading data from files...')
-    seq_data = load_seq_data()
+    seq_data = 2**load_seq_data()
     genes = load_gene_names()
     tf_genes = load_tf_gene_interactions(verbose=args.verbose)
 
     if args.analysis is None:
+        # Check input cached files
+        cache_dir = args.cache if args.cache else os.path.join(output_dir, 'cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        network_cache_file = os.path.join(cache_dir, NETWORK_CACHE_FILE)
+        tf_cache_file = os.path.join(cache_dir, TF_CACHE_FILE)
+        no_cache = not (os.path.exists(network_cache_file) and os.path.exists(tf_cache_file))
+
         # Create or load network mapping and TF IDs
-        no_cache = not (os.path.exists(NETWORK_CACHE_FILE) and os.path.exists(TF_CACHE_FILE))
         if args.force or no_cache:
             print('Creating initial network mapping...')
             initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
             initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
-
-            np.save(NETWORK_CACHE_FILE, initial_tf_map)
-            np.save(TF_CACHE_FILE, tfs)
         else:
             print('Loading cached initial network mapping...')
-            initial_tf_map = np.load(NETWORK_CACHE_FILE)
-            tfs = np.load(TF_CACHE_FILE)
+            initial_tf_map = np.load(network_cache_file)
+            tfs = np.load(tf_cache_file)
+
+        # Output cached files
+        cache_dir = os.path.join(output_dir, 'cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        network_cache_file = os.path.join(cache_dir, NETWORK_CACHE_FILE)
+        tf_cache_file = os.path.join(cache_dir, TF_CACHE_FILE)
+        np.save(network_cache_file, initial_tf_map)
+        np.save(tf_cache_file, tfs)
 
         # Solve NCA problem
         A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
 
         # Save results
-        output_file = RESULTS_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
-        save_regulation(A, genes, tfs, output_file)
+        save_regulation(A, P, genes, tfs, output_dir)
     else:
         print('Loading regulation results without running NCA...')
-        A, genes, tfs = load_regulation(args.analysis)
+        A, P, genes, tfs = load_regulation(args.analysis)
 
     # Assess results of analysis
     match_statistics(tf_genes, A, genes, tfs)
-    histogram_file = HISTOGRAM_FILE_TEMPLATE.format(f'{args.label}_' if args.label else '')
-    plot_results(tf_genes, A, genes, tfs, histogram_file)
+    plot_results(tf_genes, A, genes, tfs, output_dir)

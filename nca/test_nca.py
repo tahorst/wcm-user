@@ -20,9 +20,8 @@ NCA_DATA_DIR = os.path.join(DATA_DIR, 'nca')
 NCA_TEST_TOPOLOGY_FILE = os.path.join(NCA_DATA_DIR, 'subnet1_top.tsv')
 NCA_TEST_EXPRESSION_FILE = os.path.join(NCA_DATA_DIR, 'subnet1_data.tsv')
 
-OUTPUT_DIR = os.path.join(BASE_DIR, 'out')
-if not os.path.exists(OUTPUT_DIR):
-    os.mkdir(OUTPUT_DIR)
+OUTPUT_DIR = os.path.join(BASE_DIR, 'out', 'test-plots')
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def test_nca(method: str) -> None:

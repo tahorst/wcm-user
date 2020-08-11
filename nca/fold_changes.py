@@ -236,19 +236,19 @@ def save_regulation(
         for tf, activity in zip(tfs, P):
             writer.writerow([tf] + list(activity))
 
-def load_regulation(directory: str) -> (np.ndarray, np.ndarray, np.ndarray):
+def load_regulation(directory: str, genes: np.ndarray, tfs: np.ndarray) -> (np.ndarray, np.ndarray, np.ndarray):
     """
     Load the results of a previous NCA run saved to file with save_regulation.
     Return values should match the arguments passed to save_regulation.
 
     Args:
         directory: path to folder containing saved NCA results
+        genes: IDs for each gene corresponding to rows in A (n genes)
+        tfs: names of each TF corresponding to columns in A (m TFs)
 
     Returns:
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
         P: TF activity for each condition
-        genes: IDs for each gene corresponding to rows in A (n genes)
-        tfs: names of each TF corresponding to columns in A (m TFs)
     """
 
     with open(os.path.join(directory, REGULATION_FILE)) as f:
@@ -256,24 +256,24 @@ def load_regulation(directory: str) -> (np.ndarray, np.ndarray, np.ndarray):
         headers = next(reader)
         data = np.array(list(reader))
 
-    genes = data[:, headers.index('Gene')]
-    tfs = data[:, headers.index('TF')]
+    fc_genes = data[:, headers.index('Gene')]
+    fc_tfs = data[:, headers.index('TF')]
     fcs = data[:, headers.index('FC')].astype(float)
 
     # Recreate A matrix
     A = np.zeros((len(genes), len(tfs)))
     gene_idx = {gene: idx for idx, gene in enumerate(genes)}
     tf_idx = {tf: idx for idx, tf in enumerate(tfs)}
-    for gene, tf, fc in zip(genes, tfs, fcs):
+    for gene, tf, fc in zip(fc_genes, fc_tfs, fcs):
         A[gene_idx[gene], tf_idx[tf]] = fc
 
     # Recreate P matrix
     with open(os.path.join(directory, ACTIVITY_FILE)) as f:
         reader = csv.reader(f, delimiter='\t')
         next(reader)  # strip headers
-        P = np.array(list(reader))[1:, :].astype(float)
+        P = np.array(list(reader))[:, 1:].astype(float)
 
-    return A, P, genes, tfs
+    return A, P
 
 def match_statistics(
         tf_genes: Dict[str, Dict[str, int]],
@@ -464,7 +464,9 @@ if __name__ == '__main__':
         save_regulation(A, P, genes, tfs, output_dir)
     else:
         print('Loading regulation results without running NCA...')
-        A, P, genes, tfs = load_regulation(args.analysis)
+        cache_dir = args.cache if args.cache else os.path.join(args.analysis, 'cache')
+        tfs = np.load(os.path.join(cache_dir, TF_CACHE_FILE))
+        A, P = load_regulation(args.analysis, genes, tfs)
 
     # Assess results of analysis
     match_statistics(tf_genes, A, genes, tfs)

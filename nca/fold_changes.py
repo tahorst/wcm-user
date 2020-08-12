@@ -324,7 +324,10 @@ def match_statistics(
         tf = tfs[j]
         annotated = tf_genes.get(tf, {}).get(gene)
 
-        if annotated:
+        if annotated is None:
+            continue
+
+        if np.isfinite(annotated):
             predicted = A[i, j]
 
             if annotated > 0:
@@ -335,15 +338,18 @@ def match_statistics(
                 annotated_neg += 1
                 if predicted < 0:
                     correct_neg += 1
-        elif annotated == 0:
+        else:
             ambiguous += 1
 
     # Print statistics
     correct = correct_neg + correct_pos
     total = annotated_neg + annotated_pos
-    print(f'Overall matches: {correct}/{total} ({100*correct/total:.1f}%)')
-    print(f'Negative regulation matches: {correct_neg}/{annotated_neg} ({100*correct_neg/annotated_neg:.1f}%)')
-    print(f'Positive regulation matches: {correct_pos}/{annotated_pos} ({100*correct_pos/annotated_pos:.1f}%)')
+    percent_match = 0 if total == 0 else 100*correct/total
+    percent_match_neg = 0 if annotated_neg == 0 else 100*correct_neg/annotated_neg
+    percent_match_pos = 0 if annotated_pos == 0 else 100*correct_pos/annotated_pos
+    print(f'Overall matches: {correct}/{total} ({percent_match:.1f}%)')
+    print(f'Negative regulation matches: {correct_neg}/{annotated_neg} ({percent_match_neg:.1f}%)')
+    print(f'Positive regulation matches: {correct_pos}/{annotated_pos} ({percent_match_pos:.1f}%)')
     print(f'Number of ambiguous regulatory interactions: {ambiguous}')
 
 def plot_results(
@@ -399,6 +405,8 @@ def plot_results(
         max(annotated_pos) if annotated_pos else 0,
         max(annotated_amb) if annotated_amb else 0,
         )
+    if min_val == max_val:
+        max_val += 1
     hist_range = (
         np.floor(min_val),
         np.ceil(max_val),
@@ -458,8 +466,6 @@ def parse_args() -> argparse.Namespace:
 if __name__ == '__main__':
     start = time.time()
     args = parse_args()
-    output_dir = os.path.join(OUTPUT_DIR, args.label)
-    os.makedirs(output_dir, exist_ok=True)
 
     # TODO: normalize seq data or only use EcoMAC data for now
     print('Loading data from files...')
@@ -469,6 +475,8 @@ if __name__ == '__main__':
 
     if args.analysis is None:
         # Check input cached files
+        output_dir = os.path.join(OUTPUT_DIR, args.label)
+        os.makedirs(output_dir, exist_ok=True)
         cache_dir = args.cache if args.cache else os.path.join(output_dir, 'cache')
         os.makedirs(cache_dir, exist_ok=True)
         network_cache_file = os.path.join(cache_dir, NETWORK_CACHE_FILE)
@@ -500,8 +508,13 @@ if __name__ == '__main__':
         save_regulation(A, P, genes, tfs, output_dir)
     else:
         print('Loading regulation results without running NCA...')
+        output_dir = args.analysis
+        if not os.path.exists(output_dir):
+            raise IOError(f'Directory does not exist: {output_dir}')
         cache_dir = args.cache if args.cache else os.path.join(args.analysis, 'cache')
+
         tfs = np.load(os.path.join(cache_dir, TF_CACHE_FILE))
+        tfs = np.hstack((tfs, np.array(['constituitive', 'regulated'])))
         A, P = load_regulation(args.analysis, genes, tfs)
 
     # Assess results of analysis

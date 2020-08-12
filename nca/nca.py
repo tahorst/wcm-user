@@ -6,10 +6,11 @@ NCA methods to use to solve E = AP given E and specified network connections in 
 
 import numpy as np
 import scipy.linalg
+import swiglpk as glp
 
 
 # Function names of the different NCA methods that have been implemented below
-METHODS = ['robust_nca', 'fast_nca']
+METHODS = ['constrained_nca', 'robust_nca', 'fast_nca']
 
 
 def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
@@ -135,7 +136,7 @@ def fast_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
     V = V[:n_cols, :]
     E_approx = U.dot(S).dot(V)
 
-    A_hat = np.zeros_like(A)
+    A_est = np.zeros_like(A)
     status_step = 0.1
     next_update = status_step
     for i in range(n_cols):
@@ -153,11 +154,11 @@ def fast_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
             v = M[:, -1]
         a = U.dot(v)
         a[A[:, i] == 0] = 0
-        A_hat[:, i] = a / np.sum(np.abs(a)) * np.sum(A[:, i] != 0)
+        A_est[:, i] = a / np.sum(np.abs(a)) * np.sum(A[:, i] != 0)
 
-    P_hat = np.linalg.lstsq(A_hat, E_approx, rcond=None)[0]
+    P_est = np.linalg.lstsq(A_est, E_approx, rcond=None)[0]
 
-    return A_hat, P_hat
+    return A_est, P_est
 
 def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
     """
@@ -210,4 +211,121 @@ def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
         outliers = B * np.fmax(0, (norm - lambda_ / 2)) / norm
 
     P_est = S
+    return A_est, P_est
+
+def constrained_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
+    """
+    Perform constrained NCA on dataset E with network connectivity specified by
+    A for the problem: E = AP. Based on method in Chang et al. ICA. 2009.
+    Original method was only for non-negative constraint but this has been
+    modified to accept non-negative and non-positive constraints.
+
+    Args:
+        E: data to solve NCA for (n genes, m conditions)
+        A: network connectivity (n genes, o TFs), sign should indicate
+            sign constraint for problem solution (eg. positive entries will
+            stay positive, negative entries will stay negative)
+
+    Returns:
+        A_est: estimated A based fit to data (n genes, o TFs)
+        P_est: estimated P based fit to data (o TFs, m conditions)
+    """
+
+    def int_array(array):
+        ia = glp.intArray(len(array) + 1)
+        ia[0] = -1
+        for (i, value) in enumerate(array):
+            ia[i + 1] = int(value)
+        return ia
+
+    def double_array(array):
+        da = glp.doubleArray(len(array) + 1)
+        da[0] = np.nan
+        for (i, value) in enumerate(array):
+            da[i + 1] = float(value)
+        return da
+
+    print('Solving constrained NCA...')
+    A_cols = A.shape[1]
+    U, _, _ = scipy.linalg.svd(E)
+    C = U[:, A_cols:]
+    C_cols = C.shape[1]
+
+    # Create LP objects
+    lp = glp.glp_create_prob()
+    smcp = glp.glp_smcp()
+    glp.glp_init_smcp(smcp)
+
+    # Set up variables
+    t_idx = 1  # +1 offset for GLPK
+    n_entries = int(np.sum(A != 0))
+    glp_rows = A_cols * (2*C_cols + 1)
+    glp.glp_add_rows(lp, glp_rows)
+    glp_cols = n_entries + 1
+    glp.glp_add_cols(lp, glp_cols)
+
+    # Add constraints
+    glp.glp_set_col_bnds(lp, t_idx, glp.GLP_FR, 0, 0)
+    bound = 0.
+    row_idx = 1  # GLPK +1 offset
+    col_idx = 2  # Start at 2 for GLPK +1 offset and t_idx
+    result_mapping = {}
+    for col, data in enumerate(A.T):
+        nonzero_idx = np.where(data)[0]
+        n_nonzero = len(nonzero_idx)
+        data_sign = np.sign(data[nonzero_idx])
+
+        ## -t < ca < t
+        for i in range(C_cols):
+            values = np.hstack((1, C[nonzero_idx, i]))
+            length = len(values)
+            col_idxs = int_array(np.hstack((t_idx, range(col_idx, col_idx + length))))
+
+            # ca + t > 0 (-t < ca)
+            glp.glp_set_mat_row(lp, row_idx, length, col_idxs, double_array(values))
+            glp.glp_set_row_bnds(lp, row_idx, glp.GLP_LO, bound, bound)
+            row_idx += 1
+
+            # ca - t < 0 (ca < t)
+            values[0] = -1  # update t sign
+            glp.glp_set_mat_row(lp, row_idx, length, col_idxs, double_array(values))
+            glp.glp_set_row_bnds(lp, row_idx, glp.GLP_UP, bound, bound)
+            row_idx += 1
+
+        ## sum(a) = Lj
+        col_idxs = int_array(range(col_idx, col_idx + n_nonzero))
+        values = double_array(data_sign)
+        glp.glp_set_mat_row(lp, row_idx, n_nonzero, col_idxs, values)
+        glp.glp_set_row_bnds(lp, row_idx, glp.GLP_FX, float(n_nonzero), float(n_nonzero))
+        row_idx += 1
+
+        ## A sign constraint
+        for i, sign in enumerate(data_sign):
+            glp_col = col_idx + i
+            result_mapping[glp_col - 1] = (nonzero_idx[i], col)
+            if sign > 0:
+                glp.glp_set_col_bnds(lp, glp_col, glp.GLP_LO, bound, bound)
+            else:
+                glp.glp_set_col_bnds(lp, glp_col, glp.GLP_UP, bound, bound)
+
+        col_idx += n_nonzero
+
+    # Set objective
+    glp.glp_set_obj_coef(lp, t_idx, 1)
+
+    # Solve LP
+    glp.glp_set_obj_dir(lp, glp.GLP_MIN)
+    result = glp.glp_simplex(lp, smcp)
+    if result != 0:
+        raise RuntimeError('Could not solve LP problem')
+    solution = glp.get_col_primals(lp)
+
+    # Recreate A matrix from LP solution
+    A_est = np.zeros_like(A)
+    for idx, (i, j) in result_mapping.items():
+        A_est[i, j] = solution[idx]
+
+    # Solve for P
+    P_est = np.linalg.lstsq(A_est, E, rcond=None)[0]
+
     return A_est, P_est

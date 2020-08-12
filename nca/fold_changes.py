@@ -91,12 +91,16 @@ def load_gene_names() -> np.ndarray:
 
     return genes
 
-def load_seq_data() -> np.ndarray:
+def load_seq_data(linearize: bool) -> np.ndarray:
     """
     Load sequencing data from the compendium.
 
+    Args:
+        linearize: if set, counts will be transformed from log2 space to linear space
+
     Returns:
-        matrix of normalized sequencing data representing log2 counts (n genes, m samples)
+        data: matrix of normalized sequencing data representing counts (n genes, m samples)
+            linear if linearize, log2 otherwise
 
     TODO:
     - normalize data to include other files instead of just EcoMAC in SEQ_FILES
@@ -110,7 +114,11 @@ def load_seq_data() -> np.ndarray:
             reader = csv.reader(f, delimiter='\t')
             seq_data.append(list(reader))
 
-    return np.hstack(seq_data).astype(np.float64)
+    data = np.hstack(seq_data).astype(np.float64)
+    if linearize:
+        data = 2**data
+
+    return data
 
 def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, int]]:
     """
@@ -410,23 +418,33 @@ def parse_args() -> argparse.Namespace:
     default_nca = nca.METHODS[0]
     default_label = 'nca-results'
 
-    parser.add_argument('-f', '--force',
-        action='store_true',
-        help='If set, force a rerun of identifying the initial TF map, otherwise use cached values.')
+    # General options
     parser.add_argument('-l', '--label',
         default=default_label,
         help=f'Label for output directory to save results to (default: {default_label}).')
-    parser.add_argument('-m', '--method',
-        choices=nca.METHODS,
-        default=default_nca,
-        help=f'NCA method to use, defined in nca.py (default: {default_nca}).')
     parser.add_argument('-v', '--verbose',
         action='store_true',
         help='If set, prints status updates for creating initial network map.')
+
+    # Options for efficient analysis by reusing saved results
     parser.add_argument('-a', '--analysis',
         help='Path to directory containing saved regulation data to just run analysis on. Will skip NCA.')
     parser.add_argument('-c', '--cache',
         help='Path to cache directory to load network files. Defaults to output directory if not specified.')
+    parser.add_argument('-f', '--force',
+        action='store_true',
+        help='If set, force a rerun of identifying the initial TF map, otherwise use cached values.')
+
+    # Data options
+    parser.add_argument('--linear',
+        action='store_true',
+        help='If set, use linear counts from sequencing data other keep log2 counts.')
+
+    # NCA options
+    parser.add_argument('-m', '--method',
+        choices=nca.METHODS,
+        default=default_nca,
+        help=f'NCA method to use, defined in nca.py (default: {default_nca}).')
 
     return parser.parse_args()
 
@@ -439,7 +457,7 @@ if __name__ == '__main__':
 
     # TODO: normalize seq data or only use EcoMAC data for now
     print('Loading data from files...')
-    seq_data = 2**load_seq_data()
+    seq_data = load_seq_data(args.linear)
     genes = load_gene_names()
     tf_genes = load_tf_gene_interactions(verbose=args.verbose)
 

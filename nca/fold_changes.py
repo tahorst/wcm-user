@@ -312,46 +312,59 @@ def match_statistics(
 
     TODO:
         - stats for each TF
-        - iterate on all annotated data from tf_genes instead of positive entries in A
+        - track skipped TFs and genes needed to satisfy NCA constraints
     """
 
     # Variable to track stats
-    annotated_neg = 0
+    total_neg = 0
     correct_neg = 0
-    annotated_pos = 0
+    dropped_neg = 0
+    total_pos = 0
     correct_pos = 0
+    dropped_pos = 0
     ambiguous = 0
 
-    # Check each entry in the mapping matrix against the annotated data
-    for i, j in zip(*np.where(A)):
-        gene = genes[i]
-        tf = tfs[j]
-        annotated = tf_genes.get(tf, {}).get(gene)
+    gene_idx = {gene: i for i, gene in enumerate(genes)}
+    tf_idx = {tf: i for i, tf in enumerate(tfs)}
 
-        if annotated is None:
+    # Check each entry in the mapping matrix against the annotated data
+    for tf, regulation in tf_genes.items():
+        if tf not in tf_idx:
             continue
 
-        if np.isfinite(annotated):
-            predicted = A[i, j]
+        for gene, annotated in regulation.items():
+            if gene not in gene_idx:
+                continue
 
-            if annotated > 0:
-                annotated_pos += 1
+            predicted = A[gene_idx[gene], tf_idx[tf]]
+            if annotated == 0:
+                ambiguous += 1
+            elif annotated > 0:
+                total_pos += 1
                 if predicted > 0:
                     correct_pos += 1
+                elif predicted == 0:
+                    dropped_pos += 1
             else:
-                annotated_neg += 1
+                total_neg += 1
                 if predicted < 0:
                     correct_neg += 1
-        else:
-            ambiguous += 1
+                elif predicted == 0:
+                    dropped_neg += 1
 
     # Print statistics
+    annotated_neg = total_neg - dropped_neg
+    annotated_pos = total_pos - dropped_pos
     correct = correct_neg + correct_pos
-    total = annotated_neg + annotated_pos
-    percent_match = 0 if total == 0 else 100*correct/total
+    dropped = dropped_neg + dropped_pos
+    matched = annotated_neg + annotated_pos
+    total = matched + dropped + ambiguous
+    percent_dropped = 0 if total == 0 else 100*dropped/total
+    percent_match = 0 if matched == 0 else 100*correct/matched
     percent_match_neg = 0 if annotated_neg == 0 else 100*correct_neg/annotated_neg
     percent_match_pos = 0 if annotated_pos == 0 else 100*correct_pos/annotated_pos
-    print(f'Overall matches: {correct}/{total} ({percent_match:.1f}%)')
+    print(f'Dropped regulation: {dropped}/{total} ({percent_dropped:.1f}%)')
+    print(f'Overall matches: {correct}/{matched} ({percent_match:.1f}%)')
     print(f'Negative regulation matches: {correct_neg}/{annotated_neg} ({percent_match_neg:.1f}%)')
     print(f'Positive regulation matches: {correct_pos}/{annotated_pos} ({percent_match_pos:.1f}%)')
     print(f'Number of ambiguous regulatory interactions: {ambiguous}')

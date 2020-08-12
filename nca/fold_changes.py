@@ -183,10 +183,14 @@ def create_tf_map(
     Args:
         gene_names: gene IDs corresponding to each row of expression matrix
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
-        verbose: If True, prints warnings about loaded data
+        verbose: if True, prints warnings about loaded data
 
     Returns:
         mapping: matrix representing network links between TFs and genes (n genes, m TFs)
+            positive regulation: positive number
+            negative regulation: negative number
+            unknown/ambiguous regulation: NaN
+            no regulation: 0
         tfs: IDs of TFs associated with each column of mapping
     """
 
@@ -206,8 +210,10 @@ def create_tf_map(
                     print(f'Unknown gene: {gene}')
                 continue
 
-            mapping[gene_idx[gene], j] = np.random.rand() + 1
-            # mapping[gene_idx[gene], j] = direction  # TODO: does this need a sign
+            if direction == 0:
+                mapping[gene_idx[gene], j] = np.nan
+            else:
+                mapping[gene_idx[gene], j] = direction * np.random.rand()
         tfs.append(tf)
 
     return mapping, np.array(tfs)

@@ -179,6 +179,7 @@ def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
     A_est = A.copy()
     outliers = np.zeros_like(E)
     zero_mask = A == 0
+    A_est[~np.isfinite(A_est)] = 1
 
     lambda_ = 0.7  # parameter that can be tuned for sparsity to determine outliers
     n_iters = 100
@@ -303,11 +304,13 @@ def constrained_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
         for i, sign in enumerate(data_sign):
             glp_col = col_idx + i
             result_mapping[glp_col - 1] = (nonzero_idx[i], col)
-            if sign > 0:
-                glp.glp_set_col_bnds(lp, glp_col, glp.GLP_LO, bound, bound)
+            if not np.isfinite(sign):
+                bound_type = glp.GLP_FR
+            elif sign > 0:
+                bound_type = glp.GLP_LO
             else:
-                glp.glp_set_col_bnds(lp, glp_col, glp.GLP_UP, bound, bound)
-
+                bound_type = glp.GLP_UP
+            glp.glp_set_col_bnds(lp, glp_col, bound_type, bound, bound)
         col_idx += n_nonzero
 
     # Set objective

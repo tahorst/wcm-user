@@ -351,7 +351,7 @@ def plot_results(
     """
 
     def plot(series, label, color):
-        mean = sum(series) / len(series)
+        mean = sum(series) / len(series) if series else 0
         plt.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
         plt.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
 
@@ -375,9 +375,19 @@ def plot_results(
             else:
                 annotated_amb.append(predicted)
 
+    min_val = min(
+        min(annotated_neg) if annotated_neg else 0,
+        min(annotated_pos) if annotated_pos else 0,
+        min(annotated_amb) if annotated_amb else 0,
+        )
+    max_val = max(
+        max(annotated_neg) if annotated_neg else 0,
+        max(annotated_pos) if annotated_pos else 0,
+        max(annotated_amb) if annotated_amb else 0,
+        )
     hist_range = (
-        np.floor(min(min(annotated_neg), min(annotated_pos), min(annotated_amb))),
-        np.ceil(max(max(annotated_neg), max(annotated_pos), max(annotated_amb))),
+        np.floor(min_val),
+        np.ceil(max_val),
     )
     n_bins = int(np.ceil(5*(hist_range[1] - hist_range[0])))
     cmap = plt.get_cmap('tab10')

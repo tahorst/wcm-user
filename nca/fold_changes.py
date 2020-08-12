@@ -8,6 +8,7 @@ each gene based on expression in all conditions.
 import argparse
 import csv
 import os
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -421,6 +422,7 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == '__main__':
+    start = time.time()
     args = parse_args()
     output_dir = os.path.join(OUTPUT_DIR, args.label)
     os.makedirs(output_dir, exist_ok=True)
@@ -471,3 +473,5 @@ if __name__ == '__main__':
     # Assess results of analysis
     match_statistics(tf_genes, A, genes, tfs)
     plot_results(tf_genes, A, genes, tfs, output_dir)
+
+    print(f'Completed in {(time.time() - start) / 60:.1f} min')

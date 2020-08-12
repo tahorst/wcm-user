@@ -291,24 +291,28 @@ def load_regulation(directory: str, genes: np.ndarray, tfs: np.ndarray) -> (np.n
     return A, P
 
 def match_statistics(
-        tf_genes: Dict[str, Dict[str, int]],
+        E: np.ndarray,
         A: np.ndarray,
+        P: np.ndarray,
+        tf_genes: Dict[str, Dict[str, int]],
         genes: np.ndarray,
         tfs: np.ndarray,
         ) -> None:
     """
     Assess the accuracy of NCA results by printing statistics about how well
-    the regulation direction is captured.
+    the regulation direction and overall expression is captured.
 
     Args:
-        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+        E: original expression data (n genes, m conditions)
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        P: NCA solution for TF activity in each condition (o TFs, m conditions)
+        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
         genes: IDs for each gene corresponding to rows in A (n genes)
         tfs: names of each TF corresponding to columns in A (m TFs)
 
     TODO:
-        - add fit error
         - stats for each TF
+        - iterate on all annotated data from tf_genes instead of positive entries in A
     """
 
     # Variable to track stats
@@ -351,6 +355,11 @@ def match_statistics(
     print(f'Negative regulation matches: {correct_neg}/{annotated_neg} ({percent_match_neg:.1f}%)')
     print(f'Positive regulation matches: {correct_pos}/{annotated_pos} ({percent_match_pos:.1f}%)')
     print(f'Number of ambiguous regulatory interactions: {ambiguous}')
+
+    # E prediction from results
+    E_est = A.dot(P)
+    error = np.sqrt(np.mean(((E - E_est) / E)**2))
+    print(f'Error fitting original data: {error:.3f}')
 
 def plot_results(
         tf_genes: Dict[str, Dict[str, int]],
@@ -518,7 +527,7 @@ if __name__ == '__main__':
         A, P = load_regulation(args.analysis, genes, tfs)
 
     # Assess results of analysis
-    match_statistics(tf_genes, A, genes, tfs)
+    match_statistics(seq_data, A, P, tf_genes, genes, tfs)
     plot_results(tf_genes, A, genes, tfs, output_dir)
 
     print(f'Completed in {(time.time() - start) / 60:.1f} min')

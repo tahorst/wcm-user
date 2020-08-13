@@ -120,12 +120,16 @@ def load_seq_data(linearize: bool) -> np.ndarray:
 
     return data
 
-def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, int]]:
+def load_tf_gene_interactions(
+        split: bool = False,
+        verbose: bool = True,
+        ) -> Dict[str, Dict[str, int]]:
     """
     Load regulonDB TF-gene interactions.
 
     Args:
-        verbose: If True, prints warnings about loaded data
+        split: if True, splits TFs into activator and repressor forms
+        verbose: if True, prints warnings about loaded data
 
     Returns:
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
@@ -155,18 +159,30 @@ def load_tf_gene_interactions(verbose: bool = True) -> Dict[str, Dict[str, int]]
         elif effect == 'unknown':
             direction = 0
         else:
-            raise ValueError(f'Unknown TF effect: {effect}')
+            raise ValueError(f'Unrecognized TF effect: {effect}')
 
         # Store new data
-        tf = f'{tf}-{effect}'
-        genes = tf_genes.get(tf, {})
-        if genes.get(gene, direction) != direction:
-            if verbose:
-                print(f'Inconsistent regulatory effects for {tf} on {gene}')
-            genes[gene] = 0
+        if split:
+            if effect == 'activator' or effect == 'unknown':
+                split_tf = f'{tf}-activator'
+                genes = tf_genes.get(split_tf, {})
+                genes[gene] = 1
+                tf_genes[split_tf] = genes
+
+            if effect == 'repressor' or effect == 'unknown':
+                split_tf = f'{tf}-repressor'
+                genes = tf_genes.get(split_tf, {})
+                genes[gene] = -1
+                tf_genes[split_tf] = genes
         else:
-            genes[gene] = direction
-        tf_genes[tf] = genes
+            genes = tf_genes.get(tf, {})
+            if genes.get(gene, direction) != direction:
+                if verbose:
+                    print(f'Inconsistent regulatory effects for {tf} on {gene}')
+                genes[gene] = 0
+            else:
+                genes[gene] = direction
+            tf_genes[tf] = genes
 
     return tf_genes
 
@@ -514,6 +530,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--global-expression',
         action='store_true',
         help='If set, creates pseudo transcription factors to capture global expression.')
+    parser.add_argument('--split',
+        action='store_true',
+        help='If set, split transcription factors into positive and negative regulation.')
 
     # NCA options
     parser.add_argument('-m', '--method',
@@ -531,11 +550,12 @@ if __name__ == '__main__':
     # TODO: normalize seq data or only use EcoMAC data for now
     # TODO: handle options better when loading analysis or cache
     #   - seq_data can be different with args.linear
+    #   - tf_genes can be different with args.split
     #   - tfs might not match saved regulation with args.global_expression
     print('Loading data from files...')
     seq_data = load_seq_data(args.linear)
     genes = load_gene_names()
-    tf_genes = load_tf_gene_interactions(verbose=args.verbose)
+    tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
 
     if args.analysis is None:
         # Check input cached files

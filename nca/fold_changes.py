@@ -9,10 +9,10 @@ import argparse
 import csv
 import os
 import time
+from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-from typing import Dict, List
 
 import nca
 
@@ -290,6 +290,42 @@ def load_regulation(directory: str, genes: np.ndarray, tfs: np.ndarray) -> (np.n
 
     return A, P
 
+def add_global_expression(
+        tfs: np.ndarray,
+        mapping: Optional[np.ndarray] = None
+        ) -> (np.ndarray, np.ndarray):
+    """
+    Expand out TFs to include global expression (consituitive and regulated).
+    This will capture genes not captured by TFs.
+
+    Args:
+        tfs: IDs of TFs associated with each column of mapping
+        mapping: matrix representing network links between TFs and genes (n genes, m TFs)
+            if None, no update is performed
+
+    Returns:
+        tfs: updated IDs with global expression IDs
+        mapping: updated matrix with global expression columns
+
+    TODO:
+        - add sigma factors
+        - add ppGpp
+        - add noisy elements
+    """
+
+    tfs = np.hstack((tfs, np.array(['constituitive', 'regulated'])))
+
+    if mapping is not None:
+        n_genes = mapping.shape[0]
+        no_regulation = np.sum(mapping, axis=1) == 0
+        constituitive = np.zeros((n_genes, 1))
+        constituitive[no_regulation] = 1
+        regulated = np.zeros((n_genes, 1))
+        regulated[~no_regulation] = 1
+        mapping = np.hstack((mapping, constituitive, regulated))
+
+    return tfs, mapping
+
 def match_statistics(
         E: np.ndarray,
         A: np.ndarray,
@@ -475,6 +511,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--linear',
         action='store_true',
         help='If set, use linear counts from sequencing data other keep log2 counts.')
+    parser.add_argument('--global-expression',
+        action='store_true',
+        help='If set, creates pseudo transcription factors to capture global expression.')
 
     # NCA options
     parser.add_argument('-m', '--method',
@@ -490,6 +529,9 @@ if __name__ == '__main__':
     args = parse_args()
 
     # TODO: normalize seq data or only use EcoMAC data for now
+    # TODO: handle options better when loading analysis or cache
+    #   - seq_data can be different with args.linear
+    #   - tfs might not match saved regulation with args.global_expression
     print('Loading data from files...')
     seq_data = load_seq_data(args.linear)
     genes = load_gene_names()
@@ -523,6 +565,9 @@ if __name__ == '__main__':
         np.save(network_cache_file, initial_tf_map)
         np.save(tf_cache_file, tfs)
 
+        if args.global_expression:
+            tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
+
         # Solve NCA problem
         A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
 
@@ -536,7 +581,9 @@ if __name__ == '__main__':
         cache_dir = args.cache if args.cache else os.path.join(args.analysis, 'cache')
 
         tfs = np.load(os.path.join(cache_dir, TF_CACHE_FILE))
-        tfs = np.hstack((tfs, np.array(['constituitive', 'regulated'])))
+        if args.global_expression:
+            tfs, _ = add_global_expression(tfs)
+
         A, P = load_regulation(args.analysis, genes, tfs)
 
     # Assess results of analysis

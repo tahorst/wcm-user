@@ -29,6 +29,23 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
         tfs: updated TF IDs corresponding to the new A
     """
 
+    def nan_rank(M: np.ndarray) -> int:
+        """
+        Get the matrix rank for a matrix that can have NaN values by converting
+        NaN to 1. NaN can be in the A matrix to identify uncertainty in the
+        regulation direction so it should take on a real value when calculating
+        rank.
+        """
+
+        mask = ~np.isfinite(M)
+        if np.any(mask):
+            N = M.copy()
+            N[mask] = 1
+        else:
+            N = M
+
+        return np.linalg.matrix_rank(N)
+
     if verbose:
         print(f'A shape: {A.shape}')
 
@@ -45,7 +62,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
     n_cols = A.shape[1]
 
     # Check if not full rank A matrix
-    rank = np.linalg.matrix_rank(A)
+    rank = nan_rank(A)
     if rank < n_cols:
         if verbose:
             print('A matrix is not full rank because of TFs:')
@@ -53,7 +70,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
         for i in range(n_cols):
             mask = np.ones(n_cols, bool)
             mask[i] = False
-            sub_rank = np.linalg.matrix_rank(A[:, mask])
+            sub_rank = nan_rank(A[:, mask])
             if sub_rank == rank:
                 dependent.append(i)
                 if verbose:
@@ -67,7 +84,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
         mask = np.ones(n_cols, bool)
         mask[dependent] = False
         A, tfs = nca_criteria_check(A[:, mask], tfs[mask], verbose=verbose)
-        rank = np.linalg.matrix_rank(A)
+        rank = nan_rank(A)
         n_cols = A.shape[1]
 
     # Check that reduced matrices have expected rank
@@ -77,7 +94,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
         col_mask[i] = False
 
         reduced_A = A[row_mask, :][:, col_mask]
-        sub_rank = np.linalg.matrix_rank(reduced_A)
+        sub_rank = nan_rank(reduced_A)
         if sub_rank != rank - 1:
             # Filter out empty columns with rows removed
             col_sum = np.sum(A[row_mask, :] != 0, axis=0)
@@ -99,7 +116,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
                 for j in range(n_cols):
                     col_mask = np.ones(n_cols, bool)
                     col_mask[j] = False
-                    new_rank = np.linalg.matrix_rank(rows_removed[:, col_mask])
+                    new_rank = nan_rank(rows_removed[:, col_mask])
                     if new_rank == sub_rank:
                         dependent.append(j)
                         if verbose:

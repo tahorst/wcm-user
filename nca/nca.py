@@ -6,12 +6,26 @@ NCA methods to use to solve E = AP given E and specified network connections in 
 
 import numpy as np
 import scipy.linalg
+import scipy.optimize
 import swiglpk as glp
 
 
 # Function names of the different NCA methods that have been implemented below
 METHODS = ['constrained_nca', 'robust_nca', 'fast_nca']
 
+
+def nonnegative_least_squares(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """
+    Solve nonnegative least squares with two matrices.
+    min ||AX - B||
+     st X >= 0
+    """
+
+    X = np.zeros((A.shape[1], B.shape[1]))
+    for i, b in enumerate(B.T):
+        X[:, i] = scipy.optimize.nnls(A, b)[0]
+
+    return X
 
 def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
     """

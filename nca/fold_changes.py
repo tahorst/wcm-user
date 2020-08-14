@@ -423,8 +423,16 @@ def match_statistics(
 
     # E prediction from results
     E_est = A.dot(P)
+    no_prediction = E_est == 0
+    n_zeros = np.sum(no_prediction)
+    n_negatives = np.sum(E_est < 0)
+    n_samples = E.shape[0] * E.shape[1]
     error = np.sqrt(np.mean(((E - E_est) / E)**2))
-    print(f'Error fitting original data: {error:.3f}')
+    error_predictions = np.sqrt(np.mean(((E[~no_prediction] - E_est[~no_prediction]) / E[~no_prediction])**2))
+    print(f'\nError fitting original data: {error:.3f}')
+    print(f'Error fitting original data (excluding unpredicted samples): {error_predictions:.3f}')
+    print(f'No prediction made: {n_zeros}/{n_samples} ({100 * n_zeros / n_samples:.1f}%)')
+    print(f'Negative prediction made: {n_negatives}/{n_samples} ({100 * n_negatives / n_samples:.1f}%)')
 
 def plot_results(
         tf_genes: Dict[str, Dict[str, int]],

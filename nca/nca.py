@@ -176,16 +176,11 @@ def fast_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
             print(f'{complete:.0f}% complete...')
             next_update += status_step
 
-        U0 = U[A[:, i] == 0, :]
-        if U0.shape[0] < n_cols:
-            _, _, M = scipy.linalg.svd(U0)
-            v = M[-1, :]
-        else:
-            M, _, _ = scipy.linalg.svd(U0.T)
-            v = M[:, -1]
-        a = U.dot(v)
-        a[A[:, i] == 0] = 0
-        A_est[:, i] = a / np.sum(np.abs(a)) * np.sum(A[:, i] != 0)
+        U0 = U[A[:, i] != 0, :]
+        M, _, _ = scipy.linalg.svd(U0)
+        v = M[:, 0]
+
+        A_est[A[:, i] != 0, i] = v / np.sum(v) * np.sum(A[:, i] != 0)
 
     P_est = np.linalg.lstsq(A_est, E_approx, rcond=None)[0]
 

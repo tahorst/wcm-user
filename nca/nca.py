@@ -398,17 +398,17 @@ def iterative_sub_nca(
             max_divisions: the maximum number of times to subdivide the A matrix
 
         Returns:
-            divided_E: reduced E matrices associated with each sub network,
+            divided_E: reduced E matrices associated with each subnetwork,
                 only include genes produced by corresponding A mapping
-            divided_A: reduced A matrices assocaited with each sub network,
+            divided_A: reduced A matrices assocaited with each subnetwork,
                 only include genes and TFs with relationships that satisfy
                 the NCA criteria
             divided_tfs: TF IDs associated withe the columns of each reduced
-                A matrix for each sub network
+                A matrix for each subnetwork
             common_genes: gene indices (rows in original E and A matrices)
-                shared with this sub network and any others
+                shared with this subnetwork and any others
             unique_genes: gene indices (rows in original E and A matrices)
-                unique to each sub network and not shared with any others
+                unique to each subnetwork and not shared with any others
         """
 
         E_divided = []
@@ -457,12 +457,41 @@ def iterative_sub_nca(
         return A_hat, P_hat
 
     def assemble_network(
+            n_genes: int,
+            n_tfs: int,
             A_hat: List[np.ndarray],
             P_hat: List[np.ndarray],
+            common_genes: List[Set[int]],
+            unique_genes: List[Set[int]],
             ) -> (np.ndarray, np.ndarray):
-        """Assemble subnetwork solutions into combined A and P solutions (eq. 8)."""
-        # TODO: implement
-        return A_hat[0], P_hat[0]
+        """
+        Assemble subnetwork solutions into combined A and P solutions (eq. 8).
+
+        Args:
+            n_genes: number of genes in the reconstructed A matrix
+            n_tfs: number of TFs in the reconstructed A matrix
+            A_hat: estimated A for each subnetwork
+            P_hat: estimated P for each subnetwork
+            common_genes: indices of common genes shared with other subnetworks
+                for each subnetwork
+            unique_genes: indices of unique genes to each subnetwork
+
+        Returns:
+            A_est: assembled A matrix to estimate all subnetworks
+            P_est: assembled P matrix to estimate all subnetworks
+        """
+
+        A_est = np.zeros((n_genes, n_tfs))
+        last_col = 0
+        for sub_A, common, unique in zip(A_hat, common_genes, unique_genes):
+            gene_idx = np.sort(np.hstack((np.array(list(common)), np.array(list(unique))))).astype(int)
+            start_col = last_col
+            last_col = start_col + sub_A.shape[1]
+            A_est[gene_idx, start_col:last_col] = sub_A
+
+        P_est = np.vstack(P_hat)
+
+        return A_est, P_est
 
     def update_E(
             E_divided: List[np.ndarray],
@@ -481,11 +510,14 @@ def iterative_sub_nca(
     attenuation = 0.1  # between 0 and 1
 
     E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs)
+    new_tfs = np.array([tf for tfs in tfs_divided for tf in tfs])
+    n_genes = A.shape[0]
+    n_tfs = len(new_tfs)
 
     for it in range(n_iters):
         # Solve for A and P in subnetworks and overall problem
         A_hat, P_hat = solve_networks(method, E_divided, A_divided)
-        A_est, P_est = assemble_network(A_hat, P_hat)
+        A_est, P_est = assemble_network(n_genes, n_tfs, A_hat, P_hat, common_genes, unique_genes)
 
         # Check if solution has converged
         error = np.linalg.norm(E - A_est.dot(P_est))

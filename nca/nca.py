@@ -4,7 +4,7 @@
 NCA methods to use to solve E = AP given E and specified network connections in A.
 """
 
-from typing import Callable, List, Tuple
+from typing import Callable, List, Set, Tuple
 
 import numpy as np
 import scipy.linalg
@@ -365,6 +365,7 @@ def iterative_sub_nca(
         method: Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]],
         E: np.ndarray,
         A: np.ndarray,
+        tfs: np.ndarray,
         ) -> (np.ndarray, np.ndarray):
     """
     Iterative sub-network component analysis method applied to any NCA method
@@ -374,6 +375,7 @@ def iterative_sub_nca(
         method: NCA method implemented in this file that takes E and A as args
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
+        tfs: IDs of transcription factors for each column in A
 
     Returns:
         A_est: estimated A based fit to data (n genes, o TFs)
@@ -383,10 +385,59 @@ def iterative_sub_nca(
     def divide_network(
             E: np.ndarray,
             A: np.ndarray,
-            ) -> (List[np.ndarray], List[np.ndarray]):
-        """Divide the network into subnetworks with unique and common TFs (eq. 3 and 4)."""
-        # TODO: implement
-        return [E], [A]
+            tfs: np.ndarray,
+            max_divisions: int = 2,
+            ) -> (List[np.ndarray], List[np.ndarray], List[np.ndarray], List[Set[int]], List[Set[int]]):
+        """
+        Divide the network into subnetworks with unique and common TFs (eq. 3 and 4).
+
+        Args:
+            E: original expression matrix (n genes, o TFs)
+            A: original network topology mapping (o TFs, m conditions)
+            tfs: original TF IDs corresponding to columns of A
+            max_divisions: the maximum number of times to subdivide the A matrix
+
+        Returns:
+            divided_E: reduced E matrices associated with each sub network,
+                only include genes produced by corresponding A mapping
+            divided_A: reduced A matrices assocaited with each sub network,
+                only include genes and TFs with relationships that satisfy
+                the NCA criteria
+            divided_tfs: TF IDs associated withe the columns of each reduced
+                A matrix for each sub network
+            common_genes: gene indices (rows in original E and A matrices)
+                shared with this sub network and any others
+            unique_genes: gene indices (rows in original E and A matrices)
+                unique to each sub network and not shared with any others
+        """
+
+        E_divided = []
+        A_divided = []
+        tfs_divided = []
+        divided_genes = []
+        common_genes = []
+        unique_genes = []
+
+        n_divisions = 0
+        removed_tfs = set(tfs)
+        while removed_tfs and n_divisions < max_divisions:
+            n_divisions += 1
+            reduced_A = np.array([tf in removed_tfs for tf in tfs])
+            Ai, tfsi = nca_criteria_check(A[:, reduced_A], tfs[reduced_A])
+            removed_tfs = removed_tfs - set(tfsi)
+
+            regulated_genes = np.unique(np.where(Ai)[0])
+            E_divided.append(E[regulated_genes, :])
+            A_divided.append(Ai[regulated_genes, :])
+            tfs_divided.append(tfsi)
+            divided_genes.append(set(regulated_genes))
+
+        for i, genes in enumerate(divided_genes):
+            others = {g for j, genes in enumerate(divided_genes) if i != j for g in genes}
+            common_genes.append(genes.intersection(others))
+            unique_genes.append(genes.difference(others))
+
+        return E_divided, A_divided, tfs_divided, common_genes, unique_genes
 
     def solve_networks(
             method: Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]],
@@ -429,7 +480,7 @@ def iterative_sub_nca(
     error_threshold = 1e-5
     attenuation = 0.1  # between 0 and 1
 
-    E_divided, A_divided = divide_network(E, A)
+    E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs)
 
     for it in range(n_iters):
         # Solve for A and P in subnetworks and overall problem

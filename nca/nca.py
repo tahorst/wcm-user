@@ -4,6 +4,8 @@
 NCA methods to use to solve E = AP given E and specified network connections in A.
 """
 
+from typing import Callable, List, Tuple
+
 import numpy as np
 import scipy.linalg
 import scipy.optimize
@@ -356,5 +358,91 @@ def constrained_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
 
     # Solve for P
     P_est = np.linalg.lstsq(A_est, E, rcond=None)[0]
+
+    return A_est, P_est
+
+def iterative_sub_nca(
+        method: Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]],
+        E: np.ndarray,
+        A: np.ndarray,
+        ) -> (np.ndarray, np.ndarray):
+    """
+    Iterative sub-network component analysis method applied to any NCA method
+    above. Based on method in Jayavelu et al. BMC Bioinformatics. 2015.
+
+    Args:
+        method: NCA method implemented in this file that takes E and A as args
+        E: data to solve NCA for (n genes, m conditions)
+        A: network connectivity (n genes, o TFs)
+
+    Returns:
+        A_est: estimated A based fit to data (n genes, o TFs)
+        P_est: estimated P based fit to data (o TFs, m conditions)
+    """
+
+    def divide_network(
+            E: np.ndarray,
+            A: np.ndarray,
+            ) -> (List[np.ndarray], List[np.ndarray]):
+        """Divide the network into subnetworks with unique and common TFs (eq. 3 and 4)."""
+        # TODO: implement
+        return [E], [A]
+
+    def solve_networks(
+            method: Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]],
+            E_divided: List[np.ndarray],
+            A_divided: List[np.ndarray],
+            ) -> (List[np.ndarray], List[np.ndarray]):
+        """Solve the divided networks with the given method."""
+
+        A_hat = []
+        P_hat = []
+
+        for E, A in zip(E_divided, A_divided):
+            A_est, P_est = method(E, A)
+            A_hat.append(A_est)
+            P_hat.append(P_est)
+
+        return A_hat, P_hat
+
+    def assemble_network(
+            A_hat: List[np.ndarray],
+            P_hat: List[np.ndarray],
+            ) -> (np.ndarray, np.ndarray):
+        """Assemble subnetwork solutions into combined A and P solutions (eq. 8)."""
+        # TODO: implement
+        return A_hat[0], P_hat[0]
+
+    def update_E(
+            E_divided: List[np.ndarray],
+            A_hat: List[np.ndarray],
+            P_hat: List[np.ndarray],
+            attentuation: float,
+            ) -> List[np.ndarray]:
+        """Update E submatrices for the next iteration (eq. 11)."""
+        # TODO: implement
+        return E_divided
+
+    # Parameters for approach
+    n_iters = 100
+    old_error = np.inf
+    error_threshold = 1e-5
+    attenuation = 0.1  # between 0 and 1
+
+    E_divided, A_divided = divide_network(E, A)
+
+    for it in range(n_iters):
+        # Solve for A and P in subnetworks and overall problem
+        A_hat, P_hat = solve_networks(method, E_divided, A_divided)
+        A_est, P_est = assemble_network(A_hat, P_hat)
+
+        # Check if solution has converged
+        error = np.linalg.norm(E - A_est.dot(P_est))
+        if error - old_error < error_threshold:
+            break
+        old_error = error
+
+        # Update E_divided matrices
+        E_divided = update_E(E_divided, A_hat, P_hat, attenuation)
 
     return A_est, P_est

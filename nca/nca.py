@@ -398,12 +398,12 @@ def iterative_sub_nca(
             max_divisions: the maximum number of times to subdivide the A matrix
 
         Returns:
-            divided_E: reduced E matrices associated with each subnetwork,
+            E_divided: reduced E matrices associated with each subnetwork,
                 only include genes produced by corresponding A mapping
-            divided_A: reduced A matrices assocaited with each subnetwork,
+            A_divided: reduced A matrices assocaited with each subnetwork,
                 only include genes and TFs with relationships that satisfy
                 the NCA criteria
-            divided_tfs: TF IDs associated withe the columns of each reduced
+            tfs_divided: TF IDs associated withe the columns of each reduced
                 A matrix for each subnetwork
             common_genes: gene indices (rows in original E and A matrices)
                 shared with this subnetwork and any others
@@ -494,20 +494,72 @@ def iterative_sub_nca(
         return A_est, P_est
 
     def update_E(
-            E_divided: List[np.ndarray],
+            E: np.ndarray,
             A_hat: List[np.ndarray],
             P_hat: List[np.ndarray],
-            attentuation: float,
+            common_genes: List[Set[int]],
+            unique_genes: List[Set[int]],
+            attenuation: float,
             ) -> List[np.ndarray]:
-        """Update E submatrices for the next iteration (eq. 11)."""
-        # TODO: implement
+        """
+        Update E submatrices for the next iteration (eq. 11).
+
+        Args:
+            E: original expression matrix
+            A_hat: estimated A for each subnetwork
+            P_hat: estimated P for each subnetwork
+            common_genes: indices of common genes shared with other subnetworks
+                for each subnetwork
+            unique_genes: indices of unique genes to each subnetwork
+            attenuation: fraction to multiply shared predictions by to reduce
+                E for each subnetwork
+
+        Returns:
+            E_divided: updated E matrices for each subnetwork by subtracting out
+                contributions from other subnetworks to shared components
+        """
+
+        # Contributions from each subnetwork
+        Ts = []
+        for A, P in zip(A_hat, P_hat):
+            Ts.append(A.dot(P))
+
+        # Update each subnetwork's E matrix with contributions from other subnetworks
+        E_divided = []
+        for i, (common, unique) in enumerate(zip(common_genes, unique_genes)):
+            gene_idx = np.sort(np.hstack((np.array(list(common)), np.array(list(unique))))).astype(int)
+            new_E = E.copy()[gene_idx, :]
+
+            # Map original index (global among all subnetworks) to reduced index (row in E)
+            update_idx = {original_idx: reduced_idx
+                for reduced_idx, original_idx in enumerate(gene_idx)
+                if original_idx in common}
+
+            # Iterate through every other subnetwork to update common contributions
+            for j, (T, T_common, T_unique) in enumerate(zip(Ts, common_genes, unique_genes)):
+                if i == j:
+                    continue
+
+                T_idx = np.sort(np.hstack((np.array(list(T_common)), np.array(list(T_unique))))).astype(int)
+                for row, idx in zip(T, T_idx):
+                    if idx in common:
+                        row[row < 0] = 0
+                        new_E[update_idx[idx], :] -= attenuation * row
+
+            # Prevent negative values for better stability since this is not biologically possible
+            if np.any(new_E < 0):
+                print('Values in new_E adjusted to 0 from negative values.')
+                new_E[new_E < 0] = 0
+
+            E_divided.append(new_E)
+
         return E_divided
 
     # Parameters for approach
     n_iters = 100
     old_error = np.inf
     error_threshold = 1e-5
-    attenuation = 0.1  # between 0 and 1
+    attenuation = 0.5  # between 0 and 1
 
     E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs)
     new_tfs = np.array([tf for tfs in tfs_divided for tf in tfs])
@@ -520,12 +572,16 @@ def iterative_sub_nca(
         A_est, P_est = assemble_network(n_genes, n_tfs, A_hat, P_hat, common_genes, unique_genes)
 
         # Check if solution has converged
-        error = np.linalg.norm(E - A_est.dot(P_est))
-        if error - old_error < error_threshold:
+        E_est = A_est.dot(P_est)
+        predicted_mask = E_est.sum(1) != 0
+        error = np.linalg.norm(E[predicted_mask, :] - E_est[predicted_mask, :])
+        # TODO: better criteria for exiting
+        if np.abs(error - old_error) < error_threshold:
             break
         old_error = error
+        print(f'Error: {error:.3f}')
 
         # Update E_divided matrices
-        E_divided = update_E(E_divided, A_hat, P_hat, attenuation)
+        E_divided = update_E(E, A_hat, P_hat, common_genes, unique_genes, attenuation)
 
-    return A_est, P_est
+    return A_est, P_est, new_tfs

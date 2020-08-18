@@ -604,7 +604,7 @@ if __name__ == '__main__':
         # Solve NCA problem
         nca_method = getattr(nca, args.method)
         if args.iterative:
-            A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs)
+            A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs, verbose=args.verbose)
         else:
             A, P = nca_method(seq_data, initial_tf_map)
 

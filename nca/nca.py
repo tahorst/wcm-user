@@ -366,6 +366,7 @@ def iterative_sub_nca(
         E: np.ndarray,
         A: np.ndarray,
         tfs: np.ndarray,
+        verbose: bool = False,
         ) -> (np.ndarray, np.ndarray):
     """
     Iterative sub-network component analysis method applied to any NCA method
@@ -376,6 +377,7 @@ def iterative_sub_nca(
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
         tfs: IDs of transcription factors for each column in A
+        verbose: if True, displays additional information
 
     Returns:
         A_est: estimated A based fit to data (n genes, o TFs)
@@ -386,6 +388,7 @@ def iterative_sub_nca(
             E: np.ndarray,
             A: np.ndarray,
             tfs: np.ndarray,
+            verbose: bool,
             max_divisions: int = 2,
             ) -> (List[np.ndarray], List[np.ndarray], List[np.ndarray], List[Set[int]], List[Set[int]]):
         """
@@ -423,7 +426,7 @@ def iterative_sub_nca(
         while removed_tfs and n_divisions < max_divisions:
             n_divisions += 1
             reduced_A = np.array([tf in removed_tfs for tf in tfs])
-            Ai, tfsi = nca_criteria_check(A[:, reduced_A], tfs[reduced_A])
+            Ai, tfsi = nca_criteria_check(A[:, reduced_A], tfs[reduced_A], verbose=verbose)
             removed_tfs = removed_tfs - set(tfsi)
 
             regulated_genes = np.unique(np.where(Ai)[0])
@@ -561,7 +564,7 @@ def iterative_sub_nca(
     error_threshold = 1e-5
     attenuation = 0.5  # between 0 and 1
 
-    E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs)
+    E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs, verbose)
     new_tfs = np.array([tf for tfs in tfs_divided for tf in tfs])
     n_genes = A.shape[0]
     n_tfs = len(new_tfs)
@@ -579,7 +582,7 @@ def iterative_sub_nca(
         if np.abs(error - old_error) < error_threshold:
             break
         old_error = error
-        print(f'Error: {error:.3f}')
+        print(f'Iteration {it} error: {error:.3f}')
 
         # Update E_divided matrices
         E_divided = update_E(E, A_hat, P_hat, common_genes, unique_genes, attenuation)

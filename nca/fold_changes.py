@@ -547,6 +547,9 @@ def parse_args() -> argparse.Namespace:
         choices=nca.METHODS,
         default=default_nca,
         help=f'NCA method to use, defined in nca.py (default: {default_nca}).')
+    parser.add_argument('-i', '--iterative',
+        action='store_true',
+        help='If set, performs iterative sub-network component analysis.')
 
     return parser.parse_args()
 
@@ -579,7 +582,9 @@ if __name__ == '__main__':
         if args.force or no_cache:
             print('Creating initial network mapping...')
             initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
-            initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
+
+            if not args.iterative:
+                initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
         else:
             print('Loading cached initial network mapping...')
             initial_tf_map = np.load(network_cache_file)
@@ -597,7 +602,11 @@ if __name__ == '__main__':
             tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
 
         # Solve NCA problem
-        A, P = getattr(nca, args.method)(seq_data, initial_tf_map)
+        nca_method = getattr(nca, args.method)
+        if args.iterative:
+            A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs)
+        else:
+            A, P = nca_method(seq_data, initial_tf_map)
 
         # Save results
         save_regulation(A, P, genes, tfs, output_dir)

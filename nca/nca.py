@@ -82,23 +82,24 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
     if rank < n_cols:
         if verbose:
             print('A matrix is not full rank because of TFs:')
-        dependent = []
+        min_entries = np.inf
+        removed_tf = None
+        mask = np.ones(n_cols, bool)
         for i in range(n_cols):
-            mask = np.ones(n_cols, bool)
-            mask[i] = False
-            sub_rank = nan_rank(A[:, mask])
+            col_mask = np.ones(n_cols, bool)
+            col_mask[i] = False
+            sub_rank = nan_rank(A[:, col_mask])
             if sub_rank == rank:
-                dependent.append(i)
+                n_entries = np.sum(A[:, i] != 0)
+                if n_entries < min_entries:
+                    mask = col_mask
+                    min_entries = n_entries
+                    removed_tf = tfs[i]
                 if verbose:
                     print(f'\t{tfs[i]}')
+        if verbose:
+            print(f'\tRemoved {removed_tf}')
 
-        # Check for dependent columns with LU decomposition and remove
-        # _, _, U = scipy.linalg.lu(A)
-        # dependent = np.array([i for i in range(A.shape[1]) if not np.any(U[i, :])])
-        # TODO: better way of checking this or combine dependent columns into one to not lose all info
-        dependent = np.array(dependent)
-        mask = np.ones(n_cols, bool)
-        mask[dependent] = False
         A, tfs = nca_criteria_check(A[:, mask], tfs[mask], verbose=verbose)
         rank = nan_rank(A)
         n_cols = A.shape[1]
@@ -128,19 +129,24 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
                 if verbose:
                     print('Reduced matrix is not full rank because of TFs:')
                 rows_removed = A[row_mask, :]
-                dependent = []
+                min_entries = np.inf
+                removed_tf = None
+                mask = np.ones(n_cols, bool)
                 for j in range(n_cols):
                     col_mask = np.ones(n_cols, bool)
                     col_mask[j] = False
                     new_rank = nan_rank(rows_removed[:, col_mask])
                     if new_rank == sub_rank:
-                        dependent.append(j)
+                        n_entries = np.sum(A[:, j] != 0)
+                        if n_entries < min_entries:
+                            mask = col_mask
+                            min_entries = n_entries
+                            removed_tf = tfs[j]
                         if verbose:
                             print(f'\t{tfs[j]}')
+                if verbose:
+                    print(f'\tRemoved {removed_tf}')
 
-                dependent = np.array(dependent)
-                mask = np.ones(n_cols, bool)
-                mask[dependent] = False
                 A, tfs = nca_criteria_check(A[:, mask], tfs[mask], verbose=verbose)
             break
 

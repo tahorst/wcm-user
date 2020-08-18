@@ -210,7 +210,7 @@ def robust_nca(E: np.ndarray, A: np.ndarray) -> (np.ndarray, np.ndarray):
 
     print('Solving with ROBNCA...')
     n_tfs = A.shape[1]
-    A_est = A.copy()
+    A_est = A.astype(float)
     outliers = np.zeros_like(E)
     zero_mask = A == 0
     A_est[~np.isfinite(A_est)] = 1

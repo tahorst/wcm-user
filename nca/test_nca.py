@@ -82,10 +82,12 @@ def test_nca(method: str) -> None:
 
 if __name__ == '__main__':
     # TODO: create toy model to generate data to have exact fold change targets
-    # Compare choice between linear and log2 input expression data and
-    # adding a general expression "TF" vs not - log2 and general are best
+    # Compare choice between linear, log2 and relative log2 input expression data
+    # and adding a general expression "TF" vs not - log2 and general are best
     ## No general expression column with log2 expression input
-    Ae, Pe = nca.robust_nca(TEST_EXPRESSION, TEST_TOPOLOGY[:, :-1], verbose=False)
+    E = TEST_EXPRESSION
+    A = TEST_TOPOLOGY[:, :-1]
+    Ae, Pe = nca.robust_nca(E, A, verbose=False)
     with np.printoptions(precision=2, suppress=True):
         print('Results with log2 expression input without general expression')
         print('- high fold changes (in A)')
@@ -96,7 +98,9 @@ if __name__ == '__main__':
         print(f'error: {np.linalg.norm(2**TEST_EXPRESSION - 2**(Ae.dot(Pe))):.3f}')
 
     ## No general expression column with linear expression input
-    Ae, Pe = nca.robust_nca(2**TEST_EXPRESSION, TEST_TOPOLOGY[:, :-1], verbose=False)
+    E = 2**TEST_EXPRESSION
+    A = TEST_TOPOLOGY[:, :-1]
+    Ae, Pe = nca.robust_nca(E, A, verbose=False)
     with np.printoptions(precision=2, suppress=True):
         print('\nResults with linear expression input without general expression')
         print('- reasonable fold changes')
@@ -106,7 +110,9 @@ if __name__ == '__main__':
         print(f'error: {np.linalg.norm(2**TEST_EXPRESSION - Ae.dot(Pe)):.3f}')
 
     ## Added general expression column (all 1s) with linear expression input
-    Ae, Pe = nca.robust_nca(2**TEST_EXPRESSION, TEST_TOPOLOGY, verbose=False)
+    E = 2**TEST_EXPRESSION
+    A = TEST_TOPOLOGY
+    Ae, Pe = nca.robust_nca(E, A, verbose=False)
     with np.printoptions(precision=2, suppress=True):
         print('\nResults with linear expression input and general expression')
         print('- better fold changes')
@@ -116,14 +122,30 @@ if __name__ == '__main__':
         print(f'P =\n{Pe}')
         print(f'error: {np.linalg.norm(2**TEST_EXPRESSION - Ae.dot(Pe)):.3f}')
 
+    ## Added general expression column (all 1s) with relative expression input
+    ## Similar to Liao PNAS 2003 eq 7 implementation
+    E = TEST_EXPRESSION - TEST_EXPRESSION.mean(1)
+    A = TEST_TOPOLOGY
+    Ae, Pe = nca.robust_nca(E, A, verbose=False)
+    with np.printoptions(precision=2, suppress=True):
+        print('\nResults with relative expression input and general expression:')
+        print('- similar results as absolute log2 input')
+        print(f'A =\n{Ae}')
+        print(f'P =\n{Pe}')
+        print(f'error: {np.linalg.norm(2**TEST_EXPRESSION - 2**(Ae.dot(Pe) + TEST_EXPRESSION.mean(1))):.3f}')
+
     ## Added general expression column (all 1s) with log2 expression input
-    Ae, Pe = nca.robust_nca(TEST_EXPRESSION, TEST_TOPOLOGY, verbose=False)
+    E = TEST_EXPRESSION
+    A = TEST_TOPOLOGY
+    Ae, Pe = nca.robust_nca(E, A, verbose=False)
     with np.printoptions(precision=2, suppress=True):
         print('\nResults with log2 expression input and general expression:')
         print('- best error and consistency')
         print(f'A =\n{Ae}')
         print(f'P =\n{Pe}')
         print(f'error: {np.linalg.norm(2**TEST_EXPRESSION - 2**(Ae.dot(Pe))):.3f}')
+
+
 
     # Test all methods on example data from Chang to compare output plots to paper
     print('\nTesting all methods on Chang data')

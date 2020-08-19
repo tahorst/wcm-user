@@ -329,7 +329,7 @@ def add_global_expression(
         - add noisy elements
     """
 
-    tfs = np.hstack((tfs, np.array(['constituitive', 'regulated'])))
+    tfs = np.hstack((np.array(['constituitive', 'regulated']), tfs))
 
     if mapping is not None:
         n_genes = mapping.shape[0]
@@ -338,7 +338,7 @@ def add_global_expression(
         constituitive[no_regulation] = 1
         regulated = np.zeros((n_genes, 1))
         regulated[~no_regulation] = 1
-        mapping = np.hstack((mapping, constituitive, regulated))
+        mapping = np.hstack((constituitive, regulated, mapping))
 
     return tfs, mapping
 

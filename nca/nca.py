@@ -4,6 +4,7 @@
 NCA methods to use to solve E = AP given E and specified network connections in A.
 """
 
+import multiprocessing
 from typing import Callable, List, Set, Tuple
 
 import numpy as np
@@ -461,16 +462,32 @@ def iterative_sub_nca(
             E_divided: List[np.ndarray],
             A_divided: List[np.ndarray],
             verbose: bool,
+            cpus: int = 8
             ) -> (List[np.ndarray], List[np.ndarray]):
         """Solve the divided networks with the given method."""
 
         A_hat = []
         P_hat = []
 
-        for E, A in zip(E_divided, A_divided):
-            A_est, P_est = method(E, A, verbose=verbose)
-            A_hat.append(A_est)
-            P_hat.append(P_est)
+        cpus = min(cpus, len(E_divided))
+        if cpus > 1:
+            pool = multiprocessing.Pool(processes=cpus)
+            results = [
+                pool.apply_async(method, (E, A), kwds={'verbose': verbose})
+                for E, A in zip(E_divided, A_divided)
+                ]
+            pool.close()
+            pool.join()
+
+            for result in results:
+                A_est, P_est = result.get()
+                A_hat.append(A_est)
+                P_hat.append(P_est)
+        else:
+            for E, A in zip(E_divided, A_divided):
+                A_est, P_est = method(E, A, verbose=verbose)
+                A_hat.append(A_est)
+                P_hat.append(P_est)
 
         return A_hat, P_hat
 

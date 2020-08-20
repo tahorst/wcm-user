@@ -404,7 +404,7 @@ def iterative_sub_nca(
             A: np.ndarray,
             tfs: np.ndarray,
             verbose: bool,
-            max_divisions: int = 2,
+            max_divisions: int = 5,
             ) -> (List[np.ndarray], List[np.ndarray], List[np.ndarray], List[Set[int]], List[Set[int]]):
         """
         Divide the network into subnetworks with unique and common TFs (eq. 3 and 4).
@@ -441,7 +441,11 @@ def iterative_sub_nca(
         while removed_tfs and n_divisions < max_divisions:
             n_divisions += 1
             reduced_A = np.array([tf in removed_tfs for tf in tfs])
-            Ai, tfsi = nca_criteria_check(A[:, reduced_A], tfs[reduced_A], verbose=verbose)
+            try:
+                Ai, tfsi = nca_criteria_check(A[:, reduced_A], tfs[reduced_A], verbose=verbose)
+            except Exception as e:
+                print(f'Warning: could only make {len(E_divided)} divisions')
+                break
             removed_tfs = removed_tfs - set(tfsi)
 
             regulated_genes = np.unique(np.where(Ai)[0])
@@ -462,7 +466,7 @@ def iterative_sub_nca(
             E_divided: List[np.ndarray],
             A_divided: List[np.ndarray],
             verbose: bool,
-            cpus: int = 8
+            cpus: int = 5,
             ) -> (List[np.ndarray], List[np.ndarray]):
         """Solve the divided networks with the given method."""
 
@@ -578,7 +582,7 @@ def iterative_sub_nca(
                 T_idx = np.sort(np.hstack((np.array(list(T_common)), np.array(list(T_unique))))).astype(int)
                 for row, idx in zip(T, T_idx):
                     if idx in common:
-                        row[row < 0] = 0
+                        # TODO: handle values <0?
                         new_E[update_idx[idx], :] -= attenuation * row
 
             # Prevent negative values for better stability since this is not biologically possible
@@ -592,9 +596,11 @@ def iterative_sub_nca(
 
     # Parameters for approach
     n_iters = 100
-    old_error = np.inf
     error_threshold = 1e-5
-    attenuation = 0.5  # between 0 and 1
+    old_error = np.inf
+    best_error = np.inf
+    best_A = None
+    best_P = None
 
     E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs, verbose)
     new_tfs = np.array([tf for tfs in tfs_divided for tf in tfs])
@@ -603,20 +609,35 @@ def iterative_sub_nca(
 
     for it in range(n_iters):
         # Solve for A and P in subnetworks and overall problem
-        A_hat, P_hat = solve_networks(method, E_divided, A_divided, verbose)
-        A_est, P_est = assemble_network(n_genes, n_tfs, A_hat, P_hat, common_genes, unique_genes)
+        try:
+            A_hat, P_hat = solve_networks(method, E_divided, A_divided, verbose)
+            A_est, P_est = assemble_network(n_genes, n_tfs, A_hat, P_hat, common_genes, unique_genes)
+        except Exception as e:
+            print(f'{type(e).__name__} while running ISNCA: {e.args[0]}')
+            break
+        except KeyboardInterrupt:
+            break
 
         # Check if solution has converged
         E_est = A_est.dot(P_est)
         predicted_mask = E_est.sum(1) != 0
         error = np.linalg.norm(E[predicted_mask, :] - E_est[predicted_mask, :])
         # TODO: better criteria for exiting
-        if np.abs(error - old_error) < error_threshold:
+        if np.abs(error - old_error) / error < error_threshold:
             break
         old_error = error
         print(f'Iteration {it} error: {error:.3f}')
 
+        # Check if this is the best solution so far and store results
+        if error < best_error:
+            best_error = error
+            best_A = A_est.copy()
+            best_P = P_est.copy()
+
         # Update E_divided matrices
+        attenuation = min((it + 1) / (10*len(E_divided)), 1)  # between 0 and 1
         E_divided = update_E(E, A_hat, P_hat, common_genes, unique_genes, attenuation)
 
-    return A_est, P_est, new_tfs
+    print(f'Completed ISNCA with low error of {best_error:.3f}')
+
+    return best_A, best_P, new_tfs

@@ -214,22 +214,20 @@ def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
 
     if verbose:
         print('Solving with ROBNCA...')
+    n_genes = E.shape[0]
     n_tfs = A.shape[1]
     A_est = A.astype(float)
     outliers = np.zeros_like(E)
     zero_mask = A == 0
     A_est[~np.isfinite(A_est)] = 1
 
-    lambda_ = 0.7  # parameter that can be tuned for sparsity to determine outliers
+    lambda_ = 2  # parameter that can be tuned for sparsity to determine outliers
     n_iters = 100
-    status_step = 0.1
+    status_step = 0.05
     next_update = status_step
+    old_error = np.inf
+    error_tolerance = 1e-3
     for it in range(n_iters):
-        if verbose and (it + 1) / n_iters >= next_update:
-            complete = np.floor((it + 1) / n_iters * 100)
-            print(f'{complete:.0f}% complete...')
-            next_update += status_step
-
         # Update S
         X = E - outliers
         S = np.linalg.inv(A_est.T.dot(A_est)).dot(A_est.T).dot(X)
@@ -246,9 +244,22 @@ def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
         A_est[zero_mask] = 0
 
         # Update outliers
-        B = E - A_est.dot(S)
-        norm = np.linalg.norm(B, axis=0)
+        E_est = A_est.dot(S)
+        B = E - E_est
+        norm = np.linalg.norm(B, axis=0) / np.sqrt(n_genes)
         outliers = B * np.fmax(0, (norm - lambda_ / 2)) / norm
+
+        # Calculate error for early break
+        error = np.sqrt(np.mean((B / E) ** 2))
+        if (old_error - error) / error < error_tolerance:
+            print(f'Completed after {it+1} iterations')
+            break
+
+        # Print progress update for certain iterations
+        if verbose and (it + 1) / n_iters >= next_update:
+            complete = np.floor((it + 1) / n_iters * 100)
+            print(f'{complete:.0f}% complete (error = {error:.4f})...')
+            next_update += status_step
 
     P_est = S
     return A_est, P_est

@@ -250,7 +250,8 @@ def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
         outliers = B * np.fmax(0, (norm - lambda_ / 2)) / norm
 
         # Calculate error for early break
-        error = np.sqrt(np.mean((B / E) ** 2))
+        mask = E != 0  # filter to remove inf and nan when expression has been adjusted to 0 in ISNCA
+        error = np.sqrt(np.mean((B[mask] / E[mask]) ** 2))
         if (old_error - error) / error < error_tolerance:
             print(f'Completed after {it+1} iterations')
             break

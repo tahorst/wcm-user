@@ -226,7 +226,7 @@ def fast_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray,
         M, _, _ = scipy.linalg.svd(U0)
         v = M[:, 0]
 
-        A_est[A[:, i] != 0, i] = v / np.sum(v) * np.sum(A[:, i] != 0)
+        A_est[A[:, i] != 0, i] = v / np.sum(np.abs(v)) * np.sum(A[:, i] != 0)
 
     P_est = np.linalg.lstsq(A_est, E_approx, rcond=None)[0]
 

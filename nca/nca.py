@@ -14,7 +14,7 @@ import swiglpk as glp
 
 
 # Function names of the different NCA methods that have been implemented below
-METHODS = ['constrained_nca', 'robust_nca', 'fast_nca']
+METHODS = ['constrained_nca', 'robust_nca', 'fast_nca', 'random_nca']
 
 
 def nonnegative_least_squares(A: np.ndarray, B: np.ndarray) -> np.ndarray:
@@ -152,6 +152,41 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
             break
 
     return A, tfs
+
+def random_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
+    """
+    Randomly assign values to A and solve for P with least squares to
+    determine performance of randomly assigned A.
+
+    Args:
+        E: data to solve NCA for (n genes, m conditions)
+        A: network connectivity (n genes, o TFs)
+        verbose: if True, print progress updates
+
+    Returns:
+        A_est: estimated A based fit to data (n genes, o TFs)
+        P_est: estimated P based fit to data (o TFs, m conditions)
+    """
+
+    if verbose:
+        print('Solving with random A values...')
+
+    # Set entries between -1.1 and -0.9 or 0.9 and 1.1 depending on sign of A
+    A_est = np.sign(A)
+    nonzero_mask = A_est != 0
+    n_nonzero = np.sum(nonzero_mask)
+    A_est[nonzero_mask] += 0.1 * (np.random.rand(n_nonzero) - 0.5)
+
+    # Set ambiguous regulation between -1 and 1
+    not_finite_mask = ~np.isfinite(A_est)
+    n_not_finite = np.sum(not_finite_mask)
+    A_est[not_finite_mask] = np.random.rand(n_not_finite) * 2 - 1
+
+    # Solve for P
+    P_est = np.linalg.lstsq(A_est, E, rcond=None)[0]
+
+    return A_est, P_est
+
 
 def fast_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
     """

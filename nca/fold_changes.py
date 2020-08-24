@@ -437,6 +437,7 @@ def match_statistics(
 def plot_results(
         tf_genes: Dict[str, Dict[str, int]],
         A: np.ndarray,
+        P: np.ndarray,
         genes: np.ndarray,
         tfs: np.ndarray,
         output_dir: str,
@@ -447,15 +448,16 @@ def plot_results(
     Args:
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        P: NCA solution for TF/condition relationship (m TFs, o conditions)
         genes: IDs for each gene corresponding to rows in A (n genes)
         tfs: names of each TF corresponding to columns in A (m TFs)
         output_dir: path to directory to save the plot
     """
 
-    def plot(series, label, color):
+    def plot(ax, series, label, color):
         mean = sum(series) / len(series) if series else 0
-        plt.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
-        plt.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
+        ax.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
+        ax.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
 
     annotated_neg = []
     annotated_pos = []
@@ -498,12 +500,23 @@ def plot_results(
 
     plt.figure()
 
-    plot(annotated_neg, 'Negative', cmap(0))
-    plot(annotated_pos, 'Positive', cmap(1))
-    plot(annotated_amb, 'Ambiguous', cmap(2))
+    ax = plt.subplot(3, 1, 1)
+    plot(ax, annotated_neg, 'Negative', cmap(0))
+    plot(ax, annotated_pos, 'Positive', cmap(1))
+    plot(ax, annotated_amb, 'Ambiguous', cmap(2))
 
     plt.legend(fontsize=8, frameon=False)
     plt.tight_layout()
+
+    P_ave = P.mean(1)
+    P_range = P.max(1) - P.min(1)
+
+    ax = plt.subplot(3, 1, 2)
+    ax.hist(P_ave)
+
+    ax = plt.subplot(3, 1, 3)
+    ax.hist(P_range)
+
     plt.savefig(os.path.join(output_dir, HISTOGRAM_FILE))
 
 def parse_args() -> argparse.Namespace:
@@ -625,6 +638,6 @@ if __name__ == '__main__':
 
     # Assess results of analysis
     match_statistics(seq_data, A, P, tf_genes, genes, tfs)
-    plot_results(tf_genes, A, genes, tfs, output_dir)
+    plot_results(tf_genes, A, P, genes, tfs, output_dir)
 
     print(f'Completed in {(time.time() - start) / 60:.1f} min')

@@ -561,6 +561,10 @@ def parse_args() -> argparse.Namespace:
 
     default_nca = nca.METHODS[0]
     default_label = 'nca-results'
+    default_iterative_iterations = 100
+    default_iterative_split = 5
+    default_robust_iterations = 100
+    default_status_update = 0.1
 
     # General options
     parser.add_argument('-l', '--label',
@@ -595,9 +599,29 @@ def parse_args() -> argparse.Namespace:
         choices=nca.METHODS,
         default=default_nca,
         help=f'NCA method to use, defined in nca.py (default: {default_nca}).')
+    parser.add_argument('--status',
+        type=float,
+        default=default_status_update,
+        help=f'Print status update every time this fraction of steps has been completed (default: {default_status_update}).')
+
+    ## ISNCA specific options
     parser.add_argument('-i', '--iterative',
         action='store_true',
         help='If set, performs iterative sub-network component analysis.')
+    parser.add_argument('--iterative-iterations',
+        type=int,
+        default=default_iterative_iterations,
+        help=f'Maximum iterations for iterative sub-network component analysis (default: {default_iterative_iterations}).')
+    parser.add_argument('--iterative-splits',
+        type=int,
+        default=default_iterative_split,
+        help=f'Maximum splits for iterative sub-network component analysis (default: {default_iterative_split}).')
+
+    ## ROBNCA specific options
+    parser.add_argument('--robust-iterations',
+        type=int,
+        default=default_robust_iterations,
+        help=f'Maximum iterations for robust_nca (default: {default_robust_iterations}).')
 
     return parser.parse_args()
 
@@ -652,9 +676,11 @@ if __name__ == '__main__':
         # Solve NCA problem
         nca_method = getattr(nca, args.method)
         if args.iterative:
-            A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs, verbose=args.verbose)
+            A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs,
+                n_iters=args.iterative_iterations, splits=args.iterative_splits,
+                robust_iters=args.robust_iterations, status_step=args.status, verbose=args.verbose)
         else:
-            A, P = nca_method(seq_data, initial_tf_map)
+            A, P = nca_method(seq_data, initial_tf_map, n_iters=args.robust_iterations, status_step=args.status)
 
         # Save results
         save_regulation(A, P, genes, tfs, output_dir)

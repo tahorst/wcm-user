@@ -153,7 +153,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
 
     return A, tfs
 
-def random_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
+def random_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True, **options) -> (np.ndarray, np.ndarray):
     """
     Randomly assign values to A and solve for P with least squares to
     determine performance of randomly assigned A.
@@ -162,6 +162,7 @@ def random_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
         verbose: if True, print progress updates
+        options: solver options that are implemented for other methods
 
     Returns:
         A_est: estimated A based fit to data (n genes, o TFs)
@@ -188,7 +189,11 @@ def random_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
     return A_est, P_est
 
 
-def fast_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
+def fast_nca(E: np.ndarray,
+        A: np.ndarray,
+        verbose: bool = True,
+        status_step: float = 0.1,
+        **options) -> (np.ndarray, np.ndarray):
     """
     Perform FastNCA on dataset E with network connectivity specified by A for the
     problem: E = AP. Based on matlab implementation from Chang et al. 2008.
@@ -198,6 +203,9 @@ def fast_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray,
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
         verbose: if True, print progress updates
+        status_step: print status update every time this fraction of steps has
+            been completed
+        options: solver options that are implemented for other methods
 
     Returns:
         A_est: estimated A based fit to data (n genes, o TFs)
@@ -214,7 +222,6 @@ def fast_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray,
     E_approx = U.dot(S).dot(V)
 
     A_est = np.zeros_like(A)
-    status_step = 0.1
     next_update = status_step
     for i in range(n_cols):
         if verbose and (i + 1) / n_cols >= next_update:
@@ -232,7 +239,14 @@ def fast_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray,
 
     return A_est, P_est
 
-def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
+def robust_nca(
+        E: np.ndarray,
+        A: np.ndarray,
+        verbose: bool = True,
+        status_step: float = 0.1,
+        n_iters: int = 100,
+        error_tolerance = 1e-3,
+        **options) -> (np.ndarray, np.ndarray):
     """
     Perform ROBNCA on dataset E with network connectivity specified by A for the
     problem: E = AP. Based on method in Noor et al. Bioinformatics. 2013.
@@ -241,6 +255,11 @@ def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
         verbose: if True, print progress updates
+        status_step: print status update every time this fraction of steps has
+            been completed
+        n_iters: maximum number of iterations before exiting
+        error_tolerance: difference in error for early stopping
+        options: solver options that are implemented for other methods
 
     Returns:
         A_est: estimated A based fit to data (n genes, o TFs)
@@ -257,11 +276,8 @@ def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
     A_est[~np.isfinite(A_est)] = 1
 
     lambda_ = 2  # parameter that can be tuned for sparsity to determine outliers
-    n_iters = 100
-    status_step = 0.05
     next_update = status_step
     old_error = np.inf
-    error_tolerance = 1e-3
     for it in range(n_iters):
         # Update S
         X = E - outliers
@@ -300,7 +316,7 @@ def robust_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarra
     P_est = S
     return A_est, P_est
 
-def constrained_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.ndarray, np.ndarray):
+def constrained_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True, **options) -> (np.ndarray, np.ndarray):
     """
     Perform constrained NCA on dataset E with network connectivity specified by
     A for the problem: E = AP. Based on method in Chang et al. ICA. 2009.
@@ -313,6 +329,7 @@ def constrained_nca(E: np.ndarray, A: np.ndarray, verbose: bool = True) -> (np.n
             sign constraint for problem solution (eg. positive entries will
             stay positive, negative entries will stay negative)
         verbose: if True, print progress updates
+        options: solver options that are implemented for other methods
 
     Returns:
         A_est: estimated A based fit to data (n genes, o TFs)
@@ -428,6 +445,10 @@ def iterative_sub_nca(
         E: np.ndarray,
         A: np.ndarray,
         tfs: np.ndarray,
+        n_iters: int = 100,
+        splits: int = 2,
+        robust_iters: int = 1,
+        status_step: float = 0.1,
         verbose: bool = False,
         ) -> (np.ndarray, np.ndarray):
     """
@@ -439,6 +460,11 @@ def iterative_sub_nca(
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
         tfs: IDs of transcription factors for each column in A
+        n_iters: maximum number of iterations to perform
+        splits: maximum number of sub-networks to split into
+        robust_iters: maximum number of iterations for robust_nca
+        status_step: print status update every time this fraction of steps has
+            been completed
         verbose: if True, displays additional information
 
     Returns:
@@ -451,7 +477,7 @@ def iterative_sub_nca(
             A: np.ndarray,
             tfs: np.ndarray,
             verbose: bool,
-            max_divisions: int = 5,
+            max_divisions: int,
             ) -> (List[np.ndarray], List[np.ndarray], List[np.ndarray], List[Set[int]], List[Set[int]]):
         """
         Divide the network into subnetworks with unique and common TFs (eq. 3 and 4).
@@ -512,9 +538,8 @@ def iterative_sub_nca(
             method: Callable[[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]],
             E_divided: List[np.ndarray],
             A_divided: List[np.ndarray],
-            verbose: bool,
-            cpus: int = 5,
-            ) -> (List[np.ndarray], List[np.ndarray]):
+            cpus: int,
+            **kwargs) -> (List[np.ndarray], List[np.ndarray]):
         """Solve the divided networks with the given method."""
 
         A_hat = []
@@ -524,7 +549,7 @@ def iterative_sub_nca(
         if cpus > 1:
             pool = multiprocessing.Pool(processes=cpus)
             results = [
-                pool.apply_async(method, (E, A), kwds={'verbose': verbose})
+                pool.apply_async(method, (E, A), kwds=kwargs)
                 for E, A in zip(E_divided, A_divided)
                 ]
             pool.close()
@@ -536,7 +561,7 @@ def iterative_sub_nca(
                 P_hat.append(P_est)
         else:
             for E, A in zip(E_divided, A_divided):
-                A_est, P_est = method(E, A, verbose=verbose)
+                A_est, P_est = method(E, A, **kwargs)
                 A_hat.append(A_est)
                 P_hat.append(P_est)
 
@@ -642,14 +667,13 @@ def iterative_sub_nca(
         return E_divided
 
     # Parameters for approach
-    n_iters = 100
     error_threshold = 1e-5
     old_error = np.inf
     best_error = np.inf
     best_A = None
     best_P = None
 
-    E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs, verbose)
+    E_divided, A_divided, tfs_divided, common_genes, unique_genes = divide_network(E, A, tfs, verbose, splits)
     new_tfs = np.array([tf for tfs in tfs_divided for tf in tfs])
     n_genes = A.shape[0]
     n_tfs = len(new_tfs)
@@ -657,7 +681,8 @@ def iterative_sub_nca(
     for it in range(n_iters):
         # Solve for A and P in subnetworks and overall problem
         try:
-            A_hat, P_hat = solve_networks(method, E_divided, A_divided, verbose)
+            A_hat, P_hat = solve_networks(method, E_divided, A_divided, splits,
+                n_iters=robust_iters, status_step=status_step, verbose=verbose)
             A_est, P_est = assemble_network(n_genes, n_tfs, A_hat, P_hat, common_genes, unique_genes)
         except Exception as e:
             print(f'{type(e).__name__} while running ISNCA: {e.args[0]}')

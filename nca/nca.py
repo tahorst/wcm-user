@@ -302,7 +302,7 @@ def robust_nca(
 
         # Calculate error for early break
         mask = E != 0  # filter to remove inf and nan when expression has been adjusted to 0 in ISNCA
-        error = np.sqrt(np.mean((B[mask] / E[mask]) ** 2))
+        error = np.sqrt(np.mean((B[mask] / E[mask])**2))
         if (old_error - error) / error < error_tolerance:
             print(f'Completed after {it+1} iterations')
             break

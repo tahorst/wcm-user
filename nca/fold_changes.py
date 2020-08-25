@@ -347,9 +347,9 @@ def match_statistics(
         E: np.ndarray,
         A: np.ndarray,
         P: np.ndarray,
+        tfs: np.ndarray,
         tf_genes: Dict[str, Dict[str, int]],
         genes: np.ndarray,
-        tfs: np.ndarray,
         ) -> None:
     """
     Assess the accuracy of NCA results by printing statistics about how well
@@ -359,9 +359,9 @@ def match_statistics(
         E: original expression data (n genes, m conditions)
         A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
         P: NCA solution for TF activity in each condition (o TFs, m conditions)
+        tfs: names of each TF corresponding to columns in A (m TFs)
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
         genes: IDs for each gene corresponding to rows in A (n genes)
-        tfs: names of each TF corresponding to columns in A (m TFs)
 
     TODO:
         - stats for each TF
@@ -677,6 +677,7 @@ if __name__ == '__main__':
         nca_method = getattr(nca, args.method)
         if args.iterative:
             A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs,
+                statistics=match_statistics, statistics_args=(tf_genes, genes),
                 n_iters=args.iterative_iterations, splits=args.iterative_splits,
                 robust_iters=args.robust_iterations, status_step=args.status, verbose=args.verbose)
         else:
@@ -698,7 +699,7 @@ if __name__ == '__main__':
         A, P = load_regulation(args.analysis, genes, tfs)
 
     # Assess results of analysis
-    match_statistics(seq_data, A, P, tf_genes, genes, tfs)
+    match_statistics(seq_data, A, P, tfs, tf_genes, genes)
     plot_results(tf_genes, A, P, genes, tfs, output_dir)
 
     print(f'Completed in {(time.time() - start) / 60:.1f} min')

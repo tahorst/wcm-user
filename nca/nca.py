@@ -5,7 +5,7 @@ NCA methods to use to solve E = AP given E and specified network connections in 
 """
 
 import multiprocessing
-from typing import Callable, List, Set, Tuple
+from typing import Any, Callable, List, Set, Tuple
 
 import numpy as np
 import scipy.linalg
@@ -445,6 +445,8 @@ def iterative_sub_nca(
         E: np.ndarray,
         A: np.ndarray,
         tfs: np.ndarray,
+        statistics: Callable[[np.ndarray, np.ndarray, np.ndarray, np.ndarray, Any], None] = None,
+        statistics_args: Tuple = (),
         n_iters: int = 100,
         splits: int = 2,
         robust_iters: int = 1,
@@ -460,6 +462,10 @@ def iterative_sub_nca(
         E: data to solve NCA for (n genes, m conditions)
         A: network connectivity (n genes, o TFs)
         tfs: IDs of transcription factors for each column in A
+        statistics: function to provide match statistics at each iteration,
+            needs to take E, A, P, tfs as the first args
+        statistics_args: args to the statistics function that are not determined
+            in this method
         n_iters: maximum number of iterations to perform
         splits: maximum number of sub-networks to split into
         robust_iters: maximum number of iterations for robust_nca
@@ -699,6 +705,10 @@ def iterative_sub_nca(
             break
         old_error = error
         print(f'Iteration {it} error: {error:.3f}')
+
+        # Print statistics for this iteration
+        if verbose and statistics:
+            statistics(E, A_est, P_est, new_tfs, *statistics_args)
 
         # Check if this is the best solution so far and store results
         if error < best_error:

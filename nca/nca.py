@@ -449,6 +449,7 @@ def iterative_sub_nca(
         statistics_args: Tuple = (),
         n_iters: int = 100,
         splits: int = 2,
+        parallel: bool = True,
         robust_iters: int = 1,
         status_step: float = 0.1,
         verbose: bool = False,
@@ -468,6 +469,7 @@ def iterative_sub_nca(
             in this method
         n_iters: maximum number of iterations to perform
         splits: maximum number of sub-networks to split into
+        parallel: if True, runs each sub-network NCA in parallel
         robust_iters: maximum number of iterations for robust_nca
         status_step: print status update every time this fraction of steps has
             been completed
@@ -687,7 +689,7 @@ def iterative_sub_nca(
     for it in range(n_iters):
         # Solve for A and P in subnetworks and overall problem
         try:
-            A_hat, P_hat = solve_networks(method, E_divided, A_divided, splits,
+            A_hat, P_hat = solve_networks(method, E_divided, A_divided, splits if parallel else 1,
                 n_iters=robust_iters, status_step=status_step, verbose=verbose)
             A_est, P_est = assemble_network(n_genes, n_tfs, A_hat, P_hat, common_genes, unique_genes)
         except Exception as e:

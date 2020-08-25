@@ -608,6 +608,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-i', '--iterative',
         action='store_true',
         help='If set, performs iterative sub-network component analysis.')
+    parser.add_argument('--parallel',
+        action='store_true',
+        help='If set, runs sub-network NCA solvers in parallel.')
     parser.add_argument('--iterative-iterations',
         type=int,
         default=default_iterative_iterations,
@@ -678,7 +681,7 @@ if __name__ == '__main__':
         if args.iterative:
             A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs,
                 statistics=match_statistics, statistics_args=(tf_genes, genes),
-                n_iters=args.iterative_iterations, splits=args.iterative_splits,
+                n_iters=args.iterative_iterations, splits=args.iterative_splits, parallel=args.parallel,
                 robust_iters=args.robust_iterations, status_step=args.status, verbose=args.verbose)
         else:
             A, P = nca_method(seq_data, initial_tf_map, n_iters=args.robust_iterations, status_step=args.status)

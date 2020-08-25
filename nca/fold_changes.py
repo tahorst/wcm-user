@@ -506,17 +506,20 @@ def plot_results(
     combined_tfs = (~positive_tfs) & (~negative_tfs)
 
     # Plot figure
-    plt.figure()
-    gs = gridspec.GridSpec(3, 1)
+    plt.figure(figsize=(10, 20))
+    gs = gridspec.GridSpec(4, 1)
     ax_A = plt.subplot(gs[0, 0])
     ax_P1 = plt.subplot(gs[1, 0])
     ax_P2 = plt.subplot(gs[2, 0])
+    ax_P3 = plt.subplot(gs[3, 0])
 
     ## Plot A results
     plot(ax_A, annotated_neg, 'Negative', hist_range, n_bins, cmap(0))
     plot(ax_A, annotated_pos, 'Positive', hist_range, n_bins, cmap(1))
     plot(ax_A, annotated_amb, 'Ambiguous', hist_range, n_bins, cmap(2))
     ax_A.legend(fontsize=8, frameon=False)
+    ax_A.set_xlabel('TF-Gene Interation\n(A entries)', fontsize=10)
+    ax_A.set_ylabel('Count', fontsize=10)
 
     ## Plot P results
     P_ave = P.mean(1)
@@ -526,6 +529,8 @@ def plot_results(
     plot(ax_P1, P_ave[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
     plot(ax_P1, P_ave[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
     ax_P1.legend(fontsize=8, frameon=False)
+    ax_P1.set_xlabel('TF Average Activity\n(mean of P rows)', fontsize=10)
+    ax_P1.set_ylabel('Count', fontsize=10)
 
     ## Plot P range results
     P_range = P.max(1) - P.min(1)
@@ -535,10 +540,19 @@ def plot_results(
     plot(ax_P2, P_range[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
     plot(ax_P2, P_range[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
     ax_P2.legend(fontsize=8, frameon=False)
+    ax_P2.set_xlabel('TF Activity Range\n(range of P rows)', fontsize=10)
+    ax_P2.set_ylabel('Count', fontsize=10)
+
+    ## Plot P distributions
+    for tf_activity in P:
+        ax_P3.hist(tf_activity, linewidth=1, alpha=0.2, histtype='step')
+    ax_P3.set_xlabel('TF Activity\n(P rows)', fontsize=10)
+    ax_P3.set_ylabel('Count', fontsize=10)
 
     ## Save plot
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, HISTOGRAM_FILE))
+    plt.close('all')
 
 def parse_args() -> argparse.Namespace:
     """Parse command line args for options to run."""

@@ -12,6 +12,7 @@ import time
 from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 import numpy as np
 
 import nca
@@ -454,8 +455,8 @@ def plot_results(
         output_dir: path to directory to save the plot
     """
 
-    def plot(ax, series, label, color):
-        mean = sum(series) / len(series) if series else 0
+    def plot(ax, series, label, hist_range, n_bins, color):
+        mean = sum(series) / len(series) if len(series) else 0
         ax.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
         ax.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
 
@@ -479,6 +480,7 @@ def plot_results(
             else:
                 annotated_amb.append(predicted)
 
+    # Range for A histogram
     min_val = min(
         min(annotated_neg) if annotated_neg else 0,
         min(annotated_pos) if annotated_pos else 0,
@@ -498,25 +500,44 @@ def plot_results(
     n_bins = int(np.ceil(5*(hist_range[1] - hist_range[0])))
     cmap = plt.get_cmap('tab10')
 
+    # TF regulation types
+    positive_tfs = np.array([np.all([v > 0 for v in tf_genes.get(tf, {}).values()]) for tf in tfs])
+    negative_tfs = np.array([np.all([v < 0 for v in tf_genes.get(tf, {}).values()]) for tf in tfs])
+    combined_tfs = (~positive_tfs) & (~negative_tfs)
+
+    # Plot figure
     plt.figure()
+    gs = gridspec.GridSpec(3, 1)
+    ax_A = plt.subplot(gs[0, 0])
+    ax_P1 = plt.subplot(gs[1, 0])
+    ax_P2 = plt.subplot(gs[2, 0])
 
-    ax = plt.subplot(3, 1, 1)
-    plot(ax, annotated_neg, 'Negative', cmap(0))
-    plot(ax, annotated_pos, 'Positive', cmap(1))
-    plot(ax, annotated_amb, 'Ambiguous', cmap(2))
+    ## Plot A results
+    plot(ax_A, annotated_neg, 'Negative', hist_range, n_bins, cmap(0))
+    plot(ax_A, annotated_pos, 'Positive', hist_range, n_bins, cmap(1))
+    plot(ax_A, annotated_amb, 'Ambiguous', hist_range, n_bins, cmap(2))
+    ax_A.legend(fontsize=8, frameon=False)
 
-    plt.legend(fontsize=8, frameon=False)
-    plt.tight_layout()
-
+    ## Plot P results
     P_ave = P.mean(1)
+    hist_range = (np.floor(P_ave.min()), np.ceil(P_ave.max()))
+    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    plot(ax_P1, P_ave[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
+    plot(ax_P1, P_ave[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
+    plot(ax_P1, P_ave[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
+    ax_P1.legend(fontsize=8, frameon=False)
+
+    ## Plot P range results
     P_range = P.max(1) - P.min(1)
+    hist_range = (np.floor(P_range.min()), np.ceil(P_range.max()))
+    n_bins = 2 * int(hist_range[1] - hist_range[0])
+    plot(ax_P2, P_range[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
+    plot(ax_P2, P_range[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
+    plot(ax_P2, P_range[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
+    ax_P2.legend(fontsize=8, frameon=False)
 
-    ax = plt.subplot(3, 1, 2)
-    ax.hist(P_ave)
-
-    ax = plt.subplot(3, 1, 3)
-    ax.hist(P_range)
-
+    ## Save plot
+    plt.tight_layout()
     plt.savefig(os.path.join(output_dir, HISTOGRAM_FILE))
 
 def parse_args() -> argparse.Namespace:

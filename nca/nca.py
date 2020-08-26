@@ -121,7 +121,7 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
             if not np.all(tf_idx_with_regulation):
                 # TODO: turn into function with same code above
                 if verbose:
-                    print('Removing empty columns from reduced matrix for TFs:')
+                    print(f'Removing empty columns from reduced matrix of {tfs[i]} for TFs:')
                     for tf in tfs[~tf_idx_with_regulation]:
                         print(f'\t{tf}')
                 A, tfs = nca_criteria_check(A[:, tf_idx_with_regulation], tfs[tf_idx_with_regulation], verbose=verbose)

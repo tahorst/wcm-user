@@ -121,7 +121,39 @@ def load_seq_data(linearize: bool) -> np.ndarray:
 
     return data
 
+def load_sigma_gene_interactions() -> Dict[str, Dict[str, int]]:
+    """
+    Load regulonDB Sigma factor-gene interactions.
+
+    Returns:
+        sigma_genes: relationship between sigma factors and genes
+            {sigma factor: {gene: regulatory direction}}
+    """
+
+    data = load_regulon_db_file('sigma_genes.tsv')
+
+    sigma_genes = {}
+    sigma_idx = 0
+    gene_idx = 1
+    dir_idx = 2
+    evidence_idx = 4  # TODO: filter on evidence?
+    for line in data:
+        sigma_factors = line[sigma_idx].split(', ')
+        gene = line[gene_idx]
+        effect = line[dir_idx]
+
+        if effect != 'activator':
+            raise ValueError(f'Unrecognized sigma factor effect: {effect}')
+
+        for sigma_factor in sigma_factors:
+            if sigma_factor not in sigma_genes:
+                sigma_genes[sigma_factor] = {}
+            sigma_genes[sigma_factor][gene] = 1
+
+    return sigma_genes
+
 def load_tf_gene_interactions(
+        sigma_factors: bool = False,
         split: bool = False,
         verbose: bool = True,
         ) -> Dict[str, Dict[str, int]]:
@@ -129,6 +161,7 @@ def load_tf_gene_interactions(
     Load regulonDB TF-gene interactions.
 
     Args:
+        sigma_factors: if True, loads sigma factor-gene interactions
         split: if True, splits TFs into activator and repressor forms
         verbose: if True, prints warnings about loaded data
 
@@ -141,7 +174,11 @@ def load_tf_gene_interactions(
 
     data = load_regulon_db_file(TF_GENE_FILE)
 
-    tf_genes = {}
+    if sigma_factors:
+        tf_genes = load_sigma_gene_interactions()
+    else:
+        tf_genes = {}
+
     tf_idx = 0
     gene_idx = 1
     dir_idx = 2
@@ -309,6 +346,7 @@ def load_regulation(directory: str, genes: np.ndarray, tfs: np.ndarray) -> (np.n
 
 def add_global_expression(
         tfs: np.ndarray,
+        sigma_factors: bool,
         mapping: Optional[np.ndarray] = None
         ) -> (np.ndarray, np.ndarray):
     """
@@ -317,6 +355,7 @@ def add_global_expression(
 
     Args:
         tfs: IDs of TFs associated with each column of mapping
+        sigma_factors: if True, skips adding regulated genes
         mapping: matrix representing network links between TFs and genes (n genes, m TFs)
             if None, no update is performed
 
@@ -325,21 +364,29 @@ def add_global_expression(
         mapping: updated matrix with global expression columns
 
     TODO:
-        - add sigma factors
         - add ppGpp
         - add noisy elements
     """
 
-    tfs = np.hstack((np.array(['constituitive', 'regulated']), tfs))
+    if sigma_factors:
+        tfs = np.hstack((np.array(['constituitive']), tfs))
+    else:
+        tfs = np.hstack((np.array(['regulated', 'constituitive']), tfs))
 
     if mapping is not None:
         n_genes = mapping.shape[0]
         no_regulation = np.sum(mapping, axis=1) == 0
+
+        # Add constituitive expression for any gene not regulated
         constituitive = np.zeros((n_genes, 1))
         constituitive[no_regulation] = 1
-        regulated = np.zeros((n_genes, 1))
-        regulated[~no_regulation] = 1
-        mapping = np.hstack((constituitive, regulated, mapping))
+        mapping = np.hstack((constituitive, mapping))
+
+        # Add regulated if not already accounted for by sigma factors
+        if not sigma_factors:
+            regulated = np.zeros((n_genes, 1))
+            regulated[~no_regulation] = 1
+            mapping = np.hstack((regulated, mapping))
 
     return tfs, mapping
 
@@ -593,6 +640,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--split',
         action='store_true',
         help='If set, split transcription factors into positive and negative regulation.')
+    parser.add_argument('--sigma-factors',
+        action='store_true',
+        help='If set, loads sigma factor-gene interactions into network.')
 
     # NCA options
     parser.add_argument('-m', '--method',
@@ -641,7 +691,8 @@ if __name__ == '__main__':
     print('Loading data from files...')
     seq_data = load_seq_data(args.linear)
     genes = load_gene_names()
-    tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
+    tf_genes = load_tf_gene_interactions(sigma_factors=args.sigma_factors,
+        split=args.split, verbose=args.verbose)
 
     if args.analysis is None:
         # Check input cached files
@@ -674,7 +725,7 @@ if __name__ == '__main__':
         np.save(tf_cache_file, tfs)
 
         if args.global_expression:
-            tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
+            tfs, initial_tf_map = add_global_expression(tfs, args.sigma_factors, mapping=initial_tf_map)
 
         # Solve NCA problem
         nca_method = getattr(nca, args.method)
@@ -697,7 +748,7 @@ if __name__ == '__main__':
 
         tfs = np.load(os.path.join(cache_dir, TF_CACHE_FILE))
         if args.global_expression:
-            tfs, _ = add_global_expression(tfs)
+            tfs, _ = add_global_expression(tfs, args.sigma_factors)
 
         A, P = load_regulation(args.analysis, genes, tfs)
 

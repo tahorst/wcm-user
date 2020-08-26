@@ -153,7 +153,6 @@ def load_sigma_gene_interactions() -> Dict[str, Dict[str, int]]:
     return sigma_genes
 
 def load_tf_gene_interactions(
-        sigma_factors: bool = False,
         split: bool = False,
         verbose: bool = True,
         ) -> Dict[str, Dict[str, int]]:
@@ -161,7 +160,6 @@ def load_tf_gene_interactions(
     Load regulonDB TF-gene interactions.
 
     Args:
-        sigma_factors: if True, loads sigma factor-gene interactions
         split: if True, splits TFs into activator and repressor forms
         verbose: if True, prints warnings about loaded data
 
@@ -174,11 +172,7 @@ def load_tf_gene_interactions(
 
     data = load_regulon_db_file(TF_GENE_FILE)
 
-    if sigma_factors:
-        tf_genes = load_sigma_gene_interactions()
-    else:
-        tf_genes = {}
-
+    tf_genes = {}
     tf_idx = 0
     gene_idx = 1
     dir_idx = 2
@@ -346,7 +340,6 @@ def load_regulation(directory: str, genes: np.ndarray, tfs: np.ndarray) -> (np.n
 
 def add_global_expression(
         tfs: np.ndarray,
-        sigma_factors: bool,
         mapping: Optional[np.ndarray] = None
         ) -> (np.ndarray, np.ndarray):
     """
@@ -355,7 +348,6 @@ def add_global_expression(
 
     Args:
         tfs: IDs of TFs associated with each column of mapping
-        sigma_factors: if True, skips adding regulated genes
         mapping: matrix representing network links between TFs and genes (n genes, m TFs)
             if None, no update is performed
 
@@ -368,10 +360,7 @@ def add_global_expression(
         - add noisy elements
     """
 
-    if sigma_factors:
-        tfs = np.hstack((np.array(['constituitive']), tfs))
-    else:
-        tfs = np.hstack((np.array(['regulated', 'constituitive']), tfs))
+    tfs = np.hstack((np.array(['constituitive', 'regulated']), tfs))
 
     if mapping is not None:
         n_genes = mapping.shape[0]
@@ -380,13 +369,49 @@ def add_global_expression(
         # Add constituitive expression for any gene not regulated
         constituitive = np.zeros((n_genes, 1))
         constituitive[no_regulation] = 1
-        mapping = np.hstack((constituitive, mapping))
 
-        # Add regulated if not already accounted for by sigma factors
-        if not sigma_factors:
-            regulated = np.zeros((n_genes, 1))
-            regulated[~no_regulation] = 1
-            mapping = np.hstack((regulated, mapping))
+        # Add regulated expression for general expression level of regulated genes
+        regulated = np.zeros((n_genes, 1))
+        regulated[~no_regulation] = 1
+
+        mapping = np.hstack((constituitive, regulated, mapping))
+
+    return tfs, mapping
+
+def add_sigma_factors(
+        tfs: np.ndarray,
+        genes: np.ndarray,
+        mapping: Optional[np.ndarray] = None
+        ) -> (np.ndarray, np.ndarray):
+    """
+    Expand out TFs to include sigma factors. This will capture some genes not
+    regulated by TFs.
+
+    Args:
+        tfs: IDs of TFs associated with each column of mapping
+        genes: IDs of genes associated with each row of mapping
+        mapping: matrix representing network links between TFs and genes (n genes, m TFs)
+            if None, no update is performed
+
+    Returns:
+        tfs: updated IDs with sigma factor IDs
+        mapping: updated matrix with sigma factor columns
+    """
+
+    sigma_genes = load_sigma_gene_interactions()
+    sigma_factors = list(sigma_genes.keys())
+    tfs = np.hstack((np.array(sigma_factors), tfs))
+
+    if mapping is not None:
+        n_genes = mapping.shape[0]
+        sigma_regulation = np.zeros((n_genes, len(sigma_factors)))
+        gene_idx = {gene: idx for idx, gene in enumerate(genes)}
+        sigma_idx = {sigma: idx for idx, sigma in enumerate(sigma_factors)}
+        for sigma_factor, regulation in sigma_genes.items():
+            for gene, direction in regulation.items():
+                if gene in gene_idx:
+                    sigma_regulation[gene_idx[gene], sigma_idx[sigma_factor]] = direction
+        mapping = np.hstack((sigma_regulation, mapping))
 
     return tfs, mapping
 
@@ -691,8 +716,7 @@ if __name__ == '__main__':
     print('Loading data from files...')
     seq_data = load_seq_data(args.linear)
     genes = load_gene_names()
-    tf_genes = load_tf_gene_interactions(sigma_factors=args.sigma_factors,
-        split=args.split, verbose=args.verbose)
+    tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
 
     if args.analysis is None:
         # Check input cached files
@@ -725,7 +749,9 @@ if __name__ == '__main__':
         np.save(tf_cache_file, tfs)
 
         if args.global_expression:
-            tfs, initial_tf_map = add_global_expression(tfs, args.sigma_factors, mapping=initial_tf_map)
+            tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
+        if args.sigma_factors:
+            tfs, initial_tf_map = add_sigma_factors(tfs, genes, mapping=initial_tf_map)
 
         # Solve NCA problem
         nca_method = getattr(nca, args.method)
@@ -748,7 +774,9 @@ if __name__ == '__main__':
 
         tfs = np.load(os.path.join(cache_dir, TF_CACHE_FILE))
         if args.global_expression:
-            tfs, _ = add_global_expression(tfs, args.sigma_factors)
+            tfs, _ = add_global_expression(tfs)
+        if args.sigma_factors:
+            tfs, _ = add_sigma_factors(tfs, genes)
 
         A, P = load_regulation(args.analysis, genes, tfs)
 

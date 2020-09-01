@@ -340,7 +340,7 @@ def load_regulation(directory: str, genes: np.ndarray, tfs: np.ndarray) -> (np.n
 
 def add_global_expression(
         tfs: np.ndarray,
-        mapping: Optional[np.ndarray] = None
+        mapping: Optional[np.ndarray] = None,
         ) -> (np.ndarray, np.ndarray):
     """
     Expand out TFs to include global expression (consituitive and regulated).
@@ -357,7 +357,6 @@ def add_global_expression(
 
     TODO:
         - add ppGpp
-        - add noisy elements
     """
 
     tfs = np.hstack((np.array(['constituitive', 'regulated']), tfs))
@@ -412,6 +411,47 @@ def add_sigma_factors(
                 if gene in gene_idx:
                     sigma_regulation[gene_idx[gene], sigma_idx[sigma_factor]] = direction
         mapping = np.hstack((sigma_regulation, mapping))
+
+    return tfs, mapping
+
+def add_noisy_expression(
+        tfs: np.ndarray,
+        noise: int,
+        repeats: int,
+        seed: int,
+        mapping: Optional[np.ndarray] = None,
+        ) -> (np.ndarray, np.ndarray):
+    """
+    Expand out TFs to include random expression but assigning genes to multiple
+    "transcription factors".
+
+    Args:
+        tfs: IDs of TFs associated with each column of mapping
+        noise: number of TFs to include for noise
+        repeats: number of times to repeat a gene in noise TFs
+        seed: random seed for assigning genes
+        mapping: matrix representing network links between TFs and genes (n genes, m TFs)
+            if None, no update is performed
+
+    Returns:
+        tfs: updated IDs with global expression IDs
+        mapping: updated matrix with global expression columns
+
+    TODO:
+        - verify this leads to reasonable results and doesn't cause issues
+    """
+
+    np.random.seed(seed)
+    n_genes = mapping.shape[0]
+    n_noisy = noise * repeats
+    tfs = np.hstack(([f'noise-{i}' for i in range(n_noisy)], tfs))
+    for repeat in range(repeats):
+        idx = np.arange(n_genes)
+        np.random.shuffle(idx)
+        for n in range(noise):
+            new = np.zeros((n_genes, 1))
+            new[idx[n_genes * n // noise:n_genes * (n + 1) // noise]] = 1
+            mapping = np.hstack((new, mapping))
 
     return tfs, mapping
 
@@ -668,6 +708,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--sigma-factors',
         action='store_true',
         help='If set, loads sigma factor-gene interactions into network.')
+    parser.add_argument('--noise',
+        nargs=3,
+        type=int,
+        metavar=('NOISE_ELEMENTS', 'REPEATS', 'SEED'),
+        help='Number of noisy transcription factors to add, number of times to repeat with different genes and random seed for assigning genes.')
 
     # NCA options
     parser.add_argument('-m', '--method',
@@ -752,6 +797,8 @@ if __name__ == '__main__':
             tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
         if args.sigma_factors:
             tfs, initial_tf_map = add_sigma_factors(tfs, genes, mapping=initial_tf_map)
+        if args.noise:
+            tfs, initial_tf_map = add_noisy_expression(tfs, *args.noise, mapping=initial_tf_map)
 
         # Solve NCA problem
         nca_method = getattr(nca, args.method)
@@ -777,6 +824,8 @@ if __name__ == '__main__':
             tfs, _ = add_global_expression(tfs)
         if args.sigma_factors:
             tfs, _ = add_sigma_factors(tfs, genes)
+        if args.noise:
+            tfs, _ = add_noisy_expression(tfs, *args.noise)
 
         A, P = load_regulation(args.analysis, genes, tfs)
 

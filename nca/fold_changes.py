@@ -109,6 +109,7 @@ def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
     - normalize data to include other files instead of just EcoMAC in SEQ_FILES
     """
 
+    idx_mapping = {}
     seq_data = []
     for filename in SEQ_FILES:
         path = os.path.join(SEQ_DIR, filename)
@@ -132,6 +133,7 @@ def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
             averaged_data = []
             start_idx = None
             old_replicate = 1
+            new_idx = -1
             for i, line in enumerate(reader):
                 replicate = int(line[replicate_col][-1])
                 new_line = np.array(line)[mask]
@@ -140,9 +142,11 @@ def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
                         averaged_data.append(data[:, start_idx:i].mean(1))
 
                     start_idx = i
+                    new_idx += 1
 
                 old_replicate = replicate
                 old_line = new_line
+                idx_mapping[i] = new_idx
             averaged_data.append(data[:, start_idx:].mean(1))
 
             data = np.hstack((np.vstack(averaged_data).T, data[:, i+1:]))
@@ -150,7 +154,7 @@ def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
     if linearize:
         data = 2**data
 
-    return data
+    return data, idx_mapping
 
 def load_sigma_gene_interactions() -> Dict[str, Dict[str, int]]:
     """
@@ -793,7 +797,7 @@ if __name__ == '__main__':
     #   - tf_genes can be different with args.split
     #   - tfs might not match saved regulation with args.global_expression
     print('Loading data from files...')
-    seq_data = load_seq_data(args.linear, args.average_seq)
+    seq_data, idx_mapping = load_seq_data(args.linear, args.average_seq)
     genes = load_gene_names()
     tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
 

@@ -40,6 +40,7 @@ TF_GENE_FILE = 'tf_genes.tsv'
 
 # Sequencing related
 COMPENDIUM_DIR = os.path.join(DATA_DIR, 'compendium')
+SAMPLES_FILE = os.path.join(COMPENDIUM_DIR, 'samples.tsv')
 GENE_NAMES_FILE = os.path.join(COMPENDIUM_DIR, 'gene_names.tsv')
 SEQ_DIR = os.path.join(COMPENDIUM_DIR, 'seq')
 SEQ_FILES = [
@@ -92,7 +93,7 @@ def load_gene_names() -> np.ndarray:
 
     return genes
 
-def load_seq_data(linearize: bool) -> np.ndarray:
+def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
     """
     Load sequencing data from the compendium.
 
@@ -102,6 +103,7 @@ def load_seq_data(linearize: bool) -> np.ndarray:
     Returns:
         data: matrix of normalized sequencing data representing counts (n genes, m samples)
             linear if linearize, log2 otherwise
+        average: if True, average sequencing in replicate samples
 
     TODO:
     - normalize data to include other files instead of just EcoMAC in SEQ_FILES
@@ -116,6 +118,35 @@ def load_seq_data(linearize: bool) -> np.ndarray:
             seq_data.append(list(reader))
 
     data = np.hstack(seq_data).astype(np.float64)
+
+    if average:
+        with open(SAMPLES_FILE) as f:
+            reader = csv.reader(f, delimiter='\t')
+            header = next(reader)
+
+            replicate_col = header.index('Replicate')
+            mask = np.ones(len(header), bool)
+            mask[:2] = False
+            mask[replicate_col] = False
+            old_line = np.array(header)[mask]
+            averaged_data = []
+            start_idx = None
+            old_replicate = 1
+            for i, line in enumerate(reader):
+                replicate = int(line[replicate_col][-1])
+                new_line = np.array(line)[mask]
+                if replicate != old_replicate + 1 or np.any(new_line != old_line):
+                    if start_idx is not None:
+                        averaged_data.append(data[:, start_idx:i].mean(1))
+
+                    start_idx = i
+
+                old_replicate = replicate
+                old_line = new_line
+            averaged_data.append(data[:, start_idx:].mean(1))
+
+            data = np.hstack((np.vstack(averaged_data).T, data[:, i+1:]))
+
     if linearize:
         data = 2**data
 
@@ -696,6 +727,9 @@ def parse_args() -> argparse.Namespace:
         help='If set, force a rerun of identifying the initial TF map, otherwise use cached values.')
 
     # Data options
+    parser.add_argument('--average-seq',
+        action='store_true',
+        help='If set, averages sequencing data for replicate samples and reduces the number of samples.')
     parser.add_argument('--linear',
         action='store_true',
         help='If set, use linear counts from sequencing data other keep log2 counts.')
@@ -759,7 +793,7 @@ if __name__ == '__main__':
     #   - tf_genes can be different with args.split
     #   - tfs might not match saved regulation with args.global_expression
     print('Loading data from files...')
-    seq_data = load_seq_data(args.linear)
+    seq_data = load_seq_data(args.linear, args.average_seq)
     genes = load_gene_names()
     tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
 

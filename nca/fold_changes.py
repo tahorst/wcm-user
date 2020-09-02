@@ -42,6 +42,7 @@ TF_GENE_FILE = 'tf_genes.tsv'
 COMPENDIUM_DIR = os.path.join(DATA_DIR, 'compendium')
 SAMPLES_FILE = os.path.join(COMPENDIUM_DIR, 'samples.tsv')
 GENE_NAMES_FILE = os.path.join(COMPENDIUM_DIR, 'gene_names.tsv')
+GENE_SYNONYMS_FILE = os.path.join(COMPENDIUM_DIR, 'gene_synonyms.tsv')
 SEQ_DIR = os.path.join(COMPENDIUM_DIR, 'seq')
 SEQ_FILES = [
     'EcoMAC.tsv',
@@ -79,15 +80,17 @@ def load_regulon_db_file(filename: str) -> List[List[str]]:
 
     return data
 
-def load_gene_names() -> (np.ndarray, np.ndarray):
+def load_gene_names() -> (np.ndarray, np.ndarray, Dict[str, str]):
     """
     Loads genes names associated with sequencing data rows.
 
     Returns:
         b_numbers: b number of each gene, ordered to match sequencing data rows
         symbols: gene symbol of each gene, ordered to match sequencing data rows
+        synonyms: mapping of gene symbols to b number for gene synonyms
     """
 
+    # Load sequencing data related genes
     b_numbers = []
     symbols = []
     with open(GENE_NAMES_FILE) as f:
@@ -96,7 +99,16 @@ def load_gene_names() -> (np.ndarray, np.ndarray):
             b_numbers.append(line[1])
             symbols.append(line[2])
 
-    return np.array(b_numbers), np.array(symbols)
+    # Load gene synonyms
+    synonyms = {}
+    with open(GENE_SYNONYMS_FILE) as f:
+        reader = csv.reader(f, delimiter='\t')
+        for line in reader:
+            b = line[0]
+            for synonym in line[1:]:
+                synonyms[synonym] = b
+
+    return np.array(b_numbers), np.array(symbols), synonyms
 
 def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
     """
@@ -260,6 +272,7 @@ def load_tf_gene_interactions(
 
 def create_tf_map(
         gene_names: np.ndarray,
+        synonyms: Dict[str, str],
         tf_genes: Dict[str, Dict[str, int]],
         verbose: bool = True,
         ) -> (np.ndarray, np.ndarray):
@@ -270,6 +283,7 @@ def create_tf_map(
 
     Args:
         gene_names: gene IDs corresponding to each row of expression matrix
+        synonyms: mapping of gene symbols to b number for gene synonyms
         tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
         verbose: if True, prints warnings about loaded data
 
@@ -293,15 +307,16 @@ def create_tf_map(
     tfs = []
     for j, (tf, genes) in enumerate(sorted(tf_genes.items())):
         for gene, direction in genes.items():
-            if gene not in gene_idx:
+            b = synonyms.get(gene)
+            if b is None or b not in gene_idx:
                 if verbose:
-                    print(f'Unknown gene: {gene}')
+                    print(f'Unknown transcription factor gene: {gene}')
                 continue
 
             if direction == 0:
-                mapping[gene_idx[gene], j] = np.nan
+                mapping[gene_idx[b], j] = np.nan
             else:
-                mapping[gene_idx[gene], j] = direction * np.random.rand()
+                mapping[gene_idx[b], j] = direction * np.random.rand()
         tfs.append(tf)
 
     return mapping, np.array(tfs)
@@ -420,7 +435,9 @@ def add_global_expression(
 def add_sigma_factors(
         tfs: np.ndarray,
         genes: np.ndarray,
-        mapping: Optional[np.ndarray] = None
+        synonyms: Dict[str, str],
+        mapping: Optional[np.ndarray] = None,
+        verbose: bool = False,
         ) -> (np.ndarray, np.ndarray):
     """
     Expand out TFs to include sigma factors. This will capture some genes not
@@ -429,8 +446,10 @@ def add_sigma_factors(
     Args:
         tfs: IDs of TFs associated with each column of mapping
         genes: IDs of genes associated with each row of mapping
+        synonyms: mapping of gene symbols to b number for gene synonyms
         mapping: matrix representing network links between TFs and genes (n genes, m TFs)
             if None, no update is performed
+        verbose: if True, prints warnings about unmatched genes
 
     Returns:
         tfs: updated IDs with sigma factor IDs
@@ -448,10 +467,11 @@ def add_sigma_factors(
         sigma_idx = {sigma: idx for idx, sigma in enumerate(sigma_factors)}
         for sigma_factor, regulation in sigma_genes.items():
             for gene, direction in regulation.items():
-                if gene in gene_idx:
-                    sigma_regulation[gene_idx[gene], sigma_idx[sigma_factor]] = direction
-                else:
-                    print(f'Unknown sigma gene: {gene}')
+                b = synonyms.get(gene)
+                if b in gene_idx:
+                    sigma_regulation[gene_idx[b], sigma_idx[sigma_factor]] = direction
+                elif verbose:
+                    print(f'Unknown sigma factor gene: {gene}')
         mapping = np.hstack((sigma_regulation, mapping))
 
     return tfs, mapping
@@ -800,7 +820,7 @@ if __name__ == '__main__':
     #   - tfs might not match saved regulation with args.global_expression
     print('Loading data from files...')
     seq_data, idx_mapping = load_seq_data(args.linear, args.average_seq)
-    b_numbers, gene_symbols = load_gene_names()
+    b_numbers, gene_symbols, synonyms = load_gene_names()
     tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
 
     if args.analysis is None:
@@ -816,7 +836,7 @@ if __name__ == '__main__':
         # Create or load network mapping and TF IDs
         if args.force or no_cache:
             print('Creating initial network mapping...')
-            initial_tf_map, tfs = create_tf_map(gene_symbols, tf_genes, verbose=args.verbose)
+            initial_tf_map, tfs = create_tf_map(b_numbers, synonyms, tf_genes, verbose=args.verbose)
 
             if not args.iterative:
                 initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
@@ -836,7 +856,7 @@ if __name__ == '__main__':
         if args.global_expression:
             tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
         if args.sigma_factors:
-            tfs, initial_tf_map = add_sigma_factors(tfs, gene_symbols, mapping=initial_tf_map)
+            tfs, initial_tf_map = add_sigma_factors(tfs, b_numbers, synonyms, mapping=initial_tf_map, verbose=args.verbose)
         if args.noise:
             tfs, initial_tf_map = add_noisy_expression(tfs, *args.noise, mapping=initial_tf_map)
 

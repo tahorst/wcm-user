@@ -607,9 +607,9 @@ def plot_results(
         ax.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
         ax.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
 
-    annotated_neg = []
-    annotated_pos = []
-    annotated_amb = []
+    negative = np.zeros(A.shape, bool)
+    positive = np.zeros(A.shape, bool)
+    ambiguous = np.zeros(A.shape, bool)
 
     # Check each entry in the mapping matrix against the annotated data
     for i, j in zip(*np.where(A)):
@@ -618,33 +618,13 @@ def plot_results(
         annotated = tf_genes.get(tf, {}).get(gene)
 
         if annotated is not None:
-            predicted = A[i, j]
-
-            if annotated > 0:
-                annotated_pos.append(predicted)
-            elif annotated < 0:
-                annotated_neg.append(predicted)
+            if annotated < 0:
+                negative[i, j] = True
+            elif annotated > 0:
+                positive[i, j] = True
             else:
-                annotated_amb.append(predicted)
+                ambiguous[i, j] = True
 
-    # Range for A histogram
-    min_val = min(
-        min(annotated_neg) if annotated_neg else 0,
-        min(annotated_pos) if annotated_pos else 0,
-        min(annotated_amb) if annotated_amb else 0,
-        )
-    max_val = max(
-        max(annotated_neg) if annotated_neg else 0,
-        max(annotated_pos) if annotated_pos else 0,
-        max(annotated_amb) if annotated_amb else 0,
-        )
-    if min_val == max_val:
-        max_val += 1
-    hist_range = (
-        np.floor(min_val),
-        np.ceil(max_val),
-    )
-    n_bins = int(np.ceil(5*(hist_range[1] - hist_range[0])))
     cmap = plt.get_cmap('tab10')
 
     # TF regulation types
@@ -654,16 +634,19 @@ def plot_results(
 
     # Plot figure
     plt.figure(figsize=(10, 20))
-    gs = gridspec.GridSpec(4, 1)
+    gs = gridspec.GridSpec(5, 1)
     ax_A = plt.subplot(gs[0, 0])
     ax_P1 = plt.subplot(gs[1, 0])
     ax_P2 = plt.subplot(gs[2, 0])
     ax_P3 = plt.subplot(gs[3, 0])
+    ax_fc = plt.subplot(gs[4, 0])
 
     ## Plot A results
-    plot(ax_A, annotated_neg, 'Negative', hist_range, n_bins, cmap(0))
-    plot(ax_A, annotated_pos, 'Positive', hist_range, n_bins, cmap(1))
-    plot(ax_A, annotated_amb, 'Ambiguous', hist_range, n_bins, cmap(2))
+    hist_range = (np.floor(A.min()), np.ceil(A.max()))
+    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    plot(ax_A, A[negative], 'Negative', hist_range, n_bins, cmap(0))
+    plot(ax_A, A[positive], 'Positive', hist_range, n_bins, cmap(1))
+    plot(ax_A, A[ambiguous], 'Ambiguous', hist_range, n_bins, cmap(2))
     ax_A.legend(fontsize=8, frameon=False)
     ax_A.set_xlabel('TF-Gene Interation\n(A entries)', fontsize=10)
     ax_A.set_ylabel('Count', fontsize=10)
@@ -695,6 +678,18 @@ def plot_results(
         ax_P3.hist(tf_activity, linewidth=1, alpha=0.2, histtype='step')
     ax_P3.set_xlabel('TF Activity\n(P rows)', fontsize=10)
     ax_P3.set_ylabel('Count', fontsize=10)
+
+    ## Plot fold changes
+    sort = np.sort(P, 1)
+    fcs = A * (sort[:, -P.shape[1]//2:].mean(1) - sort[:, :P.shape[1]//2].mean(1))
+    hist_range = (np.floor(fcs.min()), np.ceil(fcs.max()))
+    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    plot(ax_fc, fcs[negative], 'Negative', hist_range, n_bins, cmap(0))
+    plot(ax_fc, fcs[positive], 'Positive', hist_range, n_bins, cmap(1))
+    plot(ax_fc, fcs[ambiguous], 'Ambiguous', hist_range, n_bins, cmap(2))
+    ax_fc.legend(fontsize=8, frameon=False)
+    ax_fc.set_xlabel('TF-Gene Fold Change', fontsize=10)
+    ax_fc.set_ylabel('Count', fontsize=10)
 
     ## Save plot
     plt.tight_layout()

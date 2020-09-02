@@ -845,6 +845,7 @@ if __name__ == '__main__':
                 statistics=match_statistics, statistics_args=(tf_genes, genes),
                 n_iters=args.iterative_iterations, splits=args.iterative_splits, parallel=args.parallel,
                 robust_iters=args.robust_iterations, status_step=args.status, verbose=args.verbose)
+            np.save(tf_cache_file, tfs)
         else:
             A, P = nca_method(seq_data, initial_tf_map, n_iters=args.robust_iterations, status_step=args.status)
 
@@ -858,12 +859,13 @@ if __name__ == '__main__':
         cache_dir = args.cache if args.cache else os.path.join(args.analysis, 'cache')
 
         tfs = np.load(os.path.join(cache_dir, TF_CACHE_FILE))
-        if args.global_expression:
-            tfs, _ = add_global_expression(tfs)
-        if args.sigma_factors:
-            tfs, _ = add_sigma_factors(tfs, genes)
-        if args.noise:
-            tfs, _ = add_noisy_expression(tfs, *args.noise)
+        if not args.iterative:
+            if args.global_expression:
+                tfs, _ = add_global_expression(tfs)
+            if args.sigma_factors:
+                tfs, _ = add_sigma_factors(tfs, genes)
+            if args.noise:
+                tfs, _ = add_noisy_expression(tfs, *args.noise)
 
         A, P = load_regulation(args.analysis, genes, tfs)
 

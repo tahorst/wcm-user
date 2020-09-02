@@ -79,19 +79,24 @@ def load_regulon_db_file(filename: str) -> List[List[str]]:
 
     return data
 
-def load_gene_names() -> np.ndarray:
+def load_gene_names() -> (np.ndarray, np.ndarray):
     """
     Loads genes names associated with sequencing data rows.
 
     Returns:
-        genes: names of each gene, ordered to match sequencing data rows
+        b_numbers: b number of each gene, ordered to match sequencing data rows
+        symbols: gene symbol of each gene, ordered to match sequencing data rows
     """
 
+    b_numbers = []
+    symbols = []
     with open(GENE_NAMES_FILE) as f:
         reader = csv.reader(f, delimiter='\t')
-        genes = np.array([line[2] for line in reader])
+        for line in reader:
+            b_numbers.append(line[1])
+            symbols.append(line[2])
 
-    return genes
+    return np.array(b_numbers), np.array(symbols)
 
 def load_seq_data(linearize: bool, average: bool) -> np.ndarray:
     """
@@ -445,6 +450,8 @@ def add_sigma_factors(
             for gene, direction in regulation.items():
                 if gene in gene_idx:
                     sigma_regulation[gene_idx[gene], sigma_idx[sigma_factor]] = direction
+                else:
+                    print(f'Unknown sigma gene: {gene}')
         mapping = np.hstack((sigma_regulation, mapping))
 
     return tfs, mapping
@@ -793,7 +800,7 @@ if __name__ == '__main__':
     #   - tfs might not match saved regulation with args.global_expression
     print('Loading data from files...')
     seq_data, idx_mapping = load_seq_data(args.linear, args.average_seq)
-    genes = load_gene_names()
+    b_numbers, gene_symbols = load_gene_names()
     tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
 
     if args.analysis is None:
@@ -809,7 +816,7 @@ if __name__ == '__main__':
         # Create or load network mapping and TF IDs
         if args.force or no_cache:
             print('Creating initial network mapping...')
-            initial_tf_map, tfs = create_tf_map(genes, tf_genes, verbose=args.verbose)
+            initial_tf_map, tfs = create_tf_map(gene_symbols, tf_genes, verbose=args.verbose)
 
             if not args.iterative:
                 initial_tf_map, tfs = nca.nca_criteria_check(initial_tf_map, tfs, verbose=args.verbose)
@@ -829,7 +836,7 @@ if __name__ == '__main__':
         if args.global_expression:
             tfs, initial_tf_map = add_global_expression(tfs, mapping=initial_tf_map)
         if args.sigma_factors:
-            tfs, initial_tf_map = add_sigma_factors(tfs, genes, mapping=initial_tf_map)
+            tfs, initial_tf_map = add_sigma_factors(tfs, gene_symbols, mapping=initial_tf_map)
         if args.noise:
             tfs, initial_tf_map = add_noisy_expression(tfs, *args.noise, mapping=initial_tf_map)
 
@@ -837,7 +844,7 @@ if __name__ == '__main__':
         nca_method = getattr(nca, args.method)
         if args.iterative:
             A, P, tfs = nca.iterative_sub_nca(nca_method, seq_data, initial_tf_map, tfs,
-                statistics=match_statistics, statistics_args=(tf_genes, genes),
+                statistics=match_statistics, statistics_args=(tf_genes, gene_symbols),
                 n_iters=args.iterative_iterations, splits=args.iterative_splits, parallel=args.parallel,
                 robust_iters=args.robust_iterations, status_step=args.status, verbose=args.verbose)
             np.save(tf_cache_file, tfs)
@@ -845,7 +852,7 @@ if __name__ == '__main__':
             A, P = nca_method(seq_data, initial_tf_map, n_iters=args.robust_iterations, status_step=args.status)
 
         # Save results
-        save_regulation(A, P, genes, tfs, output_dir)
+        save_regulation(A, P, gene_symbols, tfs, output_dir)
     else:
         print('Loading regulation results without running NCA...')
         output_dir = args.analysis
@@ -858,14 +865,13 @@ if __name__ == '__main__':
             if args.global_expression:
                 tfs, _ = add_global_expression(tfs)
             if args.sigma_factors:
-                tfs, _ = add_sigma_factors(tfs, genes)
+                tfs, _ = add_sigma_factors(tfs, gene_symbols)
             if args.noise:
                 tfs, _ = add_noisy_expression(tfs, *args.noise)
 
-        A, P = load_regulation(args.analysis, genes, tfs)
+        A, P = load_regulation(args.analysis, gene_symbols, tfs)
 
-    # Assess results of analysis
-    match_statistics(seq_data, A, P, tfs, tf_genes, genes)
-    plot_results(tf_genes, A, P, genes, tfs, output_dir)
+    match_statistics(seq_data, A, P, tfs, tf_genes, gene_symbols)
+    plot_results(tf_genes, A, P, gene_symbols, tfs, output_dir)
 
     print(f'Completed in {(time.time() - start) / 60:.1f} min')

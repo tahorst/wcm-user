@@ -706,8 +706,25 @@ def plot_results(
     combined_tfs = (~positive_tfs) & (~negative_tfs)
 
     # NCA fold changes
+    ## Adjustable parameters
+    n_std = 1
+    min_conditions = 10
+
+    ## Find the upper and lower bounds based on number of standard deviations
+    ## while maintaining a minimum number of conditions to keep data for
     sort = np.sort(P, 1)
-    fcs = A * (sort[:, -P.shape[1]//2:].mean(1) - sort[:, :P.shape[1]//2].mean(1))
+    lower = np.fmax(P.mean(1) - n_std*P.std(1), sort[:, min_conditions])
+    upper = np.fmin(P.mean(1) + n_std*P.std(1), sort[:, -min_conditions])
+
+    ## Exclude data that does not fall outside the limits
+    low_P = P.copy().T
+    low_P[low_P > lower] = 0
+    high_P = P.copy().T
+    high_P[high_P < upper] = 0
+
+    ## Determine fold change as TF effect on gene multiplied by the difference
+    ## in activity between average high and low conditions
+    fcs = A * (high_P.sum(0) / np.sum(high_P != 0, 0) - low_P.sum(0) / np.sum(low_P != 0, 0))
     nca_pairs = {}
     for i, gene in enumerate(genes):
         for j, tf in enumerate(tfs):

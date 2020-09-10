@@ -834,7 +834,7 @@ if __name__ == '__main__':
         no_cache = not (os.path.exists(network_cache_file) and os.path.exists(tf_cache_file))
 
         # Create or load network mapping and TF IDs
-        if args.force or no_cache:
+        if args.force or no_cache or args.iterative:
             print('Creating initial network mapping...')
             initial_tf_map, tfs = create_tf_map(b_numbers, synonyms, tf_genes, verbose=args.verbose)
 

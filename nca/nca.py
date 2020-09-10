@@ -17,6 +17,10 @@ import swiglpk as glp
 METHODS = ['constrained_nca', 'robust_nca', 'fast_nca', 'random_nca']
 
 
+class NotValidMatrixError(Exception):
+    pass
+
+
 def nonnegative_least_squares(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     """
     Solve nonnegative least squares with two matrices.
@@ -61,7 +65,12 @@ def nca_criteria_check(A: np.ndarray, tfs: np.ndarray, verbose: bool = True) -> 
         else:
             N = M
 
-        return np.linalg.matrix_rank(N)
+        try:
+            rank = np.linalg.matrix_rank(N)
+        except ValueError as e:
+            raise NotValidMatrixError('Could not get the rank of the matrix')
+
+        return rank
 
     if verbose:
         print(f'A shape: {A.shape}')
@@ -524,7 +533,7 @@ def iterative_sub_nca(
             reduced_A = np.array([tf in removed_tfs for tf in tfs])
             try:
                 Ai, tfsi = nca_criteria_check(A[:, reduced_A], tfs[reduced_A], verbose=verbose)
-            except Exception as e:
+            except NotValidMatrixError as e:
                 print(f'Warning: could only make {len(E_divided)} divisions')
                 break
             removed_tfs = removed_tfs - set(tfsi)

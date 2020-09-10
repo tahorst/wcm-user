@@ -563,6 +563,81 @@ def add_noisy_expression(
 
     return tfs, mapping
 
+def calculate_fold_changes(
+        A: np.ndarray,
+        P: np.ndarray,
+        genes: np.ndarray,
+        tfs: np.ndarray,
+        n_std: float = 1.,
+        min_conditions: int = 10,
+        ) -> (np.ndarray, Dict[str, Dict[str, float]]):
+    """
+    Calculate expected expression fold changes from NCA solutions.
+
+    Args:
+        A: NCA solution for TF/gene matrix relationship (n genes, m TFs)
+        P: NCA solution for TF/condition relationship (m TFs, o conditions)
+        genes: IDs for each gene corresponding to rows in A (n genes)
+        tfs: names of each TF corresponding to columns in A (m TFs)
+
+    Returns:
+        fcs: fold changes corresponding to entries in A (n genes, m TFs)
+        regulatory_pairs: fold changes for TFs and genes from NCA solution
+            {TF: {gene: fold change}}
+    """
+
+    # Find the upper and lower bounds based on number of standard deviations
+    # while maintaining a minimum number of conditions to keep data for
+    sort = np.sort(P, 1)
+    lower = np.fmax(P.mean(1) - n_std*P.std(1), sort[:, min_conditions])
+    upper = np.fmin(P.mean(1) + n_std*P.std(1), sort[:, -min_conditions])
+
+    # Exclude data that does not fall outside the limits
+    low_P = P.copy().T
+    low_P[low_P > lower] = 0
+    high_P = P.copy().T
+    high_P[high_P < upper] = 0
+
+    # Determine fold change as TF effect on gene multiplied by the difference
+    # in activity between average high and low conditions
+    fcs = A * (high_P.sum(0) / np.sum(high_P != 0, 0) - low_P.sum(0) / np.sum(low_P != 0, 0))
+    regulatory_pairs = {}
+    for i, gene in enumerate(genes):
+        for j, tf in enumerate(tfs):
+            processed_tf = tf.split(':')[0].lower()
+            data = regulatory_pairs.get(processed_tf, {})
+            data[gene] = data.get(gene, 0) + fcs[i, j]
+            regulatory_pairs[processed_tf] = data
+
+    return fcs, regulatory_pairs
+
+def compare_wcm_nca(nca_pairs: Dict[str, Dict[str, float]]) -> (np.ndarray, np.ndarray, np.ndarray):
+    """
+    Get matching arrays of fold changes from the whole-cell model and NCA results
+    for comparison and plotting.
+
+    Args:
+        nca_pairs: fold changes for TFs and genes from NCA solution
+            {TF: {gene: fold change}}
+
+    Returns:
+        wcm_fcs: fold change for each TF/gene pair in the whole-cell model
+        nca_fcs: fold change for each TF/gene pair from the NCA solution
+        wcm_consistent: True if whole-cell model fold change direction is
+            consistent with annotations
+    """
+    wcm_fcs = []
+    nca_fcs = []
+    wcm_consistent = []
+    for tf, regulation in load_wcm_fold_changes().items():
+        for gene, (fc, direction) in regulation.items():
+            wcm_fcs.append(fc * np.sign(direction))
+            nca_fc = nca_pairs.get(TF_MAPPING.get(tf, tf).lower(), {}).get(gene, 0)
+            nca_fcs.append(nca_fc)
+            wcm_consistent.append(np.abs(direction) == 1)
+
+    return np.array(wcm_fcs), np.array(nca_fcs), np.array(wcm_consistent)
+
 def match_statistics(
         E: np.ndarray,
         A: np.ndarray,
@@ -709,47 +784,9 @@ def plot_results(
     negative_tfs = np.array([np.all([v < 0 for v in tf_genes.get(tf, {}).values()]) for tf in tfs])
     combined_tfs = (~positive_tfs) & (~negative_tfs)
 
-    # NCA fold changes
-    ## Adjustable parameters
-    n_std = 1
-    min_conditions = 10
-
-    ## Find the upper and lower bounds based on number of standard deviations
-    ## while maintaining a minimum number of conditions to keep data for
-    sort = np.sort(P, 1)
-    lower = np.fmax(P.mean(1) - n_std*P.std(1), sort[:, min_conditions])
-    upper = np.fmin(P.mean(1) + n_std*P.std(1), sort[:, -min_conditions])
-
-    ## Exclude data that does not fall outside the limits
-    low_P = P.copy().T
-    low_P[low_P > lower] = 0
-    high_P = P.copy().T
-    high_P[high_P < upper] = 0
-
-    ## Determine fold change as TF effect on gene multiplied by the difference
-    ## in activity between average high and low conditions
-    fcs = A * (high_P.sum(0) / np.sum(high_P != 0, 0) - low_P.sum(0) / np.sum(low_P != 0, 0))
-    nca_pairs = {}
-    for i, gene in enumerate(genes):
-        for j, tf in enumerate(tfs):
-            processed_tf = tf.split(':')[0].lower()
-            data = nca_pairs.get(processed_tf, {})
-            data[gene] = data.get(gene, 0) + fcs[i, j]
-            nca_pairs[processed_tf] = data
-
-    # WCM fold changes
-    wcm_fcs = []
-    nca_fcs = []
-    wcm_consistent = []
-    for tf, genes in load_wcm_fold_changes().items():
-        for gene, (fc, direction) in genes.items():
-            wcm_fcs.append(fc * np.sign(direction))
-            nca_fc = nca_pairs.get(TF_MAPPING.get(tf, tf).lower(), {}).get(gene, 0)
-            nca_fcs.append(nca_fc)
-            wcm_consistent.append(np.abs(direction) == 1)
-    wcm_fcs = np.array(wcm_fcs)
-    nca_fcs = np.array(nca_fcs)
-    wcm_consistent = np.array(wcm_consistent)
+    # Get fold changes from NCA and WCM
+    fcs, nca_pairs = calculate_fold_changes(A, P, genes, tfs)
+    wcm_fcs, nca_fcs, wcm_consistent = compare_wcm_nca(nca_pairs)
 
     # Plot figure
     plt.figure(figsize=(12, 18))
@@ -798,8 +835,8 @@ def plot_results(
     ax_wcm.set_xlabel('Whole-cell model fold change')
     ax_wcm.set_ylabel('NCA predicted fold change')
     ax_wcm.legend(fontsize=8, frameon=False)
-    ax_wcm.set_title(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e})\n'
-        f'Consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e})',
+    ax_wcm.set_title(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e}, n={len(wcm_fcs)})\n'
+        f'Consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e}, n={np.sum(wcm_consistent)})',
         fontsize=10)
     no_spines(ax_wcm)
 

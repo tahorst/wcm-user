@@ -730,6 +730,15 @@ def match_statistics(
     print(f'No prediction made: {n_zeros}/{n_samples} ({100 * n_zeros / n_samples:.1f}%)')
     print(f'Negative prediction made: {n_negatives}/{n_samples} ({100 * n_negatives / n_samples:.1f}%)')
 
+    # WCM fold change correlations
+    fcs, nca_pairs = calculate_fold_changes(A, P, genes, tfs)
+    wcm_fcs, nca_fcs, wcm_consistent = compare_wcm_nca(nca_pairs)
+    pearson_all = stats.pearsonr(wcm_fcs, nca_fcs)
+    pearson_consistent = stats.pearsonr(wcm_fcs[wcm_consistent], nca_fcs[wcm_consistent])
+    print('\nFold change correlation with WCM:')
+    print(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e}, n={len(wcm_fcs)})')
+    print(f'Only if WCM consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e}, n={np.sum(wcm_consistent)})')
+
 def plot_results(
         tf_genes: Dict[str, Dict[str, int]],
         A: np.ndarray,

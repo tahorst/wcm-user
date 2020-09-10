@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
+from scipy import stats
 
 import nca
 
@@ -55,6 +56,15 @@ SEQ_FILES = [
     # 'GSE55365aerobic.tsv',
     # 'GSE55365anaerobic.tsv',
     ]
+
+# Convert some whole-cell model IDs to RegulonDB IDs
+TF_MAPPING = {
+    'glnG': 'NtrC',
+    'ihfA': 'IHF',
+    'hns': 'H-NS',
+    'yjiE': 'HypT',
+    'bglJ': 'RcsB-BglJ',
+    }
 
 
 def load_regulon_db_file(filename: str) -> List[List[str]]:
@@ -249,13 +259,13 @@ def load_tf_gene_interactions(
         # Store new data
         if split:
             if effect == 'activator' or effect == 'unknown':
-                split_tf = f'{tf}-activator'
+                split_tf = f'{tf}:activator'
                 genes = tf_genes.get(split_tf, {})
                 genes[gene] = 1
                 tf_genes[split_tf] = genes
 
             if effect == 'repressor' or effect == 'unknown':
-                split_tf = f'{tf}-repressor'
+                split_tf = f'{tf}:repressor'
                 genes = tf_genes.get(split_tf, {})
                 genes[gene] = -1
                 tf_genes[split_tf] = genes
@@ -695,14 +705,40 @@ def plot_results(
     negative_tfs = np.array([np.all([v < 0 for v in tf_genes.get(tf, {}).values()]) for tf in tfs])
     combined_tfs = (~positive_tfs) & (~negative_tfs)
 
+    # NCA fold changes
+    sort = np.sort(P, 1)
+    fcs = A * (sort[:, -P.shape[1]//2:].mean(1) - sort[:, :P.shape[1]//2].mean(1))
+    nca_pairs = {}
+    for i, gene in enumerate(genes):
+        for j, tf in enumerate(tfs):
+            processed_tf = tf.split(':')[0].lower()
+            data = nca_pairs.get(processed_tf, {})
+            data[gene] = data.get(gene, 0) + fcs[i, j]
+            nca_pairs[processed_tf] = data
+
+    # WCM fold changes
+    wcm_fcs = []
+    nca_fcs = []
+    wcm_consistent = []
+    for tf, genes in load_wcm_fold_changes().items():
+        for gene, (fc, direction) in genes.items():
+            wcm_fcs.append(fc * np.sign(direction))
+            nca_fc = nca_pairs.get(TF_MAPPING.get(tf, tf).lower(), {}).get(gene, 0)
+            nca_fcs.append(nca_fc)
+            wcm_consistent.append(np.abs(direction) == 1)
+    wcm_fcs = np.array(wcm_fcs)
+    nca_fcs = np.array(nca_fcs)
+    wcm_consistent = np.array(wcm_consistent)
+
     # Plot figure
-    plt.figure(figsize=(10, 20))
-    gs = gridspec.GridSpec(5, 1)
+    plt.figure(figsize=(10, 25))
+    gs = gridspec.GridSpec(6, 1)
     ax_A = plt.subplot(gs[0, 0])
     ax_P1 = plt.subplot(gs[1, 0])
     ax_P2 = plt.subplot(gs[2, 0])
     ax_P3 = plt.subplot(gs[3, 0])
     ax_fc = plt.subplot(gs[4, 0])
+    ax_wcm = plt.subplot(gs[5, 0])
 
     ## Plot A results
     hist_range = (np.floor(A.min()), np.ceil(A.max()))
@@ -743,8 +779,6 @@ def plot_results(
     ax_P3.set_ylabel('Count', fontsize=10)
 
     ## Plot fold changes
-    sort = np.sort(P, 1)
-    fcs = A * (sort[:, -P.shape[1]//2:].mean(1) - sort[:, :P.shape[1]//2].mean(1))
     hist_range = (np.floor(fcs.min()), np.ceil(fcs.max()))
     n_bins = 5 * int(hist_range[1] - hist_range[0])
     plot(ax_fc, fcs[negative], 'Negative', hist_range, n_bins, cmap(0))
@@ -753,6 +787,25 @@ def plot_results(
     ax_fc.legend(fontsize=8, frameon=False)
     ax_fc.set_xlabel('TF-Gene Fold Change', fontsize=10)
     ax_fc.set_ylabel('Count', fontsize=10)
+
+    ## Compare to whole-cell model fold changes
+    pearson_all = stats.pearsonr(wcm_fcs, nca_fcs)
+    pearson_consistent = stats.pearsonr(wcm_fcs[wcm_consistent], nca_fcs[wcm_consistent])
+    ax_wcm.plot(wcm_fcs[wcm_consistent], nca_fcs[wcm_consistent], 'x', label='WCM consistent')
+    ax_wcm.plot(wcm_fcs[~wcm_consistent], nca_fcs[~wcm_consistent], 'x', label='WCM inconsistent')
+    xlim = ax_wcm.get_xlim()
+    ylim = ax_wcm.get_ylim()
+    min_val = min(wcm_fcs.min(), nca_fcs.min())
+    max_val = max(wcm_fcs.max(), nca_fcs.max())
+    ax_wcm.plot([min_val, max_val], [min_val, max_val], 'k--', label='y=x')
+    ax_wcm.set_xlim(xlim)
+    ax_wcm.set_ylim(ylim)
+    ax_wcm.set_xlabel('Whole-cell model fold change')
+    ax_wcm.set_ylabel('NCA predicted fold change')
+    ax_wcm.legend()
+    ax_wcm.set_title(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e})\n'
+        f'Consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e})',
+        fontsize=12)
 
     ## Save plot
     plt.tight_layout()

@@ -9,7 +9,7 @@ import argparse
 import csv
 import os
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
@@ -39,6 +39,7 @@ REGULON_DB_SCRIPT = os.path.join(BASE_DIR, 'download_regulondb.sh')
 TF_GENE_FILE = 'tf_genes.tsv'
 
 # Sequencing related
+WCM_FILE = os.path.join(DATA_DIR, 'wcm_fold_changes.tsv')
 COMPENDIUM_DIR = os.path.join(DATA_DIR, 'compendium')
 SAMPLES_FILE = os.path.join(COMPENDIUM_DIR, 'samples.tsv')
 GENE_NAMES_FILE = os.path.join(COMPENDIUM_DIR, 'gene_names.tsv')
@@ -269,6 +270,41 @@ def load_tf_gene_interactions(
             tf_genes[tf] = genes
 
     return tf_genes
+
+def load_wcm_fold_changes() -> Dict[str, Dict[str, Tuple[float, int]]]:
+    """
+    Load fold changes currently implemented in the whole-cell model.
+
+    Returns:
+        fold_changes: regulatory pairs for TF-gene interactions
+            {tf: {gene: (log2 FC, direction)}}
+    """
+
+    fold_changes = {}
+
+    with open(WCM_FILE) as f:
+        reader = csv.reader(f, delimiter='\t')
+
+        headers = next(reader)
+        tf_idx = headers.index('TF')
+        gene_idx = headers.index('Target')
+        fc_idx = headers.index('F_avg')
+        direction_idx = headers.index('Regulation_direct')
+
+        for line in reader:
+            if line[0].startswith('#'):
+                continue
+
+            tf = line[tf_idx]
+            gene = line[gene_idx]
+            fc = float(line[fc_idx])
+            direction = int(line[direction_idx])
+
+            data = fold_changes.get(tf, {})
+            data.update({gene: (fc, direction)})
+            fold_changes[tf] = data
+
+    return fold_changes
 
 def create_tf_map(
         gene_names: np.ndarray,

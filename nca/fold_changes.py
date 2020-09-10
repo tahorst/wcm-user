@@ -680,6 +680,10 @@ def plot_results(
         ax.hist(series, color=color, bins=n_bins, range=hist_range, alpha=0.5, label=label)
         ax.axvline(mean, color=color, linestyle='--', label=f'{label} mean: {mean:.2f}')
 
+    def no_spines(ax):
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
     negative = np.zeros(A.shape, bool)
     positive = np.zeros(A.shape, bool)
     ambiguous = np.zeros(A.shape, bool)
@@ -748,14 +752,14 @@ def plot_results(
     wcm_consistent = np.array(wcm_consistent)
 
     # Plot figure
-    plt.figure(figsize=(10, 25))
-    gs = gridspec.GridSpec(6, 1)
+    plt.figure(figsize=(12, 18))
+    gs = gridspec.GridSpec(3, 2)
     ax_A = plt.subplot(gs[0, 0])
-    ax_P1 = plt.subplot(gs[1, 0])
-    ax_P2 = plt.subplot(gs[2, 0])
-    ax_P3 = plt.subplot(gs[3, 0])
-    ax_fc = plt.subplot(gs[4, 0])
-    ax_wcm = plt.subplot(gs[5, 0])
+    ax_fc = plt.subplot(gs[1, 0])
+    ax_wcm = plt.subplot(gs[2, 0])
+    ax_P1 = plt.subplot(gs[0, 1])
+    ax_P2 = plt.subplot(gs[1, 1])
+    ax_P3 = plt.subplot(gs[2, 1])
 
     ## Plot A results
     hist_range = (np.floor(A.min()), np.ceil(A.max()))
@@ -766,34 +770,7 @@ def plot_results(
     ax_A.legend(fontsize=8, frameon=False)
     ax_A.set_xlabel('TF-Gene Interation\n(A entries)', fontsize=10)
     ax_A.set_ylabel('Count', fontsize=10)
-
-    ## Plot P results
-    P_ave = P.mean(1)
-    hist_range = (np.floor(P_ave.min()), np.ceil(P_ave.max()))
-    n_bins = 5 * int(hist_range[1] - hist_range[0])
-    plot(ax_P1, P_ave[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
-    plot(ax_P1, P_ave[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
-    plot(ax_P1, P_ave[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
-    ax_P1.legend(fontsize=8, frameon=False)
-    ax_P1.set_xlabel('TF Average Activity\n(mean of P rows)', fontsize=10)
-    ax_P1.set_ylabel('Count', fontsize=10)
-
-    ## Plot P range results
-    P_range = P.max(1) - P.min(1)
-    hist_range = (np.floor(P_range.min()), np.ceil(P_range.max()))
-    n_bins = 2 * int(hist_range[1] - hist_range[0])
-    plot(ax_P2, P_range[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
-    plot(ax_P2, P_range[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
-    plot(ax_P2, P_range[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
-    ax_P2.legend(fontsize=8, frameon=False)
-    ax_P2.set_xlabel('TF Activity Range\n(range of P rows)', fontsize=10)
-    ax_P2.set_ylabel('Count', fontsize=10)
-
-    ## Plot P distributions
-    for tf_activity in P:
-        ax_P3.hist(tf_activity, linewidth=1, alpha=0.2, histtype='step')
-    ax_P3.set_xlabel('TF Activity\n(P rows)', fontsize=10)
-    ax_P3.set_ylabel('Count', fontsize=10)
+    no_spines(ax_A)
 
     ## Plot fold changes
     hist_range = (np.floor(fcs.min()), np.ceil(fcs.max()))
@@ -804,6 +781,7 @@ def plot_results(
     ax_fc.legend(fontsize=8, frameon=False)
     ax_fc.set_xlabel('TF-Gene Fold Change', fontsize=10)
     ax_fc.set_ylabel('Count', fontsize=10)
+    no_spines(ax_fc)
 
     ## Compare to whole-cell model fold changes
     pearson_all = stats.pearsonr(wcm_fcs, nca_fcs)
@@ -819,10 +797,42 @@ def plot_results(
     ax_wcm.set_ylim(ylim)
     ax_wcm.set_xlabel('Whole-cell model fold change')
     ax_wcm.set_ylabel('NCA predicted fold change')
-    ax_wcm.legend()
+    ax_wcm.legend(fontsize=8, frameon=False)
     ax_wcm.set_title(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e})\n'
         f'Consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e})',
-        fontsize=12)
+        fontsize=10)
+    no_spines(ax_wcm)
+
+    ## Plot P results
+    P_ave = P.mean(1)
+    hist_range = (np.floor(P_ave.min()), np.ceil(P_ave.max()))
+    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    plot(ax_P1, P_ave[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
+    plot(ax_P1, P_ave[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
+    plot(ax_P1, P_ave[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
+    ax_P1.legend(fontsize=8, frameon=False)
+    ax_P1.set_xlabel('TF Average Activity\n(mean of P rows)', fontsize=10)
+    ax_P1.set_ylabel('Count', fontsize=10)
+    no_spines(ax_P1)
+
+    ## Plot P range results
+    P_range = P.max(1) - P.min(1)
+    hist_range = (np.floor(P_range.min()), np.ceil(P_range.max()))
+    n_bins = 2 * int(hist_range[1] - hist_range[0])
+    plot(ax_P2, P_range[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
+    plot(ax_P2, P_range[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
+    plot(ax_P2, P_range[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
+    ax_P2.legend(fontsize=8, frameon=False)
+    ax_P2.set_xlabel('TF Activity Range\n(range of P rows)', fontsize=10)
+    ax_P2.set_ylabel('Count', fontsize=10)
+    no_spines(ax_P2)
+
+    ## Plot P distributions
+    for tf_activity in P:
+        ax_P3.hist(tf_activity, linewidth=1, alpha=0.2, histtype='step')
+    ax_P3.set_xlabel('TF Activity\n(P rows)', fontsize=10)
+    ax_P3.set_ylabel('Count', fontsize=10)
+    no_spines(ax_P3)
 
     ## Save plot
     plt.tight_layout()

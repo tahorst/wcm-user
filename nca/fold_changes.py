@@ -1047,7 +1047,7 @@ if __name__ == '__main__':
             if args.global_expression:
                 tfs, _ = add_global_expression(tfs)
             if args.sigma_factors:
-                tfs, _ = add_sigma_factors(tfs, gene_symbols)
+                tfs, _ = add_sigma_factors(tfs, gene_symbols, synonyms)
             if args.noise:
                 tfs, _ = add_noisy_expression(tfs, *args.noise)
 

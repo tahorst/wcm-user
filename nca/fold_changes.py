@@ -746,6 +746,7 @@ def plot_results(
         genes: np.ndarray,
         tfs: np.ndarray,
         output_dir: str,
+        max_bins: int = 200,
         ) -> None:
     """
     Plot NCA results for easier inspection.
@@ -757,6 +758,7 @@ def plot_results(
         genes: IDs for each gene corresponding to rows in A (n genes)
         tfs: names of each TF corresponding to columns in A (m TFs)
         output_dir: path to directory to save the plot
+        max_bins: maximum number of bins for histogram plots
     """
 
     def plot(ax, series, label, hist_range, n_bins, color):
@@ -809,7 +811,7 @@ def plot_results(
 
     ## Plot A results
     hist_range = (np.floor(A.min()), np.ceil(A.max()))
-    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    n_bins = min(5 * int(hist_range[1] - hist_range[0]), max_bins)
     plot(ax_A, A[negative], 'Negative', hist_range, n_bins, cmap(0))
     plot(ax_A, A[positive], 'Positive', hist_range, n_bins, cmap(1))
     plot(ax_A, A[ambiguous], 'Ambiguous', hist_range, n_bins, cmap(2))
@@ -820,7 +822,7 @@ def plot_results(
 
     ## Plot fold changes
     hist_range = (np.floor(fcs.min()), np.ceil(fcs.max()))
-    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    n_bins = min(5 * int(hist_range[1] - hist_range[0]), max_bins)
     plot(ax_fc, fcs[negative], 'Negative', hist_range, n_bins, cmap(0))
     plot(ax_fc, fcs[positive], 'Positive', hist_range, n_bins, cmap(1))
     plot(ax_fc, fcs[ambiguous], 'Ambiguous', hist_range, n_bins, cmap(2))
@@ -852,7 +854,7 @@ def plot_results(
     ## Plot P results
     P_ave = P.mean(1)
     hist_range = (np.floor(P_ave.min()), np.ceil(P_ave.max()))
-    n_bins = 5 * int(hist_range[1] - hist_range[0])
+    n_bins = min(5 * int(hist_range[1] - hist_range[0]), max_bins)
     plot(ax_P1, P_ave[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
     plot(ax_P1, P_ave[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
     plot(ax_P1, P_ave[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))
@@ -864,7 +866,7 @@ def plot_results(
     ## Plot P range results
     P_range = P.max(1) - P.min(1)
     hist_range = (np.floor(P_range.min()), np.ceil(P_range.max()))
-    n_bins = 2 * int(hist_range[1] - hist_range[0])
+    n_bins = min(2 * int(hist_range[1] - hist_range[0]), max_bins)
     plot(ax_P2, P_range[negative_tfs], 'All negative', hist_range, n_bins, cmap(0))
     plot(ax_P2, P_range[positive_tfs], 'All positive', hist_range, n_bins, cmap(1))
     plot(ax_P2, P_range[combined_tfs], 'Multiple', hist_range, n_bins, cmap(2))

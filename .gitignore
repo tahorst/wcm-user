@@ -3,6 +3,7 @@
 *.pickle
 *.pkl
 out/
+log/
 
 # Not to be committed due to license
 nca/data/regulon-db/

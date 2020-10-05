@@ -8,6 +8,7 @@ each gene based on expression in all conditions.
 import argparse
 import csv
 import os
+import re
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -38,6 +39,10 @@ TF_CACHE_FILE = 'tfs.npy'
 REGULON_DB_DIR = os.path.join(DATA_DIR, 'regulon-db')
 REGULON_DB_SCRIPT = os.path.join(BASE_DIR, 'download_regulondb.sh')
 TF_GENE_FILE = 'tf_genes.tsv'
+
+# EcoCyc regulation
+ECOCYC_DIR = os.path.join(DATA_DIR, 'ecocyc')
+ECOCYC_REGULATION_FILE = os.path.join(ECOCYC_DIR, 'regulation.tsv')
 
 # Sequencing related
 WCM_FILE = os.path.join(DATA_DIR, 'wcm_fold_changes.tsv')
@@ -191,6 +196,9 @@ def load_sigma_gene_interactions() -> Dict[str, Dict[str, int]]:
     Returns:
         sigma_genes: relationship between sigma factors and genes
             {sigma factor: {gene: regulatory direction}}
+
+    TODO:
+        - add option for EcoCyc sigma factors
     """
 
     data = load_regulon_db_file('sigma_genes.tsv')
@@ -215,7 +223,105 @@ def load_sigma_gene_interactions() -> Dict[str, Dict[str, int]]:
 
     return sigma_genes
 
-def load_tf_gene_interactions(
+def add_tf_gene_data(
+        tf_genes: Dict[str, Dict[str, int]],
+        tf: str,
+        gene: str,
+        effect: str,
+        activator_key: str,
+        repressor_key: str,
+        ambiguous_key: str,
+        split: bool,
+        verbose: bool,
+        ) -> None:
+    """
+    Add TF-gene interaction data to a data structure from multiple sources.
+
+    Args:
+        split: if True, splits TFs into activator and repressor forms
+        verbose: if True, prints warnings about loaded data
+
+    Returns:
+        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+            regulatory direction is 1 for positive regulation
+            regulatory direction is -1 for negative regulation
+            regulatory direction is 0 for unknown or conflicting regulation
+    """
+
+    # Check type of regulation
+    if effect == activator_key:
+        direction = 1
+    elif effect == repressor_key:
+        direction = -1
+    elif effect == ambiguous_key:
+        direction = 0
+    else:
+        raise ValueError(f'Unrecognized TF effect: {effect}')
+
+    # Store new data
+    if split:
+        if effect == activator_key or effect == ambiguous_key:
+            split_tf = f'{tf}:activator'
+            genes = tf_genes.get(split_tf, {})
+            genes[gene] = 1
+            tf_genes[split_tf] = genes
+
+        if effect == repressor_key or effect == ambiguous_key:
+            split_tf = f'{tf}:repressor'
+            genes = tf_genes.get(split_tf, {})
+            genes[gene] = -1
+            tf_genes[split_tf] = genes
+    else:
+        genes = tf_genes.get(tf, {})
+        if genes.get(gene, direction) != direction:
+            if verbose:
+                print(f'Inconsistent regulatory effects for {tf} on {gene}')
+            genes[gene] = 0
+        else:
+            genes[gene] = direction
+        tf_genes[tf] = genes
+
+def load_ecocyc_tf_gene_interactions(
+        split: bool = False,
+        verbose: bool = True,
+        ) -> Dict[str, Dict[str, int]]:
+    """
+    Load EcoCyc TF-gene interactions.
+
+    Args:
+        split: if True, splits TFs into activator and repressor forms
+        verbose: if True, prints warnings about loaded data
+
+    Returns:
+        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+            regulatory direction is 1 for positive regulation
+            regulatory direction is -1 for negative regulation
+            regulatory direction is 0 for unknown or conflicting regulation
+    """
+
+    tf_genes = {}
+
+    with open(ECOCYC_REGULATION_FILE) as f:
+        reader = csv.reader(f, delimiter='\t')
+
+        type_idx = 2
+        dir_idx = 3
+        common_name_idx = 4
+        for line in reader:
+            # Skip lines that are not needed
+            if line[0].startswith('#'):
+                continue
+            if line[type_idx] != 'Transcription-Factor-Binding':
+                continue
+
+            # Extract data from the line
+            tf, gene = re.findall('(.*) [-\+]*> (.*)', line[common_name_idx])[0]
+            effect = line[dir_idx]
+            add_tf_gene_data(tf_genes, tf, gene, effect, '+', '-', 'NIL', split, verbose)
+
+    return tf_genes
+
+def load_regulondb_tf_gene_interactions(
         split: bool = False,
         verbose: bool = True,
         ) -> Dict[str, Dict[str, int]]:
@@ -245,39 +351,47 @@ def load_tf_gene_interactions(
         tf = line[tf_idx]
         gene = line[gene_idx]
         effect = line[dir_idx]
+        add_tf_gene_data(tf_genes, tf, gene, effect, 'activator', 'repressor', 'unknown', split, verbose)
 
-        # Check type of regulation
-        if effect == 'activator':
-            direction = 1
-        elif effect == 'repressor':
-            direction = -1
-        elif effect == 'unknown':
-            direction = 0
-        else:
-            raise ValueError(f'Unrecognized TF effect: {effect}')
+    return tf_genes
 
-        # Store new data
-        if split:
-            if effect == 'activator' or effect == 'unknown':
-                split_tf = f'{tf}:activator'
-                genes = tf_genes.get(split_tf, {})
-                genes[gene] = 1
-                tf_genes[split_tf] = genes
+def load_tf_gene_interactions(
+        ecocyc: bool = True,
+        regulondb: bool = False,
+        split: bool = False,
+        verbose: bool = True,
+        ) -> Dict[str, Dict[str, int]]:
+    """
+    Load TF-gene interactions.
 
-            if effect == 'repressor' or effect == 'unknown':
-                split_tf = f'{tf}:repressor'
-                genes = tf_genes.get(split_tf, {})
-                genes[gene] = -1
-                tf_genes[split_tf] = genes
-        else:
-            genes = tf_genes.get(tf, {})
-            if genes.get(gene, direction) != direction:
-                if verbose:
-                    print(f'Inconsistent regulatory effects for {tf} on {gene}')
-                genes[gene] = 0
-            else:
-                genes[gene] = direction
-            tf_genes[tf] = genes
+    Args:
+        ecocyc: if True, uses regulation interactions from EcoCyc
+        regulondb: if True, uses regulation interactions from RegulonDB
+        split: if True, splits TFs into activator and repressor forms
+        verbose: if True, prints warnings about loaded data
+
+    Returns:
+        tf_genes: relationship between TF and genes {TF: {gene: regulatory direction}}
+            regulatory direction is 1 for positive regulation
+            regulatory direction is -1 for negative regulation
+            regulatory direction is 0 for unknown or conflicting regulation
+
+    TODO:
+        - create consistent naming convention from EcoCyc and RegulonDB (eg EcoCyc TF arcA vs RegulonDB ArcA)
+        - check for clashes in regulation direction if using both ecocyc and regulondb
+    """
+
+    if ecocyc and regulondb:
+        raise NotImplementedError('Using both EcoCyc and RegulonDB requires reconciling differences in TF/gene IDs.')
+
+    tf_genes = {}
+    if ecocyc:
+        tf_genes.update(load_ecocyc_tf_gene_interactions(split, verbose))
+        print('Loaded EcoCyc gene regulation')
+
+    if regulondb:
+        tf_genes.update(load_regulondb_tf_gene_interactions(split, verbose))
+        print('Loaded RegulonDB gene regulation')
 
     return tf_genes
 
@@ -916,6 +1030,14 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='If set, force a rerun of identifying the initial TF map, otherwise use cached values.')
 
+    # Network options
+    parser.add_argument('--no-ecocyc', dest='ecocyc',
+        action='store_false',
+        help='If set, does not use EcoCyc regulation data.')
+    parser.add_argument('--regulondb',
+        action='store_true',
+        help='If set, uses RegulonDB regulation data.')
+
     # Data options
     parser.add_argument('--average-seq',
         action='store_true',
@@ -985,7 +1107,10 @@ if __name__ == '__main__':
     print('Loading data from files...')
     seq_data, idx_mapping = load_seq_data(args.linear, args.average_seq)
     b_numbers, gene_symbols, synonyms = load_gene_names()
-    tf_genes = load_tf_gene_interactions(split=args.split, verbose=args.verbose)
+    tf_genes = load_tf_gene_interactions(
+        ecocyc=args.ecocyc, regulondb=args.regulondb,
+        split=args.split, verbose=args.verbose,
+        )
 
     if args.analysis is None:
         # Check input cached files

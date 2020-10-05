@@ -721,6 +721,8 @@ def calculate_fold_changes(
             processed_tf = tf.split(':')[0].lower()
             data = regulatory_pairs.get(processed_tf, {})
             data[gene] = data.get(gene, 0) + fcs[i, j]
+            if data[gene] == 0:
+                del data[gene]
             regulatory_pairs[processed_tf] = data
 
     return fcs, regulatory_pairs
@@ -847,11 +849,14 @@ def match_statistics(
     # WCM fold change correlations
     fcs, nca_pairs = calculate_fold_changes(A, P, genes, tfs)
     wcm_fcs, nca_fcs, wcm_consistent = compare_wcm_nca(nca_pairs)
+    nonzero = nca_fcs != 0
     pearson_all = stats.pearsonr(wcm_fcs, nca_fcs)
     pearson_consistent = stats.pearsonr(wcm_fcs[wcm_consistent], nca_fcs[wcm_consistent])
+    pearson_no_zeros = stats.pearsonr(wcm_fcs[nonzero], nca_fcs[nonzero])
     print('\nFold change correlation with WCM:')
     print(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e}, n={len(wcm_fcs)})')
     print(f'Only if WCM consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e}, n={np.sum(wcm_consistent)})')
+    print(f'Excluding unmatched: r={pearson_no_zeros[0]:.3f} (p={pearson_no_zeros[1]:.0e}, n={np.sum(nonzero)})')
 
 def plot_results(
         tf_genes: Dict[str, Dict[str, int]],
@@ -946,8 +951,10 @@ def plot_results(
     no_spines(ax_fc)
 
     ## Compare to whole-cell model fold changes
+    nonzero = nca_fcs != 0
     pearson_all = stats.pearsonr(wcm_fcs, nca_fcs)
     pearson_consistent = stats.pearsonr(wcm_fcs[wcm_consistent], nca_fcs[wcm_consistent])
+    pearson_no_zeros = stats.pearsonr(wcm_fcs[nonzero], nca_fcs[nonzero])
     ax_wcm.plot(wcm_fcs[wcm_consistent], nca_fcs[wcm_consistent], 'x', label='WCM consistent')
     ax_wcm.plot(wcm_fcs[~wcm_consistent], nca_fcs[~wcm_consistent], 'x', label='WCM inconsistent')
     xlim = ax_wcm.get_xlim()
@@ -961,7 +968,8 @@ def plot_results(
     ax_wcm.set_ylabel('NCA predicted fold change')
     ax_wcm.legend(fontsize=8, frameon=False)
     ax_wcm.set_title(f'All: r={pearson_all[0]:.3f} (p={pearson_all[1]:.0e}, n={len(wcm_fcs)})\n'
-        f'Consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e}, n={np.sum(wcm_consistent)})',
+        f'Consistent: r={pearson_consistent[0]:.3f} (p={pearson_consistent[1]:.0e}, n={np.sum(wcm_consistent)})\n'
+        f'Exclude zeros: r={pearson_no_zeros[0]:.3f} (p={pearson_no_zeros[1]:.0e}, n={np.sum(nonzero)})',
         fontsize=10)
     no_spines(ax_wcm)
 

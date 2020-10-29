@@ -427,6 +427,7 @@ def load_wcm_fold_changes() -> Dict[str, Dict[str, Tuple[float, int]]]:
     with open(WCM_FILE) as f:
         reader = csv.reader(f, delimiter='\t')
 
+        next(reader)  # remove comment line
         headers = next(reader)
         tf_idx = headers.index('TF')
         gene_idx = headers.index('Target')

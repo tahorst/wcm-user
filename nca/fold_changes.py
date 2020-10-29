@@ -1130,10 +1130,10 @@ def parse_args() -> argparse.Namespace:
         help='If set, averages sequencing data for replicate samples and reduces the number of samples.')
     parser.add_argument('--linear',
         action='store_true',
-        help='If set, use linear counts from sequencing data other keep log2 counts.')
+        help='If set, use linear counts from sequencing data otherwise keep log2 counts.')
     parser.add_argument('--global-expression',
         action='store_true',
-        help='If set, creates pseudo transcription factors to capture global expression.')
+        help='If set, creates pseudo transcription factors to capture global expression capacity (basal rates).')
     parser.add_argument('--split',
         action='store_true',
         help='If set, split transcription factors into positive and negative regulation.')

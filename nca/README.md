@@ -7,8 +7,8 @@ Relevant papers:
 - Jayavelu et al. Iterative sub-network component analysis enables reconstruction of large scale genetic networks. BMC Bioinformatics. 2015.
 - Carrera et al. An integrative, multi‐scale, genome‐wide model reveals the phenotypic landscape of Escherichia coli. MSB. 2014.
 
-Setup (optional depending on desired regulatory network topology):
-Run `./download_regulondb.sh` to download data from regulonDB that is not committed.
+Setup (optional depending on desired regulatory network topology options):
+Run `cd data/regulon-db/ && ./download_regulondb.sh` to download data from regulonDB that is not committed (unclear if their license allows it).
 
 TODO:
 - Normalize sequencing datasets (might need Lowess normalization for each sample and quantile normalization between all samples) to use datasets in addition to EcoMAC.tsv

@@ -39,7 +39,7 @@ TF_CACHE_FILE = 'tfs.npy'
 
 # RegulonDB related
 REGULON_DB_DIR = os.path.join(DATA_DIR, 'regulon-db')
-REGULON_DB_SCRIPT = os.path.join(BASE_DIR, 'download_regulondb.sh')
+REGULON_DB_SCRIPT = os.path.join(REGULON_DB_DIR, 'download_regulondb.sh')
 TF_GENE_FILE = 'tf_genes.tsv'
 
 # EcoCyc regulation

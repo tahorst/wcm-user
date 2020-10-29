@@ -1,3 +1,4 @@
+# File from reconstruction/ecoli/flat/fold_changes.tsv for comparison purposes
 "TF"	"Target"	"F_avg"	"F_sd"	"F_corrected"	"Regulation_direct"	"PS"	"PS_corrected"	"kd (units.mol/units.L)"
 "araC"	"araD"	0.35	0.0	NaN	-2	8	5	2e-13
 "araC"	"araA"	0.7	0.04	NaN	-2	8	5	2e-13

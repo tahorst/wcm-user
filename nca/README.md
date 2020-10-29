@@ -14,6 +14,8 @@ Run `cd data/regulon-db/ && ./download_regulondb.sh` to download data from regul
 
 Scripts:
 - `run_all.py`: runs `fold_changes.py` with various options for output comparisons
+    - `log/*.log`: output logs for each method/option combination
+    - `log/summary.tsv`: compiled statistics for each method/option combination for comparison
 - `fold_changes.py`: main script to solve the NCA problem and determine fold changes to use in the whole-cell model
     - `./fold_changes.py -h`: show options available and a description of what they do
     - methods (`-m`):

@@ -109,7 +109,11 @@ def parse_args() -> argparse.Namespace:
 	# General options
 	parser.add_argument('-c', '--compile',
 		action='store_true',
-		help='Compile log output into a spreadsheet.')
+		help='Compile log output into a spreadsheet without rerunning solvers (useful if compile_output() changed).')
+	parser.add_argument('--cpus',
+		type=int,
+		default=2,
+		help='Number of CPUs to use to run different option combinations. Beware of memory limitations with constrained_nca and many CPUs. (default: 2)')
 
 	return parser.parse_args()
 
@@ -125,7 +129,9 @@ if __name__ == '__main__':
 			for i in range(2**len(OPTIONS))
 			]
 
-		pool = multiprocessing.Pool(8)
+		pool = multiprocessing.Pool(args.cpus)
 		results = [pool.apply_async(solve_nca, args) for args in all_args]
 		pool.close()
 		pool.join()
+
+		compile_output()

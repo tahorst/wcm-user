@@ -253,7 +253,7 @@ def robust_nca(
         A: np.ndarray,
         verbose: bool = True,
         status_step: float = 0.1,
-        n_iters: int = 100,
+        n_iters: int = 5,
         error_tolerance = 1e-3,
         **options) -> (np.ndarray, np.ndarray):
     """

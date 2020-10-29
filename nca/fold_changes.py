@@ -1096,7 +1096,7 @@ def parse_args() -> argparse.Namespace:
     default_label = 'nca-results'
     default_iterative_iterations = 100
     default_iterative_split = 5
-    default_robust_iterations = 100
+    default_robust_iterations = 5
     default_status_update = 0.1
 
     # General options

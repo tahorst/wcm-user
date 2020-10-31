@@ -14,7 +14,7 @@ import swiglpk as glp
 
 
 # Function names of the different NCA methods that have been implemented below
-METHODS = ['constrained_nca', 'robust_nca', 'fast_nca', 'random_nca']
+METHODS = ['robust_nca', 'constrained_nca', 'fast_nca', 'random_nca']
 
 
 class NotValidMatrixError(Exception):

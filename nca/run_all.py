@@ -36,7 +36,7 @@ MODELS = [
 def solve_nca(model: str, options: List[str]):
 	label = '-'.join([model] + [option.split('-')[0] for option in options])
 	flags = ' '.join([f'--{option}' for option in options])
-	cmd = f'./fold_changes.py -l {label} -m {model} {flags}'
+	cmd = f'./fold_changes.py -f -l {label} -m {model} {flags}'
 
 	print(f'Running: {cmd}')
 	with open(os.path.join(LOG_DIR, f'{label}.log'), 'w') as f:
@@ -107,7 +107,7 @@ def parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser()
 
 	# General options
-	parser.add_argument('-c', '--compile',
+	parser.add_argument('--compile',
 		action='store_true',
 		help='Compile log output into a spreadsheet without rerunning solvers (useful if compile_output() changed).')
 	parser.add_argument('--cpus',

@@ -4,8 +4,6 @@
 Template file for new python files.
 """
 
-from __future__ import absolute_import, division, print_function
-
 import argparse
 import os
 import time
@@ -14,15 +12,14 @@ import time
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 
 
-def main():
+def main() -> None:
 	"""
 	Main function
 	"""
 
 	return
 
-def parse_args():
-	# type: () -> argparse.Namespace
+def parse_args() -> argparse.Namespace:
 	"""
 	Parses arguments from the command line.
 
@@ -41,6 +38,7 @@ def parse_args():
 		help='help')
 
 	return parser.parse_args()
+
 
 if __name__ == '__main__':
 	start = time.time()

@@ -68,6 +68,16 @@ PATHWAYS = {
 		'L-valine': ['IlvIHGMBNCDE'],
 		}.items()
 	}
+TRANSCRIPTION_FACTORS = {
+	'alaS': ['L-alanine'],
+	'argP': ['L-arginine', 'L-lysine'],  # TODO: lysine bound is inactive
+	'argR': ['L-arginine'],
+	'asnC': ['L-asparagine'],  # TODO: bound is inactive
+	'gcvA': ['glycine'],  # TODO: bound is inactive
+	'lrp': ['L-leucine'],
+	'tyrR': ['L-phenylalanine', 'L-tryptophan', 'L-tyrosine'],
+	'trpR': ['L-tryptophan'],
+	}
 
 
 def load_regulation() -> Tuple[Dict[str, Dict[str, Tuple[str, str]]], Dict[str, Dict[str, Tuple[str, str]]]]:
@@ -185,9 +195,29 @@ def summarize_trna_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) ->
 			}
 		print(f'\t{aa}: {", ".join(sorted(regulated))}')
 
+def summarize_tf_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) -> None:
+	"""
+	Show amino acids that regulate enzymatic expression in synthesis pathways
+	for other amino acids through transcription factor binding.
+
+	Args:
+		regulation: dictionary of regulatee to regulator pair mappings,
+			see load_regulation()
+	"""
+
+	print('Pathway expression regulated by other amino acids through TFs:')
+	for aa, enzymes in PATHWAYS.items():
+		regulated = {
+			AMINO_ACIDS[ligand]
+			for enzyme in enzymes
+			for regulator, control in sorted(regulation.get(enzyme, {}).items())
+			for ligand in TRANSCRIPTION_FACTORS.get(regulator, [])
+			}
+		print(f'\t{aa}: {", ".join(sorted(regulated))}')
 
 if __name__ == '__main__':
 	regulators, regulatees = load_regulation()
 	summarize_aa_control(regulators)
 	summarize_pathway_control(regulatees)
 	summarize_trna_control(regulatees)
+	summarize_tf_control(regulatees)

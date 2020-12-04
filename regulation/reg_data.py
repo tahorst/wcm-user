@@ -165,8 +165,29 @@ def summarize_pathway_control(regulation: Dict[str, Dict[str, Tuple[str, str]]])
 			}
 		print(f'\t{aa}: {", ".join(sorted(regulated))}')
 
+def summarize_trna_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) -> None:
+	"""
+	Show tRNA that regulate enzymatic expression in synthesis pathways for
+	other amino acids.
+
+	Args:
+		regulation: dictionary of regulatee to regulator pair mappings,
+			see load_regulation()
+	"""
+
+	print('Pathway expression regulated by other tRNA:')
+	for aa, enzymes in PATHWAYS.items():
+		regulated = {
+			regulator[-4:-1]
+			for enzyme in enzymes
+			for regulator, control in sorted(regulation.get(enzyme, {}).items())
+			if control[0] == 'Ribosome-Mediated-Attenuation' and control[1] == '-' and 'tRNA' in regulator
+			}
+		print(f'\t{aa}: {", ".join(sorted(regulated))}')
+
 
 if __name__ == '__main__':
 	regulators, regulatees = load_regulation()
 	summarize_aa_control(regulators)
 	summarize_pathway_control(regulatees)
+	summarize_trna_control(regulatees)

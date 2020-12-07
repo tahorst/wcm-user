@@ -2,11 +2,6 @@
 
 """
 Load and explore regulation data.
-
-TODO:
-	tRNA control
-	TF control
-	AA regulation in pathways
 """
 
 import csv
@@ -17,6 +12,7 @@ from typing import Dict, Tuple
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 
+# Mapping for easier to read output and tRNA matching
 AMINO_ACIDS = {
 	'L-alanine': 'Ala',
 	'L-arginine': 'Arg',
@@ -39,6 +35,8 @@ AMINO_ACIDS = {
 	'L-tyrosine': 'Tyr',
 	'L-valine': 'Val',
 	}
+# Mapping to all genes in each AA synthesis pathway curated from EcoCyc
+# Some genes form complexes with each other or catalyze reactions in parallel
 PATHWAYS = {
 	aa: [
 		f'{gene[:3].lower()}{letter}'
@@ -68,6 +66,7 @@ PATHWAYS = {
 		'L-valine': ['IlvIHGMBNCDE'],
 		}.items()
 	}
+# Mapping to transcription factors that an amino acid can bind to curated from regulonDB
 TRANSCRIPTION_FACTORS = {
 	'alaS': ['L-alanine'],
 	'argP': ['L-arginine', 'L-lysine'],  # TODO: lysine bound is inactive
@@ -214,6 +213,7 @@ def summarize_tf_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) -> N
 			for ligand in TRANSCRIPTION_FACTORS.get(regulator, [])
 			}
 		print(f'\t{aa}: {", ".join(sorted(regulated))}')
+
 
 if __name__ == '__main__':
 	regulators, regulatees = load_regulation()

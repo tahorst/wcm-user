@@ -214,6 +214,26 @@ def summarize_tf_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) -> N
 			}
 		print(f'\t{aa}: {", ".join(sorted(regulated))}')
 
+def summarize_rnap_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) -> None:
+	"""
+	Show RNAP regulation (ppGpp or DksA) of enzymatic expression in synthesis
+	pathways for amino acids.
+
+	Args:
+		regulation: dictionary of regulatee to regulator pair mappings,
+			see load_regulation()
+	"""
+
+	print('Pathway expression regulated by RNAP allosteric effects:')
+	for aa, enzymes in PATHWAYS.items():
+		regulated = {
+			regulator
+			for enzyme in enzymes
+			for regulator, control in sorted(regulation.get(enzyme, {}).items())
+			if control[0] == 'Allosteric-Regulation-of-RNAP'
+			}
+		print(f'\t{aa}: {", ".join(sorted(regulated))}')
+
 
 if __name__ == '__main__':
 	regulators, regulatees = load_regulation()
@@ -221,3 +241,4 @@ if __name__ == '__main__':
 	summarize_pathway_control(regulatees)
 	summarize_trna_control(regulatees)
 	summarize_tf_control(regulatees)
+	summarize_rnap_control(regulatees)

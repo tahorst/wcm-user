@@ -234,6 +234,30 @@ def summarize_rnap_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) ->
 			}
 		print(f'\t{aa}: {", ".join(sorted(regulated))}')
 
+def summarize_other_control(regulation: Dict[str, Dict[str, Tuple[str, str]]]) -> None:
+	"""
+	Show other regulation of enzymes in synthesis pathways for amino acids
+	that is not captured in other functions above.
+
+	Args:
+		regulation: dictionary of regulatee to regulator pair mappings,
+			see load_regulation()
+	"""
+
+	print('Pathway regulated by other means:')
+	for aa, enzymes in PATHWAYS.items():
+		regulated = {
+			f'{control[1]} {regulator} -> {enzyme} ({control[0]})'
+			for enzyme in enzymes
+			for regulator, control in sorted(regulation.get(enzyme, {}).items())
+			if not (control[0] == 'Regulation-of-Enzyme-Activity' and control[1] == '-' and regulator in PATHWAYS)
+			and not (control[0] == 'Ribosome-Mediated-Attenuation' and control[1] == '-' and 'tRNA' in regulator)
+			and regulator not in TRANSCRIPTION_FACTORS
+			and control[0] != 'Allosteric-Regulation-of-RNAP'
+			}
+		sep = '\n\t\t'
+		print(f'\t{aa}:{sep}{sep.join(sorted(regulated))}')
+
 
 if __name__ == '__main__':
 	regulators, regulatees = load_regulation()
@@ -242,3 +266,4 @@ if __name__ == '__main__':
 	summarize_trna_control(regulatees)
 	summarize_tf_control(regulatees)
 	summarize_rnap_control(regulatees)
+	summarize_other_control(regulatees)

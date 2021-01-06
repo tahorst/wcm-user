@@ -44,7 +44,7 @@ PATHWAYS = {
 		for letter in (gene[3:] if gene[3:] else [''])
 		]
 	for aa, regulated in {
-		'L-alanine': ['IlvE', 'AvtA', 'AlaCA', 'IscS', 'SufS'],
+		'L-alanine': ['AvtA', 'AlaCA', 'IscS', 'SufS'],
 		'L-arginine': ['ArgABCDEFGHI', 'AstC', 'GabT', 'CarAB'],
 		'L-asparagine': ['AsnAB'],
 		'L-aspartate': ['AspC'],

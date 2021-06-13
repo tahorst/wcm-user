@@ -4,15 +4,14 @@
 Find valid reactions and metabolites in reaction network.
 """
 
-from __future__ import absolute_import, division, print_function
-
-import cPickle
+import pickle
 import csv
 import os
 
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 from reconstruction.ecoli.dataclasses.process.metabolism import Metabolism
+from reconstruction.ecoli.dataclasses.state.external_state import ExternalState
 
 
 # Directories
@@ -27,8 +26,8 @@ METABOLITE_FILE = os.path.join(OUT_DIR, 'invalid_metabolites.tsv')
 REACTION_FILE = os.path.join(OUT_DIR, 'invalid_reactions.tsv')
 
 
-def get_boundaries(metabolism, media=None):
-	# type: (Metabolism, Optional[str]) -> (Set[str], Set[str])
+def get_boundaries(metabolism, external_state, media=None):
+	# type: (Metabolism, ExternalState, Optional[str]) -> (Set[str], Set[str])
 	"""
 	Get source and sink metabolites. Imports are sources. Concentration targets
 	and secretions are sinks.
@@ -43,16 +42,15 @@ def get_boundaries(metabolism, media=None):
 		sinks: set of metabolite IDs with location tag that are sinks
 	"""
 
-	imports = metabolism.boundary.exchange_data_dict['importExchangeMolecules']
 	if media is None:
 		sources = set([
-			m for exchange in imports.values()
-			for m in exchange
+			met for media in external_state.saved_media
+			for met in external_state.exchange_data_from_media(media)['importExchangeMolecules']
 			])
 	else:
-		sources = set(imports[media])
-	sinks = set(metabolism.boundary.secretion_exchange_molecules)
-	sinks.update(metabolism.concDict)
+		sources = set(external_state.exchange_data_from_media(media)['importExchangeMolecules'])
+	sinks = set(external_state.secretion_exchange_molecules)
+	sinks.update(metabolism.conc_dict)
 
 	return sources, sinks
 
@@ -163,14 +161,15 @@ def save_to_file(path, data, reactants, products):
 if __name__ == '__main__':
 	# Load data to analyze
 	print('Loading data from {}'.format(SIM_DATA_FILE))
-	with open(SIM_DATA_FILE) as f:
-		sim_data = cPickle.load(f)
+	with open(SIM_DATA_FILE, 'rb') as f:
+		sim_data = pickle.load(f)
 	metabolism = sim_data.process.metabolism
-	reactions = metabolism.reactionStoich
+	external_state = sim_data.external_state
+	reactions = metabolism.reaction_stoich
 
 	# Extract necessary data
 	print('Analyzing reaction network')
-	sources, sinks = get_boundaries(metabolism)
+	sources, sinks = get_boundaries(metabolism, external_state)
 	reactant_to_rxn, rxn_to_reactant = get_mappings(reactions, True)
 	product_to_rxn, rxn_to_product = get_mappings(reactions, False)
 
@@ -194,8 +193,8 @@ if __name__ == '__main__':
 		excluded_rxns = prune_reactions(reactions, valid_mets)
 
 	# Analyze results
-	all_mets = set(reactant_to_rxn.keys() + product_to_rxn.keys())
-	all_rxns = set(rxn_to_reactant.keys() + rxn_to_product.keys())
+	all_mets = set(list(reactant_to_rxn) + list(product_to_rxn))
+	all_rxns = set(list(rxn_to_reactant) + list(rxn_to_product))
 	excluded_mets = all_mets.difference(valid_mets)
 	valid_rxns = all_rxns.difference(excluded_rxns)
 

@@ -16,6 +16,7 @@ import numpy as np
 
 SIM_DIR = '/home/travis/scratch/wcEcoli_out/growth-paper/'
 BASE_SIM_DIR = 'Conditions_without_regulation_or_charging'
+NEW_C_SOURCE_DIR = 'Conditions_with_regulation'
 ADD_ONE_DIR = 'Add_one_amino_acid_shift'
 REMOVE_ONE_DIR = 'Remove_one_amino_acid_shift'
 FILE_PATH = 'plotOut/growth_trajectory.tsv'
@@ -74,6 +75,7 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
 
 if __name__ == '__main__':
     no_regulation = load_data(BASE_SIM_DIR)
+    regulation = load_data(NEW_C_SOURCE_DIR)
     add_one = load_data(ADD_ONE_DIR)
     remove_one = load_data(REMOVE_ONE_DIR)
 
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     plt.figure()
 
     plot(no_regulation, label='Original conditions', variants=np.arange(3))
-    plot(no_regulation, label='New carbon sources', variants=np.arange(3, 5))
+    plot(regulation, label='New carbon sources', variants=np.arange(3, 5))
     plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation')
     plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc with growth regulation')
     plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation', options=one_aa_options)
@@ -91,6 +93,8 @@ if __name__ == '__main__':
     plt.legend(fontsize=8, frameon=False)
     plt.xlabel('RNA/protein mass ratio')
     plt.ylabel('Growth rate (1/hr)')
+    plt.xlim([0, 0.6])
+    plt.ylim([0, 2])
 
     plt.tight_layout()
     plt.savefig(OUTPUT_FILE)

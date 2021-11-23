@@ -29,6 +29,14 @@ RP_HEADER = 'R/P ratio'
 MEAN_HEADER = ' mean'
 STD_HEADER = ' std'
 
+DENNIS_BREMER_2021 = np.array([
+[0.1691, 0.415888308335967],
+[0.2056, 0.693147180559945],
+[0.2576, 1.03972077083992],
+[0.3307, 1.38629436111989],
+[0.4176, 1.73286795139986],
+[0.5023, 2.07944154167984],
+])
 
 
 def load_data(desc, filename='growth_trajectory'):
@@ -97,6 +105,7 @@ if __name__ == '__main__':
     plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=ppgpp_options)  # 12, 20 for all
     plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
     plt.plot([0.11, 0.52], [0, 2], '--k')  # Dennis and Bremer (dry_mass_composition.tsv)
+    plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'x')
 
     # Optional plots
     # ppgpp_aa = load_data(PPGPP_DIR, 'protein_aa-growth_trajectory')

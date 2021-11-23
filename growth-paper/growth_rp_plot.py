@@ -19,7 +19,8 @@ BASE_SIM_DIR = 'Conditions_without_regulation_or_charging'
 NEW_C_SOURCE_DIR = 'Conditions_with_regulation'
 ADD_ONE_DIR = 'Add_one_amino_acid_shift'
 REMOVE_ONE_DIR = 'Remove_one_amino_acid_shift'
-FILE_PATH = 'plotOut/growth_trajectory.tsv'
+PPGPP_DIR = 'ppGpp_sensitivity'
+FILE_PATH = 'plotOut/{}.tsv'
 OUTPUT_FILE = 'combined-growth-rp.pdf'
 
 CONTROL_IDX = 19
@@ -30,11 +31,11 @@ STD_HEADER = ' std'
 
 
 
-def load_data(desc):
+def load_data(desc, filename='growth_trajectory'):
     dirs = os.listdir(SIM_DIR)
     for d in dirs:
         if d.endswith(desc):
-            path = os.path.join(SIM_DIR, d, FILE_PATH)
+            path = os.path.join(SIM_DIR, d, FILE_PATH.format(filename))
             break
     else:
         raise ValueError(f'{desc} not found in sim directory')
@@ -78,17 +79,32 @@ if __name__ == '__main__':
     regulation = load_data(NEW_C_SOURCE_DIR)
     add_one = load_data(ADD_ONE_DIR)
     remove_one = load_data(REMOVE_ONE_DIR)
+    ppgpp = load_data(PPGPP_DIR)
 
     one_aa_options = dict(alpha=0.5, markersize=4)
+    ppgpp_options = dict(alpha=0.5, markersize=6)
 
     plt.figure()
 
     plot(no_regulation, label='Original conditions', variants=np.arange(3))
-    plot(regulation, label='New carbon sources', variants=np.arange(3, 5))
+    plot(regulation, label='New carbon sources with growth regulation', variants=np.arange(3, 5))
     plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation')
     plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc with growth regulation')
     plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation', options=one_aa_options)
     plot(remove_one, std=False, exclude=[CONTROL_IDX], label='Remove one AA from rich with growth regulation', options=one_aa_options)
+    plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=ppgpp_options)  # 0, 4 for all
+    plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=ppgpp_options)  # 5, 10 for all
+    plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=ppgpp_options)  # 12, 20 for all
+    plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
+    plt.plot([0.11, 0.52], [0, 2], '--k')  # Dennis and Bremer (dry_mass_composition.tsv)
+
+    # Optional plots
+    # ppgpp_aa = load_data(PPGPP_DIR, 'protein_aa-growth_trajectory')
+    # plot(ppgpp, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=ppgpp_options)  # off window
+    # plot(ppgpp_aa, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=ppgpp_options)
+    # plot(ppgpp_aa, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=ppgpp_options)
+    # plot(ppgpp_aa, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=ppgpp_options)
+    # plot(ppgpp_aa, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=ppgpp_options)
 
     plt.legend(fontsize=8, frameon=False)
     plt.xlabel('RNA/protein mass ratio')

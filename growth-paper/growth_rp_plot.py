@@ -14,12 +14,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-SIM_DIR = '/home/travis/scratch/wcEcoli_out/growth-paper/'
+SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
 BASE_SIM_DIR = 'Conditions_without_regulation_or_charging'
 NEW_C_SOURCE_DIR = 'Conditions_with_regulation'
 ADD_ONE_DIR = 'Add_one_amino_acid_shift'
 REMOVE_ONE_DIR = 'Remove_one_amino_acid_shift'
-PPGPP_DIR = 'ppGpp_sensitivity'
+PPGPP_DIR = 'ppGpp_sensitivity_-_no_mechanistic_transport'
+NEW_AA_SOURCE_DIR = 'Amino_acid_combinations_in_media'
+INHIBITION_NO_PPGPP_DIR = 'Remove_amino_acid_inhibition_-_no_ppgpp'
+INHIBITION_DIR = 'Remove_amino_acid_inhibition'
 FILE_PATH = 'plotOut/{}.tsv'
 OUTPUT_FILE = 'combined-growth-rp.pdf'
 
@@ -37,6 +40,10 @@ DENNIS_BREMER_2021 = np.array([
 [0.4176, 1.73286795139986],
 [0.5023, 2.07944154167984],
 ])
+
+ONE_AA_OPTIONS = dict(alpha=0.5, markersize=4)
+PPGPP_OPTIONS = dict(alpha=0.5, markersize=6)
+FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black')
 
 
 def load_data(desc, filename='growth_trajectory'):
@@ -81,6 +88,48 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
 
     plt.errorbar(rp_ratio, growth, xerr=rp_ratio_std, yerr=growth_std, fmt='o', label=label, **options)
 
+def plot_conditions(options=None, std=True, label=True):
+    plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3), options=options)
+    plot(regulation, std=std, label='New carbon sources with growth regulation' if label else '', variants=np.arange(3, 5), options=options)
+    plot(add_one, std=std, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation' if label else '', options=options)
+    plot(remove_one, std=std, variants=[CONTROL_IDX], label='Rich + glc with growth regulation' if label else '', options=options)
+    plot(new_aa, std=std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '', options=options)
+    plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation' if label else '',
+        options=options if options else ONE_AA_OPTIONS)
+    plot(remove_one, std=False, exclude=[CONTROL_IDX], label='Remove one AA from rich with growth regulation' if label else '',
+        options=options if options else ONE_AA_OPTIONS)
+
+def plot_ppgpp():
+    plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=PPGPP_OPTIONS)  # 0, 4 for all
+    plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=PPGPP_OPTIONS)  # 5, 10 for all
+    plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 15), options=PPGPP_OPTIONS)  # 12, 20 for all
+
+def plot_inhibition():
+    # Control variants
+    # plot(inhib_no_ppgpp, variants=[0], std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
+    # plot(inhib, variants=[0], std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
+
+    plot(inhib_no_ppgpp, variants=range(1, 8), std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
+    plot(inhib, variants=range(1, 8), std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
+
+def plot_trends():
+    plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
+    plt.plot([0.11, 0.52], [0, 2], '--k')  # Dennis and Bremer (dry_mass_composition.tsv)
+    plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'x')
+
+def format_plot():
+    plt.legend(fontsize=8, frameon=False)
+    plt.xlabel('RNA/protein mass ratio')
+    plt.ylabel('Growth rate (1/hr)')
+    plt.xlim([0, 0.6])
+    plt.ylim([0, 2])
+    plt.tight_layout()
+
+def save_fig(output_file):
+    plt.savefig(output_file)
+    print(f'Saved to {output_file}')
+    plt.close('all')
+
 
 if __name__ == '__main__':
     no_regulation = load_data(BASE_SIM_DIR)
@@ -88,39 +137,35 @@ if __name__ == '__main__':
     add_one = load_data(ADD_ONE_DIR)
     remove_one = load_data(REMOVE_ONE_DIR)
     ppgpp = load_data(PPGPP_DIR)
-
-    one_aa_options = dict(alpha=0.5, markersize=4)
-    ppgpp_options = dict(alpha=0.5, markersize=6)
+    new_aa = load_data(NEW_AA_SOURCE_DIR)
+    inhib_no_ppgpp = load_data(INHIBITION_NO_PPGPP_DIR)
+    inhib = load_data(INHIBITION_DIR)
 
     plt.figure()
+    plot_conditions()
+    plot_trends()
+    format_plot()
+    save_fig(OUTPUT_FILE)
 
-    plot(no_regulation, label='Original conditions', variants=np.arange(3))
-    plot(regulation, label='New carbon sources with growth regulation', variants=np.arange(3, 5))
-    plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation')
-    plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc with growth regulation')
-    plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation', options=one_aa_options)
-    plot(remove_one, std=False, exclude=[CONTROL_IDX], label='Remove one AA from rich with growth regulation', options=one_aa_options)
-    plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=ppgpp_options)  # 0, 4 for all
-    plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=ppgpp_options)  # 5, 10 for all
-    plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=ppgpp_options)  # 12, 20 for all
-    plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
-    plt.plot([0.11, 0.52], [0, 2], '--k')  # Dennis and Bremer (dry_mass_composition.tsv)
-    plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'x')
+    plt.figure()
+    plot_conditions(options=FADE_OPTIONS, std=False, label=False)
+    plot_ppgpp()
+    plot_trends()
+    format_plot()
+    save_fig('ppgpp-' + OUTPUT_FILE)
+
+    plt.figure()
+    plot_conditions(options=FADE_OPTIONS, std=False, label=False)
+    plot_inhibition()
+    plot_trends()
+    format_plot()
+    save_fig('inhibition-' + OUTPUT_FILE)
 
     # Optional plots
     # ppgpp_aa = load_data(PPGPP_DIR, 'protein_aa-growth_trajectory')
-    # plot(ppgpp, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=ppgpp_options)  # off window
-    # plot(ppgpp_aa, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=ppgpp_options)
-    # plot(ppgpp_aa, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=ppgpp_options)
-    # plot(ppgpp_aa, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=ppgpp_options)
-    # plot(ppgpp_aa, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=ppgpp_options)
+    # plot(ppgpp, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=PPGPP_OPTIONS)  # off window
+    # plot(ppgpp_aa, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=PPGPP_OPTIONS)
+    # plot(ppgpp_aa, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=PPGPP_OPTIONS)
+    # plot(ppgpp_aa, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=PPGPP_OPTIONS)
+    # plot(ppgpp_aa, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=PPGPP_OPTIONS)
 
-    plt.legend(fontsize=8, frameon=False)
-    plt.xlabel('RNA/protein mass ratio')
-    plt.ylabel('Growth rate (1/hr)')
-    plt.xlim([0, 0.6])
-    plt.ylim([0, 2])
-
-    plt.tight_layout()
-    plt.savefig(OUTPUT_FILE)
-    print(f'Saved to {OUTPUT_FILE}')

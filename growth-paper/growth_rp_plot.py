@@ -88,7 +88,12 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
 
     plt.errorbar(rp_ratio, growth, xerr=rp_ratio_std, yerr=growth_std, fmt='o', label=label, **options)
 
-def plot_conditions(options=None, std=True, label=True):
+def plot_conditions(fade=False, options=None, std=True, label=True):
+    if fade:
+        options = FADE_OPTIONS
+        std = False
+        label = False
+
     plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3), options=options)
     plot(regulation, std=std, label='New carbon sources with growth regulation' if label else '', variants=np.arange(3, 5), options=options)
     plot(add_one, std=std, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation' if label else '', options=options)
@@ -102,20 +107,26 @@ def plot_conditions(options=None, std=True, label=True):
 def plot_ppgpp():
     plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=PPGPP_OPTIONS)  # 0, 4 for all
     plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=PPGPP_OPTIONS)  # 5, 10 for all
+    plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc')
+    plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc')
     plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 15), options=PPGPP_OPTIONS)  # 12, 20 for all
 
 def plot_inhibition():
+    plot(inhib_no_ppgpp, variants=range(1, 8), std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
+    plot(inhib, variants=range(1, 8), std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
+    plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc')
+    plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc')
+
     # Control variants
     # plot(inhib_no_ppgpp, variants=[0], std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
     # plot(inhib, variants=[0], std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
 
-    plot(inhib_no_ppgpp, variants=range(1, 8), std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
-    plot(inhib, variants=range(1, 8), std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
-
-def plot_trends():
-    plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
+def plot_trends(all=False):
     plt.plot([0.11, 0.52], [0, 2], '--k')  # Dennis and Bremer (dry_mass_composition.tsv)
-    plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'x')
+
+    if all:
+        plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
+        plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'x')
 
 def format_plot():
     plt.legend(fontsize=8, frameon=False)
@@ -148,14 +159,12 @@ if __name__ == '__main__':
     save_fig(OUTPUT_FILE)
 
     plt.figure()
-    plot_conditions(options=FADE_OPTIONS, std=False, label=False)
     plot_ppgpp()
     plot_trends()
     format_plot()
     save_fig('ppgpp-' + OUTPUT_FILE)
 
     plt.figure()
-    plot_conditions(options=FADE_OPTIONS, std=False, label=False)
     plot_inhibition()
     plot_trends()
     format_plot()

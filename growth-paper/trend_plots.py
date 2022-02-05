@@ -41,7 +41,25 @@ OUTPUT_FILE = 'growth-trends.pdf'
 
 
 def load_datasets(sims):
-    return {sim_desc: load_data(sim_desc) for sim_desc in sims}
+    all_data = {}
+    all_headers = set()
+    min_headers = None
+    for sim_desc in sims:
+        data, headers = load_data(sim_desc)
+        all_data[sim_desc] = data
+
+        header_set = set(headers)
+        all_headers |= header_set
+        if min_headers is None:
+            min_headers = header_set
+        else:
+            min_headers &= header_set
+
+    # Check to make sure headers are consistent across all sims
+    if min_headers != all_headers:
+        raise ValueError('Headers do not match for certain sims')
+
+    return all_data, sorted(all_headers)
 
 def load_data(desc, filename='rp_data'):
     dirs = os.listdir(SIM_DIR)
@@ -62,18 +80,27 @@ def load_data(desc, filename='rp_data'):
         for header, column in zip(headers, columns):
             data[header] = column
 
-    return data
+    return data, headers
 
-def plot(all_data):
+def get_comparisons(y_keys):
     # TODO: take list of x and y and plot on subplots
-    x_key = 'rp_ratio'
-    y_keys = list(next(iter(all_data.values())).keys())
     n_keys = len(y_keys)
     rows = int(np.ceil(np.sqrt(n_keys)))
     cols = int(np.ceil(n_keys / rows))
-    scale = 3
 
+    return rows, cols
+
+def plot_setup(y_keys, scale=3):
+    # TODO: take list of x and y to pass to get_comparisons
+    rows, cols = get_comparisons(y_keys)
     _, axes = plt.subplots(nrows=rows, ncols=cols, figsize=(cols*scale, rows*scale))
+
+    return axes
+
+def plot(axes, all_data, y_keys):
+    # TODO: multiple comparisons of x and y
+    x_key = 'rp_ratio'
+    rows, cols  = get_comparisons(y_keys)
 
     for i, y_key in enumerate(y_keys):
         row = i % rows
@@ -84,8 +111,6 @@ def plot(all_data):
             ax.plot(data[x_key], data[y_key], 'o', alpha=0.4, label=sim)
 
         format_ax(ax, x_key, y_key)
-
-    save_fig(OUTPUT_FILE)
 
 def format_ax(ax, xlabel, ylabel):
     ax.set_xlabel(xlabel)
@@ -102,6 +127,10 @@ def save_fig(output_file):
 
 
 if __name__ == '__main__':
-    condition_data = load_datasets(CONDITION_SIMS)
+    condition_data, headers = load_datasets(CONDITION_SIMS)
 
-    plot(condition_data)
+    # Condition sims
+    axes = plot_setup(headers)
+    plot(axes, condition_data, headers)
+    save_fig('conditions-' + OUTPUT_FILE)
+

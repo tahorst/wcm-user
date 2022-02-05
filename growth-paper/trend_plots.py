@@ -97,7 +97,12 @@ def plot_setup(y_keys, scale=3):
 
     return axes
 
-def plot(axes, all_data, y_keys):
+def plot(axes, all_data, y_keys, fade=False):
+    if fade:
+        options = dict(color='k', alpha=0.1, markersize=2)
+    else:
+        options = dict(alpha=0.4)
+
     # TODO: multiple comparisons of x and y
     x_key = 'rp_ratio'
     rows, cols  = get_comparisons(y_keys)
@@ -108,7 +113,7 @@ def plot(axes, all_data, y_keys):
         ax = axes[row, col]
 
         for sim, data in all_data.items():
-            ax.plot(data[x_key], data[y_key], 'o', alpha=0.4, label=sim)
+            ax.plot(data[x_key], data[y_key], 'o', label=sim, **options)
 
         format_ax(ax, x_key, y_key)
 
@@ -128,9 +133,15 @@ def save_fig(output_file):
 
 if __name__ == '__main__':
     condition_data, headers = load_datasets(CONDITION_SIMS)
+    perturbation_data, _ = load_datasets(PERTURBATION_SIMS)
 
     # Condition sims
     axes = plot_setup(headers)
     plot(axes, condition_data, headers)
     save_fig('conditions-' + OUTPUT_FILE)
 
+    # Condition sims with faded perturbations
+    axes = plot_setup(headers)
+    plot(axes, condition_data, headers)
+    plot(axes, perturbation_data, headers, fade=True)
+    save_fig('all-' + OUTPUT_FILE)

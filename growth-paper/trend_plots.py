@@ -14,28 +14,36 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-# TODO: set back to sherlock dirs
-# SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
-SIM_DIR = '/home/travis/wcEcoli/out/'
-SIM_DESC = [
-    'ecocyc',
-    # 'Conditions_without_regulation_or_charging',
-    # 'Conditions_with_regulation',
-    # 'Add_one_amino_acid_shift',
-    # 'Remove_one_amino_acid_shift',
-    # 'ppGpp_sensitivity_-_no_mechanistic_transport',
-    # 'Amino_acid_combinations_in_media',
-    # 'Remove_amino_acid_inhibition_-_no_ppgpp',
-    # 'Remove_amino_acid_inhibition',
+# TODO: highlight sim sets that are expected to be off
+SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
+CONDITION_SIMS = [
+    'Amino_acid_combinations_in_media',  # TODO: generate file based on the right number of gens (after shift adjustment)
+    'Add_one_amino_acid_shift',
+    'Remove_one_amino_acid_shift',
+    'Conditions_with_regulation',
+    ]
+PERTURBATION_SIMS = [
+    'ppGpp_sensitivity',
+    'ppGpp_limitations_-_low_ppGpp',
+    'Remove_amino_acid_inhibition',
+    'Amino_acid_synthesis_network_sensitivity_-_glt',
+    'ppGpp_limitations_-_high_ppGpp',
+    'Amino_acid_synthesis_network_sensitivity_-_control',
+    'ppGpp_limitations_-_normal_ppGpp',
+    'ppGpp_sensitivity_-_no_mechanistic_transport',
+    'Amino_acid_combinations_in_media_without_regulation_or_charging',
+    'Conditions_without_regulation_or_charging',
+    'Amino_acid_combinations_in_media_-_no_mechanistic_transport',
+    'Remove_amino_acid_inhibition_-_no_ppgpp',
     ]
 FILE_PATH = 'plotOut/{}.tsv'
 OUTPUT_FILE = 'growth-trends.pdf'
 
 
-def load_all_data():
-    return {sim_desc: load_data(sim_desc) for sim_desc in SIM_DESC}
+def load_datasets(sims):
+    return {sim_desc: load_data(sim_desc) for sim_desc in sims}
 
-def load_data(desc, filename='rp_data', ):
+def load_data(desc, filename='rp_data'):
     dirs = os.listdir(SIM_DIR)
     for d in dirs:
         if d.endswith(desc):
@@ -56,32 +64,44 @@ def load_data(desc, filename='rp_data', ):
 
     return data
 
-def plot_all(all_data):
+def plot(all_data):
     # TODO: take list of x and y and plot on subplots
     x_key = 'rp_ratio'
-    y_key = 'growth_rate'
+    y_keys = list(next(iter(all_data.values())).keys())
+    n_keys = len(y_keys)
+    rows = int(np.ceil(np.sqrt(n_keys)))
+    cols = int(np.ceil(n_keys / rows))
+    scale = 3
 
-    plt.figure()
-    ax = plt.gca()
+    _, axes = plt.subplots(nrows=rows, ncols=cols, figsize=(cols*scale, rows*scale))
 
-    for sim, data in all_data.items():
-        ax.plot(data[x_key], data[y_key], 'o', label=sim)
+    for i, y_key in enumerate(y_keys):
+        row = i % rows
+        col = i // rows
+        ax = axes[row, col]
 
-    format_plot(x_key, y_key)
+        for sim, data in all_data.items():
+            ax.plot(data[x_key], data[y_key], 'o', alpha=0.4, label=sim)
+
+        format_ax(ax, x_key, y_key)
+
     save_fig(OUTPUT_FILE)
 
-def format_plot(xlabel, ylabel):
+def format_ax(ax, xlabel, ylabel):
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+def format_plot():
     plt.legend(fontsize=8, frameon=False)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.tight_layout()
 
 def save_fig(output_file):
+    plt.tight_layout()
     plt.savefig(output_file)
     print(f'Saved to {output_file}')
     plt.close('all')
 
 
 if __name__ == '__main__':
-    data = load_all_data()
-    plot_all(data)
+    condition_data = load_datasets(CONDITION_SIMS)
+
+    plot(condition_data)

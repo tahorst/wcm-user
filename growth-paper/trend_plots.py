@@ -92,6 +92,7 @@ def get_comparisons(y_keys):
 
 def plot_setup(y_keys, scale=3):
     # TODO: take list of x and y to pass to get_comparisons
+    # TODO: add subplot for legend
     rows, cols = get_comparisons(y_keys)
     _, axes = plt.subplots(nrows=rows, ncols=cols, figsize=(cols*scale, rows*scale))
 
@@ -121,14 +122,19 @@ def format_ax(ax, xlabel, ylabel):
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
 
-def format_plot():
-    plt.legend(fontsize=8, frameon=False)
-
 def save_fig(output_file):
     plt.tight_layout()
     plt.savefig(output_file)
     print(f'Saved to {output_file}')
     plt.close('all')
+
+def get_ax_lim(axes):
+    return [(ax.get_xlim(), ax.get_ylim()) for ax in axes.flatten()]
+
+def set_ax_lim(axes, lims):
+    for ax, lim in zip(axes.flatten(), lims):
+        ax.set_xlim(lim[0])
+        ax.set_ylim(lim[1])
 
 
 if __name__ == '__main__':
@@ -145,3 +151,11 @@ if __name__ == '__main__':
     plot(axes, condition_data, headers)
     plot(axes, perturbation_data, headers, fade=True)
     save_fig('all-' + OUTPUT_FILE)
+
+    # Condition sims with faded perturbations and fixed axes
+    axes = plot_setup(headers)
+    plot(axes, condition_data, headers)
+    ax_lim = get_ax_lim(axes)
+    plot(axes, perturbation_data, headers, fade=True)
+    set_ax_lim(axes, ax_lim)
+    save_fig('all-fixed-' + OUTPUT_FILE)

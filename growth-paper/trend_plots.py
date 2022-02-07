@@ -16,27 +16,27 @@ import numpy as np
 
 # TODO: highlight sim sets that are expected to be off
 SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
-CONDITION_SIMS = [
-    'Amino_acid_combinations_in_media',  # TODO: generate file based on the right number of gens (after shift adjustment)
-    'Add_one_amino_acid_shift',
-    'Remove_one_amino_acid_shift',
-    'Conditions_with_regulation',
-    ]
-PERTURBATION_SIMS = [
-    'ppGpp_sensitivity',
-    'ppGpp_limitations_-_low_ppGpp',
-    'Remove_amino_acid_inhibition',
-    'Amino_acid_synthesis_network_sensitivity_-_glt',
-    'ppGpp_limitations_-_high_ppGpp',
-    'Amino_acid_synthesis_network_sensitivity_-_control',
-    'ppGpp_limitations_-_normal_ppGpp',
-    'ppGpp_sensitivity_-_no_mechanistic_transport',
-    'Amino_acid_combinations_in_media_without_regulation_or_charging',
-    'Conditions_without_regulation_or_charging',
-    'Amino_acid_combinations_in_media_-_no_mechanistic_transport',
-    'Remove_amino_acid_inhibition_-_no_ppgpp',
-    ]
-FILE_PATH = 'plotOut/{}.tsv'
+CONDITION_SIMS = {
+    'Amino_acid_combinations_in_media': '6+',
+    'Add_one_amino_acid_shift': '6+',
+    'Remove_one_amino_acid_shift': '4+',
+    'Conditions_with_regulation': '',
+    }
+PERTURBATION_SIMS = {
+    'ppGpp_sensitivity': '4+',
+    'ppGpp_limitations_-_low_ppGpp': '',
+    'Remove_amino_acid_inhibition': '',
+    'Amino_acid_synthesis_network_sensitivity_-_glt': '',
+    'ppGpp_limitations_-_high_ppGpp': '',
+    'Amino_acid_synthesis_network_sensitivity_-_control': '',
+    'ppGpp_limitations_-_normal_ppGpp': '',
+    'ppGpp_sensitivity_-_no_mechanistic_transport': '4+',
+    'Amino_acid_combinations_in_media_without_regulation_or_charging': '',
+    'Conditions_without_regulation_or_charging': '',
+    'Amino_acid_combinations_in_media_-_no_mechanistic_transport': '',
+    'Remove_amino_acid_inhibition_-_no_ppgpp': '',
+    }
+FILE_PATH = 'plotOut/{}{}.tsv'
 OUTPUT_FILE = 'growth-trends.pdf'
 
 
@@ -44,8 +44,8 @@ def load_datasets(sims):
     all_data = {}
     all_headers = set()
     min_headers = None
-    for sim_desc in sims:
-        data, headers = load_data(sim_desc)
+    for sim_desc, prepend in sims.items():
+        data, headers = load_data(sim_desc, prepend=prepend)
         all_data[sim_desc] = data
 
         header_set = set(headers)
@@ -61,11 +61,11 @@ def load_datasets(sims):
 
     return all_data, sorted(all_headers)
 
-def load_data(desc, filename='rp_data'):
+def load_data(desc, prepend='', filename='rp_data'):
     dirs = os.listdir(SIM_DIR)
     for d in dirs:
         if d.endswith(desc):
-            path = os.path.join(SIM_DIR, d, FILE_PATH.format(filename))
+            path = os.path.join(SIM_DIR, d, FILE_PATH.format(prepend, filename))
             break
     else:
         raise ValueError(f'{desc} not found in sim directory')

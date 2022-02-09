@@ -9,6 +9,7 @@ certain descriptions assumed in SIM_DESC to select sets of runs.
 
 import csv
 import os
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,6 +39,18 @@ PERTURBATION_SIMS = {
     }
 FILE_PATH = 'plotOut/{}{}.tsv'
 OUTPUT_FILE = 'growth-trends.pdf'
+
+ADDED_DATA = {
+    'aa / ribosome': lambda data: data['aa_mass'] / data['ribosome_mass'],
+    'glt / aa': lambda data: data['glt'] / data['aa_mass'],
+    'glt fraction / ppGpp': lambda data: data['glt'] / data['aa_mass'] / data['ppGpp'],
+    }
+ALL_X_COMPARISONS = ['growth_rate']
+ALL_Y_COMPARISONS = ['rp_ratio', 'ppGpp']
+OTHER_COMPARISONS = [
+    ('glt / aa', 'aa / ribosome'),
+    ('glt fraction / ppGpp', 'aa / ribosome'),
+    ]
 
 
 def load_datasets(sims):
@@ -80,25 +93,56 @@ def load_data(desc, prepend='', filename='rp_data'):
         for header, column in zip(headers, columns):
             data[header] = column
 
+        for key, fun in ADDED_DATA.items():
+            data[key] = fun(data)
+            headers.append(key)
+
     return data, headers
 
-def get_comparisons(y_keys):
-    # TODO: take list of x and y and plot on subplots
+def get_comparisons(
+        keys: List[str],
+        all_x: Optional[List[str]] = None,
+        all_y: Optional[List[str]] = None,
+        others: Optional[List[Tuple[str, str]]] = None,
+        ) -> Tuple[Tuple[int, int], List[Tuple[str, str]]]:
+    # Default to empty lists to skip iterations below
+    if all_x is None:
+        all_x = []
+    if all_y is None:
+        all_y = []
+    if others is None:
+        others = []
+
+    x_keys = []
+    y_keys = []
+
+    # Add key pairs for x and y axes
+    for y in all_x:
+        x_keys += keys
+        y_keys += [y] * len(keys)
+    for x in all_y:
+        x_keys += [x] * len(keys)
+        y_keys += keys
+    for x, y in others:
+        x_keys.append(x)
+        y_keys.append(y)
+    key_pairs = list(zip(x_keys, y_keys))
+
+    # Get near square dimensions for plotting
     n_keys = len(y_keys)
     rows = int(np.ceil(np.sqrt(n_keys)))
     cols = int(np.ceil(n_keys / rows))
+    dims = (rows, cols)
 
-    return rows, cols
+    return dims, key_pairs
 
-def plot_setup(y_keys, scale=3):
-    # TODO: take list of x and y to pass to get_comparisons
+def plot_setup(rows, cols, scale=3):
     # TODO: add subplot for legend
-    rows, cols = get_comparisons(y_keys)
     _, axes = plt.subplots(nrows=rows, ncols=cols, figsize=(cols*scale, rows*scale))
 
     return axes
 
-def plot(axes, all_data, y_keys, fade=False, sims=None, mask_funs=None, **plot_options):
+def plot(axes, all_data, dims, keys, fade=False, sims=None, mask_funs=None, **plot_options):
     if fade:
         options = dict(color='k', alpha=0.1, markersize=2)
     else:
@@ -110,11 +154,8 @@ def plot(axes, all_data, y_keys, fade=False, sims=None, mask_funs=None, **plot_o
     if mask_funs is None:
         mask_funs = [lambda data: slice(None)]
 
-    # TODO: multiple comparisons of x and y
-    x_key = 'rp_ratio'
-    rows, cols  = get_comparisons(y_keys)
-
-    for i, y_key in enumerate(y_keys):
+    rows, cols = dims
+    for i, (x_key, y_key) in enumerate(keys):
         row = i % rows
         col = i // rows
         ax = axes[row, col]
@@ -149,23 +190,25 @@ def set_ax_lim(axes, lims):
 if __name__ == '__main__':
     condition_data, headers = load_datasets(CONDITION_SIMS)
     perturbation_data, _ = load_datasets(PERTURBATION_SIMS)
+    dims, keys = get_comparisons(headers, all_x=ALL_X_COMPARISONS,
+        all_y=ALL_Y_COMPARISONS, others=OTHER_COMPARISONS)
 
     # Condition sims
-    axes = plot_setup(headers)
-    plot(axes, condition_data, headers)
+    axes = plot_setup(*dims)
+    plot(axes, condition_data, dims, keys)
     save_fig('conditions-' + OUTPUT_FILE)
 
     # Condition sims with faded perturbations
-    axes = plot_setup(headers)
-    plot(axes, condition_data, headers)
-    plot(axes, perturbation_data, headers, fade=True)
+    axes = plot_setup(*dims)
+    plot(axes, condition_data, dims, keys)
+    plot(axes, perturbation_data, dims, keys, fade=True)
     save_fig('all-' + OUTPUT_FILE)
 
     # Condition sims with faded perturbations and fixed axes
-    axes = plot_setup(headers)
-    plot(axes, condition_data, headers)
+    axes = plot_setup(*dims)
+    plot(axes, condition_data, dims, keys)
     ax_lim = get_ax_lim(axes)
-    plot(axes, perturbation_data, headers, fade=True)
+    plot(axes, perturbation_data, dims, keys, fade=True)
     set_ax_lim(axes, ax_lim)
     save_fig('all-fixed-' + OUTPUT_FILE)
 
@@ -175,10 +218,10 @@ if __name__ == '__main__':
         lambda data: (data['variant'] > 18) & (data['variant'] < 28),  # enzymes
         lambda data: (data['variant'] > 27) & (data['variant'] < 37),  # ribosomes
         ]
-    axes = plot_setup(headers)
-    plot(axes, condition_data, headers)
+    axes = plot_setup(*dims)
+    plot(axes, condition_data, dims, keys)
     ax_lim = get_ax_lim(axes)
-    plot(axes, perturbation_data, headers, sims=sims, mask_funs=masks, marker='x')
+    plot(axes, perturbation_data, dims, keys, sims=sims, mask_funs=masks, marker='x')
     set_ax_lim(axes, ax_lim)
     save_fig('low-ppgpp-' + OUTPUT_FILE)
 
@@ -188,9 +231,9 @@ if __name__ == '__main__':
         lambda data: (data['variant'] > 92) & (data['variant'] < 102),  # enzymes
         lambda data: (data['variant'] > 101) & (data['variant'] < 111),  # ribosomes
         ]
-    axes = plot_setup(headers)
-    plot(axes, condition_data, headers)
+    axes = plot_setup(*dims)
+    plot(axes, condition_data, dims, keys)
     ax_lim = get_ax_lim(axes)
-    plot(axes, perturbation_data, headers, sims=sims, mask_funs=masks, marker='x')
+    plot(axes, perturbation_data, dims, keys, sims=sims, mask_funs=masks, marker='x')
     set_ax_lim(axes, ax_lim)
     save_fig('high-ppgpp-' + OUTPUT_FILE)

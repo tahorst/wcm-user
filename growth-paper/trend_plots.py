@@ -98,11 +98,17 @@ def plot_setup(y_keys, scale=3):
 
     return axes
 
-def plot(axes, all_data, y_keys, fade=False):
+def plot(axes, all_data, y_keys, fade=False, sims=None, mask_funs=None, **plot_options):
     if fade:
         options = dict(color='k', alpha=0.1, markersize=2)
     else:
         options = dict(alpha=0.4)
+    options.update(plot_options)
+
+    if sims is None:
+        sims = all_data.keys()
+    if mask_funs is None:
+        mask_funs = [lambda data: slice(None)]
 
     # TODO: multiple comparisons of x and y
     x_key = 'rp_ratio'
@@ -113,8 +119,11 @@ def plot(axes, all_data, y_keys, fade=False):
         col = i // rows
         ax = axes[row, col]
 
-        for sim, data in all_data.items():
-            ax.plot(data[x_key], data[y_key], 'o', label=sim, **options)
+        for sim in sims:
+            data = all_data[sim]
+            for mask_fun in mask_funs:
+                mask = mask_fun(data)
+                ax.plot(data[x_key][mask], data[y_key][mask], 'o', label=sim, **options)
 
         format_ax(ax, x_key, y_key)
 
@@ -159,3 +168,29 @@ if __name__ == '__main__':
     plot(axes, perturbation_data, headers, fade=True)
     set_ax_lim(axes, ax_lim)
     save_fig('all-fixed-' + OUTPUT_FILE)
+
+    # Low ppGpp limitation sims with enzymes and ribosomes plotted
+    sims = ['ppGpp_limitations_-_low_ppGpp']
+    masks = [
+        lambda data: (data['variant'] > 18) & (data['variant'] < 28),  # enzymes
+        lambda data: (data['variant'] > 27) & (data['variant'] < 37),  # ribosomes
+        ]
+    axes = plot_setup(headers)
+    plot(axes, condition_data, headers)
+    ax_lim = get_ax_lim(axes)
+    plot(axes, perturbation_data, headers, sims=sims, mask_funs=masks, marker='x')
+    set_ax_lim(axes, ax_lim)
+    save_fig('low-ppgpp-' + OUTPUT_FILE)
+
+    # High ppGpp limitation sims with enzymes and ribosomes plotted
+    sims = ['ppGpp_limitations_-_high_ppGpp']
+    masks = [
+        lambda data: (data['variant'] > 92) & (data['variant'] < 102),  # enzymes
+        lambda data: (data['variant'] > 101) & (data['variant'] < 111),  # ribosomes
+        ]
+    axes = plot_setup(headers)
+    plot(axes, condition_data, headers)
+    ax_lim = get_ax_lim(axes)
+    plot(axes, perturbation_data, headers, sims=sims, mask_funs=masks, marker='x')
+    set_ax_lim(axes, ax_lim)
+    save_fig('high-ppgpp-' + OUTPUT_FILE)

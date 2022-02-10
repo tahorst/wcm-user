@@ -121,8 +121,8 @@ def plot_ki_range(validation, model):
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
 
-def plot_bars(data, fun):
-    # TODO: label x
+def plot_bars(data, fun, log=False):
+    # TODO: label x and y axes
     # TODO: highlight enzyme
     cols = 3
     rows = int(np.ceil(len(COMPARISONS) / cols))
@@ -136,9 +136,53 @@ def plot_bars(data, fun):
         conc = [fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES]
         ax.bar(range(len(conc)), conc)
 
+        if log:
+            ax.set_yscale('log')
+
+def plot_scatter(validation, model):
+    val_control = []
+    model_control = []
+    val_mutants = []
+    model_mutants = []
+    val_other = []
+    model_other = []
+
+    for aa, enz in COMPARISONS:
+        val = get_validation(validation, aa, enz)
+        val_control.append(val[0])
+        val_mutants.append(val[1][0])
+
+        mod = get_model(model, aa, enz)
+        model_control.append(mod[0])
+        model_mutants.append(mod[1][0])
+
+    for aa in AMINO_ACIDS:
+        for enz in ENZYMES:
+            if (aa, enz) in COMPARISONS:
+                continue
+            val_other.append(get_validation(validation, aa, enz)[1][0])
+            model_other.append(get_model(model, aa, enz)[1][0])
+
+    plt.figure()
+    plt.loglog(val_control, model_control, 'or', alpha=0.5, label='Allosteric AA in WT')
+    plt.loglog(val_mutants, model_mutants, 'ob', alpha=0.5, label='Allosteric AA in mutant')
+    plt.loglog(val_other, model_other, 'ok', alpha=0.2, markersize=2, label='Other AA')
+    plt.legend(fontsize=6, frameon=False)
+
+    xlim = plt.xlim()
+    ylim = plt.ylim()
+    min_ax = min(xlim[0], ylim[0])
+    max_ax = max(xlim[1], ylim[1])
+    xy_line = [min_ax, max_ax]
+    plt.loglog(xy_line, xy_line, '--k', alpha=0.2, linewidth=1)
+
+    plt.xlabel('Amino acid conc\nin validation (mM)')
+    plt.ylabel('Amino acid conc\nin model (mM)')
+
 def save_fig(filename):
     plt.tight_layout()
     plt.savefig(filename)
+    plt.close('all')
     print(f'Saved to {filename}')
 
 
@@ -155,5 +199,9 @@ if __name__ == '__main__':
     save_fig('validation-bar.pdf')
 
     # Comparable bar plot from model output
-    plot_bars(model, get_model)
+    plot_bars(model, get_model, log=True)
     save_fig('model-bar.pdf')
+
+    # Scatter plot between validation and model
+    plot_scatter(validation, model)
+    save_fig('scatter.pdf')

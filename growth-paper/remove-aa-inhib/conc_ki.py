@@ -97,11 +97,7 @@ def get_model(model, aa, enz):
     conc = model[1][AA_IDX[aa], ENZ_IDX[enz], :]
     return control, conc
 
-
-if __name__ == '__main__':
-    validation = load_validation()
-    model = load_model()
-
+def plot_ki_range(validation, model):
     _, axes = plt.subplots(len(COMPARISONS), 2, figsize=(8, 20))
     for i, (aa, enz) in enumerate(COMPARISONS):
         val = get_validation(validation, aa, enz)
@@ -125,6 +121,16 @@ if __name__ == '__main__':
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
 
+def save_fig(filename):
     plt.tight_layout()
-    plt.savefig(OUTPUT_FILE)
-    print(f'Saved to {OUTPUT_FILE}')
+    plt.savefig(filename)
+    print(f'Saved to {filename}')
+
+
+if __name__ == '__main__':
+    validation = load_validation()
+    model = load_model()
+
+    # Compare validation data to range of KI values produced in the model
+    plot_ki_range(validation, model)
+    save_fig(OUTPUT_FILE)

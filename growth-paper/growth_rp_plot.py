@@ -20,6 +20,8 @@ NEW_C_SOURCE_DIR = 'Conditions_with_regulation'
 ADD_ONE_DIR = 'Add_one_amino_acid_shift'
 REMOVE_ONE_DIR = 'Remove_one_amino_acid_shift'
 PPGPP_DIR = 'ppGpp_sensitivity_-_no_mechanistic_transport'
+PPGPP_LIMITATION_LOW_DIR = 'ppGpp_limitations_-_low_ppGpp'
+PPGPP_LIMITATION_HIGH_DIR = 'ppGpp_limitations_-_high_ppGpp'
 NEW_AA_SOURCE_DIR = 'Amino_acid_combinations_in_media'
 INHIBITION_NO_PPGPP_DIR = 'Remove_amino_acid_inhibition_-_no_ppgpp'
 INHIBITION_DIR = 'Remove_amino_acid_inhibition'
@@ -110,6 +112,10 @@ def plot_ppgpp():
     plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc')
     plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc')
     plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 15), options=PPGPP_OPTIONS)  # 12, 20 for all
+    plot(ppgpp_low, std=False, label='Low inhibition enzymes', variants=range(24, 28), options=PPGPP_OPTIONS)  # 19 starts low, 19 failed
+    plot(ppgpp_low, std=False, label='Low inhibition ribosomes', variants=range(33, 37), options=PPGPP_OPTIONS)  # 28 starts low
+    plot(ppgpp_high, std=False, label='High inhibition enzymes', variants=range(98, 102), options=PPGPP_OPTIONS)  # 93 starts low
+    plot(ppgpp_high, std=False, label='High inhibition ribosomes', variants=range(107, 111), options=PPGPP_OPTIONS)  # 102 starts low
 
 def plot_inhibition():
     plot(inhib_no_ppgpp, variants=range(1, 8), std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
@@ -148,6 +154,8 @@ if __name__ == '__main__':
     add_one = load_data(ADD_ONE_DIR)
     remove_one = load_data(REMOVE_ONE_DIR)
     ppgpp = load_data(PPGPP_DIR)
+    ppgpp_low = load_data(PPGPP_LIMITATION_LOW_DIR)
+    ppgpp_high = load_data(PPGPP_LIMITATION_HIGH_DIR)
     new_aa = load_data(NEW_AA_SOURCE_DIR)
     inhib_no_ppgpp = load_data(INHIBITION_NO_PPGPP_DIR)
     inhib = load_data(INHIBITION_DIR)

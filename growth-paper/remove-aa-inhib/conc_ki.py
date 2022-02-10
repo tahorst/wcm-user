@@ -63,8 +63,8 @@ COMPARISONS = [
     ('HIS', 'hisG'),
     ('LEU', 'leuA'),
     ('THR', 'thrA'),
-    ('ILE', 'ilvA'),
     ('PRO', 'proB'),
+    ('ILE', 'ilvA'),
     ]
 
 
@@ -89,7 +89,7 @@ def load_model():
     return control, conc
 
 def get_validation(validation, aa, enz):
-    return validation[aa]['WT'], validation[aa][enz]
+    return validation[aa]['WT'], np.array([validation[aa][enz]])
 
 def get_model(model, aa, enz):
     aa_idx = AA_IDX[aa]
@@ -104,7 +104,7 @@ def plot_ki_range(validation, model):
         wcm = get_model(model, aa, enz)
 
         ax = axes[i, 0]
-        data = [val[1] / val[0]] + list(wcm[1] / wcm[0])
+        data = [val[1][0] / val[0]] + list(wcm[1] / wcm[0])
         x = np.arange(len(data))
         ax.bar(x, data)
         ax.set_yscale('log')
@@ -113,13 +113,28 @@ def plot_ki_range(validation, model):
         ax.set_xticklabels(['Val'] + KI_FACTORS, rotation=45, fontsize=6)
 
         ax = axes[i, 1]
-        data = list(val) + [wcm[0]] + list(wcm[1])
+        data = [val[0]] + list(val[1]) + [wcm[0]] + list(wcm[1])
         x = np.arange(len(data))
         ax.bar(x, data)
         ax.set_yscale('log')
         ax.set_ylabel(f'{aa} conc')
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
+
+def plot_bars(data, fun):
+    # TODO: label x
+    # TODO: highlight enzyme
+    cols = 3
+    rows = int(np.ceil(len(COMPARISONS) / cols))
+    _, axes = plt.subplots(rows, cols)
+
+    for i, (aa, _) in enumerate(COMPARISONS):
+        row = i // cols
+        col = i % cols
+        ax = axes[row, col]
+
+        conc = [fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES]
+        ax.bar(range(len(conc)), conc)
 
 def save_fig(filename):
     plt.tight_layout()
@@ -134,3 +149,11 @@ if __name__ == '__main__':
     # Compare validation data to range of KI values produced in the model
     plot_ki_range(validation, model)
     save_fig(OUTPUT_FILE)
+
+    # Validation bar plot to reproduce Fig 1B from paper
+    plot_bars(validation, get_validation)
+    save_fig('validation-bar.pdf')
+
+    # Comparable bar plot from model output
+    plot_bars(model, get_model)
+    save_fig('model-bar.pdf')

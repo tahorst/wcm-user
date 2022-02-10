@@ -128,11 +128,13 @@ def plot_bars(datasets, functions, log=False):
     cols = 3
     rows = int(np.ceil(len(COMPARISONS) / cols))
     _, axes = plt.subplots(rows, cols)
+    hide_axes = np.ones_like(axes, dtype=bool)
 
     for i, (aa, _) in enumerate(COMPARISONS):
         row = i // cols
         col = i % cols
         ax = axes[row, col]
+        hide_axes[row, col] = False
 
         all_conc = []
         for data, fun in zip(datasets, functions):
@@ -151,6 +153,15 @@ def plot_bars(datasets, functions, log=False):
 
         if log:
             ax.set_yscale('log')
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(['WT'] + ENZYMES, rotation=45, fontsize=6)
+        ax.set_ylabel(f'{aa} conc (mM)', fontsize=8)
+        ax.tick_params(labelsize=6)
+
+    # Hide unused axes
+    for ax in axes[hide_axes]:
+        ax.set_visible(False)
 
 def plot_scatter(validation, model):
     val_control = []

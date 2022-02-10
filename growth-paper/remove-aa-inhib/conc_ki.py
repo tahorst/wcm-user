@@ -121,7 +121,7 @@ def plot_ki_range(validation, model):
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
 
-def plot_bars(datasets, functions, log=False):
+def plot_bars(datasets, functions, log=False, normalize=False):
     # TODO: label x and y axes
     # TODO: highlight enzyme
     # TODO: option to normalize based on control
@@ -138,7 +138,10 @@ def plot_bars(datasets, functions, log=False):
 
         all_conc = []
         for data, fun in zip(datasets, functions):
-            all_conc.append([fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES])
+            conc = np.array([fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES])
+            if normalize:
+                conc = np.log10(conc / conc[0])
+            all_conc.append(conc)
         if len(all_conc) == 0:
             continue
 
@@ -154,9 +157,15 @@ def plot_bars(datasets, functions, log=False):
         if log:
             ax.set_yscale('log')
 
+        if normalize:
+            ax.axhline(0, color='k', linestyle='--', alpha=0.3, linewidth=0.5)
+            ylabel = f'{aa} log10 increase\nover WT'
+        else:
+            ylabel = f'{aa} conc (mM)'
+
         ax.set_xticks(x)
         ax.set_xticklabels(['WT'] + ENZYMES, rotation=45, fontsize=6)
-        ax.set_ylabel(f'{aa} conc (mM)', fontsize=8)
+        ax.set_ylabel(ylabel, fontsize=8)
         ax.tick_params(labelsize=6)
 
     # Hide unused axes
@@ -229,6 +238,10 @@ if __name__ == '__main__':
     # Side by side bar plot with validation and model data
     plot_bars([validation, model], [get_validation, get_model], log=True)
     save_fig('side-by-side-bar.pdf')
+
+    # Side by side bar plot with validation and model data
+    plot_bars([validation, model], [get_validation, get_model], normalize=True)
+    save_fig('normalized-side-by-side-bar.pdf')
 
     # Scatter plot between validation and model
     plot_scatter(validation, model)

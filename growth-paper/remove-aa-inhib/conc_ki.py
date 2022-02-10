@@ -121,9 +121,10 @@ def plot_ki_range(validation, model):
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
 
-def plot_bars(data, fun, log=False):
+def plot_bars(datasets, functions, log=False):
     # TODO: label x and y axes
     # TODO: highlight enzyme
+    # TODO: option to normalize based on control
     cols = 3
     rows = int(np.ceil(len(COMPARISONS) / cols))
     _, axes = plt.subplots(rows, cols)
@@ -133,8 +134,20 @@ def plot_bars(data, fun, log=False):
         col = i % cols
         ax = axes[row, col]
 
-        conc = [fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES]
-        ax.bar(range(len(conc)), conc)
+        all_conc = []
+        for data, fun in zip(datasets, functions):
+            all_conc.append([fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES])
+        if len(all_conc) == 0:
+            continue
+
+        n_mutants = len(all_conc[0])
+        n_datasets = len(all_conc)
+        x = np.arange(n_mutants)
+        width = 0.8 / n_datasets
+        offsets = np.arange(n_datasets) * width - 0.4 + width/2
+
+        for i, offset in enumerate(offsets):
+            ax.bar(x + offset, all_conc[i], width)
 
         if log:
             ax.set_yscale('log')
@@ -195,12 +208,16 @@ if __name__ == '__main__':
     save_fig(OUTPUT_FILE)
 
     # Validation bar plot to reproduce Fig 1B from paper
-    plot_bars(validation, get_validation)
+    plot_bars([validation], [get_validation])
     save_fig('validation-bar.pdf')
 
     # Comparable bar plot from model output
-    plot_bars(model, get_model, log=True)
+    plot_bars([model], [get_model], log=True)
     save_fig('model-bar.pdf')
+
+    # Side by side bar plot with validation and model data
+    plot_bars([validation, model], [get_validation, get_model], log=True)
+    save_fig('side-by-side-bar.pdf')
 
     # Scatter plot between validation and model
     plot_scatter(validation, model)

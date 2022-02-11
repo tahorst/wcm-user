@@ -172,7 +172,31 @@ def plot_bars(datasets, functions, log=False, normalize=False):
     for ax in axes[hide_axes]:
         ax.set_visible(False)
 
-def plot_scatter(validation, model):
+def plot_sub_scatter(validation, model):
+    cols = 3
+    rows = int(np.ceil(len(COMPARISONS) / cols))
+    _, axes = plt.subplots(rows, cols, figsize=(10, 10))
+    hide_axes = np.ones_like(axes, dtype=bool)
+
+    for i, (aa, _) in enumerate(COMPARISONS):
+        row = i // cols
+        col = i % cols
+        ax = axes[row, col]
+        hide_axes[row, col] = False
+
+        plot_scatter(ax, validation, model, label=aa, amino_acids=[aa], plot_all=True)
+
+    # Hide unused axes
+    for ax in axes[hide_axes]:
+        ax.set_visible(False)
+
+def plot_scatter(ax, validation, model, label='Amino acid', amino_acids=None,
+        enzymes=None, legend=True, plot_all=False):
+    if amino_acids is None:
+        amino_acids = AMINO_ACIDS
+    if enzymes is None:
+        enzymes = ENZYMES
+
     val_control = []
     model_control = []
     val_mutants = []
@@ -181,6 +205,9 @@ def plot_scatter(validation, model):
     model_other = []
 
     for aa, enz in COMPARISONS:
+        if aa not in amino_acids:
+            continue
+
         val = get_validation(validation, aa, enz)
         val_control.append(val[0])
         val_mutants.append(val[1][0])
@@ -189,28 +216,34 @@ def plot_scatter(validation, model):
         model_control.append(mod[0])
         model_mutants.append(mod[1][0])
 
-    for aa in AMINO_ACIDS:
-        for enz in ENZYMES:
+        if plot_all:
+            for m in mod[1][1:]:
+                val_mutants.append(val[1][0])
+                model_mutants.append(m)
+
+    for aa in amino_acids:
+        for enz in enzymes:
             if (aa, enz) in COMPARISONS:
                 continue
             val_other.append(get_validation(validation, aa, enz)[1][0])
             model_other.append(get_model(model, aa, enz)[1][0])
 
-    plt.figure()
-    plt.loglog(val_control, model_control, 'or', alpha=0.5, label='Allosteric AA in WT')
-    plt.loglog(val_mutants, model_mutants, 'ob', alpha=0.5, label='Allosteric AA in mutant')
-    plt.loglog(val_other, model_other, 'ok', alpha=0.2, markersize=2, label='Other AA')
-    plt.legend(fontsize=6, frameon=False)
+    ax.loglog(val_control, model_control, 'or', alpha=0.5, label='Allosteric AA in WT')
+    ax.loglog(val_mutants, model_mutants, 'ob', alpha=0.5, label='Allosteric AA in mutant')
+    ax.loglog(val_other, model_other, 'ok', alpha=0.2, markersize=2, label='Other AA')
 
-    xlim = plt.xlim()
-    ylim = plt.ylim()
+    if legend:
+        ax.legend(fontsize=6, frameon=False)
+
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
     min_ax = min(xlim[0], ylim[0])
     max_ax = max(xlim[1], ylim[1])
     xy_line = [min_ax, max_ax]
-    plt.loglog(xy_line, xy_line, '--k', alpha=0.2, linewidth=1)
+    ax.loglog(xy_line, xy_line, '--k', alpha=0.2, linewidth=1)
 
-    plt.xlabel('Amino acid conc\nin validation (mM)')
-    plt.ylabel('Amino acid conc\nin model (mM)')
+    ax.set_xlabel(f'{label} conc\nin validation (mM)')
+    ax.set_ylabel(f'{label} conc\nin model (mM)')
 
 def save_fig(filename):
     plt.tight_layout()
@@ -244,5 +277,10 @@ if __name__ == '__main__':
     save_fig('normalized-side-by-side-bar.pdf')
 
     # Scatter plot between validation and model
-    plot_scatter(validation, model)
+    plt.figure()
+    plot_scatter(plt.gca(), validation, model)
     save_fig('scatter.pdf')
+
+    # Scatter for each amino acid
+    plot_sub_scatter(validation, model)
+    save_fig('sub-scatter.pdf')

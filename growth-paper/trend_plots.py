@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+# Input paths
 # TODO: highlight sim sets that are expected to be off
 SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
 CONDITION_SIMS = {
@@ -38,6 +39,11 @@ PERTURBATION_SIMS = {
     'Remove_amino_acid_inhibition_-_no_ppgpp': '',
     }
 FILE_PATH = 'plotOut/{}{}.tsv'
+
+# Output paths
+FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
+OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 OUTPUT_FILE = 'growth-trends.pdf'
 
 ADDED_DATA = {
@@ -173,9 +179,10 @@ def format_ax(ax, xlabel, ylabel):
     ax.set_ylabel(ylabel)
 
 def save_fig(output_file):
+    filename = os.path.join(OUTPUT_DIR, output_file)
     plt.tight_layout()
-    plt.savefig(output_file)
-    print(f'Saved to {output_file}')
+    plt.savefig(filename)
+    print(f'Saved to {filename}')
     plt.close('all')
 
 def get_ax_lim(axes):

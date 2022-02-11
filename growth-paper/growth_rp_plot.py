@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+# Input paths
 SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
 BASE_SIM_DIR = 'Conditions_without_regulation_or_charging'
 NEW_C_SOURCE_DIR = 'Conditions_with_regulation'
@@ -26,6 +27,11 @@ NEW_AA_SOURCE_DIR = 'Amino_acid_combinations_in_media'
 INHIBITION_NO_PPGPP_DIR = 'Remove_amino_acid_inhibition_-_no_ppgpp'
 INHIBITION_DIR = 'Remove_amino_acid_inhibition'
 FILE_PATH = 'plotOut/{}.tsv'
+
+# Output paths
+FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
+OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 OUTPUT_FILE = 'combined-growth-rp.pdf'
 
 CONTROL_IDX = 19
@@ -35,12 +41,12 @@ MEAN_HEADER = ' mean'
 STD_HEADER = ' std'
 
 DENNIS_BREMER_2021 = np.array([
-[0.1691, 0.415888308335967],
-[0.2056, 0.693147180559945],
-[0.2576, 1.03972077083992],
-[0.3307, 1.38629436111989],
-[0.4176, 1.73286795139986],
-[0.5023, 2.07944154167984],
+    [0.1691, 0.415888308335967],
+    [0.2056, 0.693147180559945],
+    [0.2576, 1.03972077083992],
+    [0.3307, 1.38629436111989],
+    [0.4176, 1.73286795139986],
+    [0.5023, 2.07944154167984],
 ])
 
 ONE_AA_OPTIONS = dict(alpha=0.5, markersize=4)
@@ -143,8 +149,9 @@ def format_plot():
     plt.tight_layout()
 
 def save_fig(output_file):
-    plt.savefig(output_file)
-    print(f'Saved to {output_file}')
+    filename = os.path.join(OUTPUT_DIR, output_file)
+    plt.savefig(filename)
+    print(f'Saved to {filename}')
     plt.close('all')
 
 

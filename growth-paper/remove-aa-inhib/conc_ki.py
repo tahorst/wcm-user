@@ -19,7 +19,8 @@ import numpy as np
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 VALIDATION_DATA = os.path.join(FILE_LOCATION, 'sander-allosteric-aa-conc.tsv')
 MODEL_DATA = os.path.join(FILE_LOCATION, 'remove-inhib-conc')
-OUTPUT_FILE = 'aa-ki.pdf'
+OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # From variant analysis plot
 AMINO_ACIDS = [
@@ -246,10 +247,11 @@ def plot_scatter(ax, validation, model, label='Amino acid', amino_acids=None,
     ax.set_ylabel(f'{label} conc\nin model (mM)')
 
 def save_fig(filename):
+    file = os.path.join(OUTPUT_DIR, filename)
     plt.tight_layout()
-    plt.savefig(filename)
+    plt.savefig(file)
     plt.close('all')
-    print(f'Saved to {filename}')
+    print(f'Saved to {file}')
 
 
 if __name__ == '__main__':
@@ -258,7 +260,7 @@ if __name__ == '__main__':
 
     # Compare validation data to range of KI values produced in the model
     plot_ki_range(validation, model)
-    save_fig(OUTPUT_FILE)
+    save_fig('aa-ki-range.pdf')
 
     # Validation bar plot to reproduce Fig 1B from paper
     plot_bars([validation], [get_validation])

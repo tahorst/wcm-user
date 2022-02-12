@@ -14,6 +14,8 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
 
 
 FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
@@ -122,12 +124,27 @@ def plot_ki_prediction(validation, model):
 
         kis = ki * ki_factors
         fraction_wt = 1 - 1 / (1 + wcm[0] / ki)
-        fraction_inhibited = 1 - 1 / (1 + wcm[1] / kis)
+        fraction_inhibited = 1 - 1 / (1 + wcm[0] / kis)
         reduced_inhibition = fraction_inhibited / fraction_wt
 
+        # Original data
         ax.plot(reduced_inhibition, wcm_increase, 'o', alpha=0.5)
         ax.plot(1 / ki_factors, wcm_increase, 'o', alpha=0.5)
-        ax.axhline(val_increase, linestyle='--', color='k', linewidth=1, alpha=0.5)
+
+        # Curve fit data
+        fun = lambda x, a, d: a*np.exp(d*x)
+        sol = curve_fit(fun, 1/ki_factors, np.log(wcm_increase))  # Fit in log space for closer fit at higher x values
+        ax.plot(1 / ki_factors, np.exp(fun(1 / ki_factors, *sol[0])), 'x')
+
+        # Interp function
+        x = np.log(wcm_increase)  # Fit in log space for smoother fit
+        interp = interp1d(x, 1 / ki_factors)
+        val_match = interp(np.log(val_increase))
+        y = np.linspace(x.min(), x.max(), 1000)
+        ax.plot(interp(y), np.exp(y))
+
+        ax.axhline(val_increase, linestyle='--', color='k', linewidth=0.5, alpha=0.5)
+        ax.axvline(val_match, linestyle='--', color='k', linewidth=0.5, alpha=0.5)
 
         ax.set_yscale('log')
 

@@ -56,6 +56,7 @@ ENZYMES = [
 AA_IDX = {aa: i for i, aa in enumerate(sorted(AMINO_ACIDS))}
 ENZ_IDX = {enz: i for i, enz in enumerate(ENZYMES)}
 KI_FACTORS = sorted([np.inf, 2, 5, 10, 100])[::-1]  # from sim variant file
+KIS = np.array([0.15, 0.17, 0.07327, 0.28, 0.167, 0.15, 0.06])  # KIs (mM) from sim_data.process.metabolism.aa_kis corresponding to AA in COMPARISONS
 
 # Data to plot
 COMPARISONS = [
@@ -97,6 +98,46 @@ def get_model(model, aa, enz):
     control = model[0][aa_idx]
     conc = model[1][AA_IDX[aa], ENZ_IDX[enz], :]
     return control, conc
+
+def plot_ki_prediction(validation, model):
+    # TODO: decide on metric (need to do 1 - metric?)
+    # TODO: fit curve to points and drop prediction vline
+    cols = 3
+    rows = int(np.ceil(len(COMPARISONS) / cols))
+    _, axes = plt.subplots(rows, cols)
+    hide_axes = np.ones_like(axes, dtype=bool)
+
+    ki_factors = np.array(KI_FACTORS)
+    for i, ((aa, enz), ki) in enumerate(zip(COMPARISONS, KIS)):
+        row = i // cols
+        col = i % cols
+        ax = axes[row, col]
+        hide_axes[row, col] = False
+
+        val = get_validation(validation, aa, enz)
+        wcm = get_model(model, aa, enz)
+
+        val_increase = val[1][0] / val[0]
+        wcm_increase = wcm[1] / wcm[0]
+
+        kis = ki * ki_factors
+        fraction_wt = 1 - 1 / (1 + wcm[0] / ki)
+        fraction_inhibited = 1 - 1 / (1 + wcm[1] / kis)
+        reduced_inhibition = fraction_inhibited / fraction_wt
+
+        ax.plot(reduced_inhibition, wcm_increase, 'o', alpha=0.5)
+        ax.plot(1 / ki_factors, wcm_increase, 'o', alpha=0.5)
+        ax.axhline(val_increase, linestyle='--', color='k', linewidth=1, alpha=0.5)
+
+        ax.set_yscale('log')
+
+        ylabel = f'{aa} conc (mM)'
+        ax.set_ylabel(ylabel, fontsize=8)
+        ax.tick_params(labelsize=6)
+
+    # Hide unused axes
+    for ax in axes[hide_axes]:
+        ax.set_visible(False)
 
 def plot_ki_range(validation, model):
     _, axes = plt.subplots(len(COMPARISONS), 2, figsize=(8, 20))
@@ -257,6 +298,10 @@ def save_fig(filename):
 if __name__ == '__main__':
     validation = load_validation()
     model = load_model()
+
+    # Compare validation data AA increase to level of inhibition reduction in the model
+    plot_ki_prediction(validation, model)
+    save_fig('aa-ki-prediction.pdf')
 
     # Compare validation data to range of KI values produced in the model
     plot_ki_range(validation, model)

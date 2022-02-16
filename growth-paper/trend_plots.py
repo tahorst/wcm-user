@@ -50,6 +50,10 @@ ADDED_DATA = {
     'aa / ribosome': lambda data: data['aa_mass'] / data['ribosome_mass'],
     'glt / aa': lambda data: data['glt'] / data['aa_mass'],
     'glt fraction / ppGpp': lambda data: data['glt'] / data['aa_mass'] / data['ppGpp'],
+    'ribosome / cell mass fraction': lambda data: data['ribosome_mass'] / data['cell_mass'],
+    'ribosome / protein mass fraction': lambda data: data['ribosome_mass'] / data['protein_mass'],
+    'excess aa': lambda data: data['aa_mass'] / data['protein_mass'],
+    'total excess': lambda data: data['aa_mass'] / data['protein_mass'] + data['excess rrna fraction'] + data['excess rprotein fraction'],
     }
 ALL_X_COMPARISONS = ['growth_rate']
 ALL_Y_COMPARISONS = ['rp_ratio', 'ppGpp']
@@ -218,6 +222,18 @@ if __name__ == '__main__':
     plot(axes, perturbation_data, dims, keys, fade=True)
     set_ax_lim(axes, ax_lim)
     save_fig('all-fixed-' + OUTPUT_FILE)
+
+    # Condition sims with ppGpp sensitivity high and low sims to see if any attributes are off for one but not the other
+    sims = ['ppGpp_sensitivity']
+    low_mask = [lambda data: (data['variant'] >= 0) & (data['variant'] < 4)]
+    high_mask = [lambda data: (data['variant'] > 4) & (data['variant'] < 10)]
+    axes = plot_setup(*dims)
+    plot(axes, condition_data, dims, keys)
+    ax_lim = get_ax_lim(axes)
+    plot(axes, perturbation_data, dims, keys, sims=sims, mask_funs=low_mask, marker='X', color='k')
+    plot(axes, perturbation_data, dims, keys, sims=sims, mask_funs=high_mask, marker='X')
+    set_ax_lim(axes, ax_lim)
+    save_fig('ppgpp-sensitivity-' + OUTPUT_FILE)
 
     # Low ppGpp limitation sims with enzymes and ribosomes plotted
     sims = ['ppGpp_limitations_-_low_ppGpp']

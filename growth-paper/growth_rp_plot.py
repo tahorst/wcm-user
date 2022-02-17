@@ -96,21 +96,36 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
 
     plt.errorbar(rp_ratio, growth, xerr=rp_ratio_std, yerr=growth_std, fmt='o', label=label, **options)
 
-def plot_conditions(fade=False, options=None, std=True, label=True):
+def plot_conditions(fade=False, grouping=False, options=None, std=True, label=True):
     if fade:
         options = FADE_OPTIONS
         std = False
         label = False
 
-    plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3), options=options)
-    plot(regulation, std=std, label='New carbon sources with growth regulation' if label else '', variants=np.arange(3, 5), options=options)
-    plot(add_one, std=std, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation' if label else '', options=options)
-    plot(remove_one, std=std, variants=[CONTROL_IDX], label='Rich + glc with growth regulation' if label else '', options=options)
-    plot(new_aa, std=std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '', options=options)
+    original_options = dict(options) if options else {}
+    parameterized_options = dict(options) if options else {}
+    unparameterized_options = dict(options) if options else {}
+    if grouping:
+        original_options.update(dict(color='r', alpha=0.5))
+        parameterized_options.update(dict(color='b', alpha=0.5))
+        unparameterized_options.update(dict(color='g', markersize=4, alpha=0.2))
+        std = False
+        label = False
+
+    plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3),
+        options=original_options)
+    plot(regulation, std=std, label='New carbon sources with growth regulation' if label else '', variants=np.arange(3, 5),
+        options=parameterized_options)
+    plot(add_one, std=std, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation' if label else '',
+        options=parameterized_options)
+    plot(remove_one, std=std, variants=[CONTROL_IDX], label='Rich + glc with growth regulation' if label else '',
+        options=parameterized_options)
+    plot(new_aa, std=std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '',
+        options=unparameterized_options)
     plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation' if label else '',
-        options=options if options else ONE_AA_OPTIONS)
+        options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
     plot(remove_one, std=False, exclude=[CONTROL_IDX], label='Remove one AA from rich with growth regulation' if label else '',
-        options=options if options else ONE_AA_OPTIONS)
+        options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
 
 def plot_ppgpp():
     plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(2, 4), options=PPGPP_OPTIONS)  # 0, 4 for all
@@ -172,6 +187,12 @@ if __name__ == '__main__':
     plot_trends()
     format_plot()
     save_fig(OUTPUT_FILE)
+
+    plt.figure()
+    plot_conditions(grouping=True)
+    plot_trends()
+    format_plot()
+    save_fig('groups-' + OUTPUT_FILE)
 
     plt.figure()
     plot_ppgpp()

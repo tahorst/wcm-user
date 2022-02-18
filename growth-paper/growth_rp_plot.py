@@ -53,6 +53,7 @@ ONE_AA_OPTIONS = dict(alpha=0.5, markersize=4)
 PPGPP_OPTIONS = dict(alpha=0.5, markersize=6)
 FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black')
 
+FIG_SIZE = (4, 4)
 
 def load_data(desc, filename='growth_trajectory'):
     dirs = os.listdir(SIM_DIR)
@@ -94,7 +95,7 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
         rp_ratio_std = None
         growth_std = None
 
-    plt.errorbar(rp_ratio, growth, xerr=rp_ratio_std, yerr=growth_std, fmt='o', label=label, **options)
+    plt.errorbar(rp_ratio, growth, xerr=rp_ratio_std, yerr=growth_std, fmt='o', label=label, linewidth=1, **options)
 
 def plot_conditions(fade=False, grouping=False, options=None, std=True, label=True):
     if fade:
@@ -102,14 +103,16 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
         std = False
         label = False
 
+    new_std = std
+
     original_options = dict(options) if options else {}
     parameterized_options = dict(options) if options else {}
     unparameterized_options = dict(options) if options else {}
     if grouping:
-        original_options.update(dict(color='r', alpha=0.5))
-        parameterized_options.update(dict(color='b', alpha=0.5))
-        unparameterized_options.update(dict(color='g', markersize=4, alpha=0.2))
-        std = False
+        original_options.update(dict(color='r', markersize=10, alpha=0.5, markeredgewidth=0))
+        parameterized_options.update(dict(color='b', markersize=10, alpha=0.5, markeredgewidth=0))
+        unparameterized_options.update(dict(color='g', markersize=6, alpha=0.2, markeredgewidth=0))
+        new_std = False
         label = False
 
     plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3),
@@ -120,7 +123,7 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
         options=parameterized_options)
     plot(remove_one, std=std, variants=[CONTROL_IDX], label='Rich + glc with growth regulation' if label else '',
         options=parameterized_options)
-    plot(new_aa, std=std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '',
+    plot(new_aa, std=new_std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '',
         options=unparameterized_options)
     plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation' if label else '',
         options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
@@ -149,18 +152,29 @@ def plot_inhibition():
     # plot(inhib, variants=[0], std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
 
 def plot_trends(all=False):
-    plt.plot([0.11, 0.52], [0, 2], '--k')  # Dennis and Bremer (dry_mass_composition.tsv)
+    options = dict(linewidth=1, alpha=0.5)
+    plt.plot([0.11, 0.52], [0, 2], '--k', **options)  # Dennis and Bremer (dry_mass_composition.tsv)
 
     if all:
-        plt.plot([0.07, 0.49], [0, 2], '--k')  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
-        plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'x')
+        plt.plot([0.07, 0.49], [0, 2], '--k', **options)  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
+        plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'X', **options)
 
-def format_plot():
-    plt.legend(fontsize=8, frameon=False)
+def format_plot(legend=True):
+    # Show legend
+    if legend:
+        plt.legend(fontsize=6, frameon=False)
+
+    # Set axes
     plt.xlabel('RNA/protein mass ratio')
     plt.ylabel('Growth rate (1/hr)')
     plt.xlim([0, 0.6])
     plt.ylim([0, 2])
+
+    # Remove axes borders
+    ax = plt.gca()
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
     plt.tight_layout()
 
 def save_fig(output_file):
@@ -182,25 +196,25 @@ if __name__ == '__main__':
     inhib_no_ppgpp = load_data(INHIBITION_NO_PPGPP_DIR)
     inhib = load_data(INHIBITION_DIR)
 
-    plt.figure()
+    plt.figure(figsize=FIG_SIZE)
     plot_conditions()
     plot_trends()
     format_plot()
     save_fig(OUTPUT_FILE)
 
-    plt.figure()
+    plt.figure(figsize=FIG_SIZE)
     plot_conditions(grouping=True)
     plot_trends()
-    format_plot()
+    format_plot(legend=False)
     save_fig('groups-' + OUTPUT_FILE)
 
-    plt.figure()
+    plt.figure(figsize=FIG_SIZE)
     plot_ppgpp()
     plot_trends()
     format_plot()
     save_fig('ppgpp-' + OUTPUT_FILE)
 
-    plt.figure()
+    plt.figure(figsize=FIG_SIZE)
     plot_inhibition()
     plot_trends()
     format_plot()

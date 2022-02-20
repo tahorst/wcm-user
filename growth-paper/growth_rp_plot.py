@@ -55,6 +55,7 @@ FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black')
 
 FIG_SIZE = (4, 4)
 
+
 def load_data(desc, filename='growth_trajectory'):
     dirs = os.listdir(SIM_DIR)
     for d in dirs:
@@ -109,9 +110,10 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
     parameterized_options = dict(options) if options else {}
     unparameterized_options = dict(options) if options else {}
     if grouping:
-        original_options.update(dict(color='r', markersize=10, alpha=0.5, markeredgewidth=0))
-        parameterized_options.update(dict(color='b', markersize=10, alpha=0.5, markeredgewidth=0))
-        unparameterized_options.update(dict(color='g', markersize=6, alpha=0.2, markeredgewidth=0))
+        # Colors from seaborn-colorblind prop cycle
+        original_options.update(dict(color='#D55E00', markersize=10, alpha=0.5, markeredgewidth=0))
+        parameterized_options.update(dict(color='#0072B2', markersize=10, alpha=0.5, markeredgewidth=0))
+        unparameterized_options.update(dict(color='#009E73', markersize=7, alpha=0.3, markeredgewidth=0))
         new_std = False
         label = False
 

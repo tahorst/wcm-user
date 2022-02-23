@@ -55,6 +55,10 @@ FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black')
 
 FIG_SIZE = (4, 4)
 
+ORANGE = '#D55E00'
+BLUE = '#0072B2'
+GREEN = '#009E73'
+
 
 def load_data(desc, filename='growth_trajectory'):
     dirs = os.listdir(SIM_DIR)
@@ -111,9 +115,9 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
     unparameterized_options = dict(options) if options else {}
     if grouping:
         # Colors from seaborn-colorblind prop cycle
-        original_options.update(dict(color='#D55E00', markersize=10, alpha=0.5, markeredgewidth=0))
-        parameterized_options.update(dict(color='#0072B2', markersize=10, alpha=0.5, markeredgewidth=0))
-        unparameterized_options.update(dict(color='#009E73', markersize=7, alpha=0.3, markeredgewidth=0))
+        original_options.update(dict(color=ORANGE, markersize=10, alpha=0.5, markeredgewidth=0))
+        parameterized_options.update(dict(color=BLUE, markersize=10, alpha=0.5, markeredgewidth=0))
+        unparameterized_options.update(dict(color=GREEN, markersize=7, alpha=0.3, markeredgewidth=0))
         new_std = False
         label = False
 
@@ -221,6 +225,14 @@ if __name__ == '__main__':
     plot_trends()
     format_plot()
     save_fig('inhibition-' + OUTPUT_FILE)
+
+    # Could also plot regulation with variants 2 and 0
+    plt.figure(figsize=FIG_SIZE)
+    plot(new_aa, variants=[0], options=dict(color=GREEN))
+    plot(new_aa, variants=[3], options=dict(color=ORANGE))
+    plot_trends()
+    format_plot(legend=False)
+    save_fig('shifts-' + OUTPUT_FILE)
 
     # Optional plots
     # ppgpp_aa = load_data(PPGPP_DIR, 'protein_aa-growth_trajectory')

@@ -129,17 +129,14 @@ def plot_ki_prediction(validation, model):
 
         # Original data
         ax.plot(reduced_inhibition, wcm_increase, 'o', alpha=0.5)
-        ax.plot(1 / ki_factors, wcm_increase, 'o', alpha=0.5)
 
-        # Curve fit data
-        fun = lambda x, a, d: a*np.exp(d*x)
-        sol = curve_fit(fun, 1/ki_factors, np.log(wcm_increase))  # Fit in log space for closer fit at higher x values
-        ax.plot(1 / ki_factors, np.exp(fun(1 / ki_factors, *sol[0])), 'x')
-
-        # Interp function
+        # Interp function to calculate expected value based on validation increase
         x = np.log(wcm_increase)  # Fit in log space for smoother fit
-        interp = interp1d(x, 1 / ki_factors)
+        interp = interp1d(x, reduced_inhibition)
         val_match = interp(np.log(val_increase))
+        predicted_fraction_inhibited = val_match * fraction_wt
+        predicted_ki = (1 - predicted_fraction_inhibited) / predicted_fraction_inhibited * wcm[0]
+        val = (1 - 1 / (1 + wcm[0] / predicted_ki)) / fraction_wt
         y = np.linspace(x.min(), x.max(), 1000)
         ax.plot(interp(y), np.exp(y))
 
@@ -148,7 +145,8 @@ def plot_ki_prediction(validation, model):
 
         ax.set_yscale('log')
 
-        ylabel = f'{aa} conc (mM)'
+        ylabel = f'{aa} conc fold change'
+        ax.set_xlabel(f'Fraction of wildtype inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})', fontsize=8)
         ax.set_ylabel(ylabel, fontsize=8)
         ax.tick_params(labelsize=6)
 

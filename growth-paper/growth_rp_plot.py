@@ -24,7 +24,7 @@ PPGPP_DIR = 'ppGpp_sensitivity_-_no_mechanistic_transport'
 PPGPP_LIMITATION_LOW_DIR = 'ppGpp_limitations_-_low_ppGpp'
 PPGPP_LIMITATION_HIGH_DIR = 'ppGpp_limitations_-_high_ppGpp'
 NEW_AA_SOURCE_DIR = 'Amino_acid_combinations_in_media'
-INHIBITION_NO_PPGPP_DIR = 'Remove_amino_acid_inhibition_-_no_ppgpp'
+INHIBITION_NO_PPGPP_DIR = 'Remove_amino_acid_inhibition_-_constant_ppgpp'
 INHIBITION_DIR = 'Remove_amino_acid_inhibition'
 FILE_PATH = 'plotOut/{}.tsv'
 

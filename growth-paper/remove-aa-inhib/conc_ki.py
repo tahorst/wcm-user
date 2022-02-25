@@ -104,13 +104,14 @@ def get_model(model, aa, enz):
 def plot_ki_prediction(validation, model):
     # TODO: decide on metric (need to do 1 - metric?)
     # TODO: fit curve to points and drop prediction vline
-    cols = 3
+    cols = 4
     rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols)
+    _, axes = plt.subplots(rows, cols, figsize=(8, 4))
     hide_axes = np.ones_like(axes, dtype=bool)
 
     ki_factors = np.array(KI_FACTORS)
     for i, ((aa, enz), ki) in enumerate(zip(COMPARISONS, KIS)):
+        i += 1  # skip first ax
         row = i // cols
         col = i % cols
         ax = axes[row, col]
@@ -146,8 +147,8 @@ def plot_ki_prediction(validation, model):
         ax.set_yscale('log')
 
         ylabel = f'{aa} conc fold change'
-        ax.set_xlabel(f'Fraction of wildtype inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})', fontsize=8)
-        ax.set_ylabel(ylabel, fontsize=8)
+        ax.set_xlabel(f'Fraction of wildtype inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})', fontsize=6)
+        ax.set_ylabel(ylabel, fontsize=6)
         ax.tick_params(labelsize=6)
 
     # Hide unused axes
@@ -178,16 +179,17 @@ def plot_ki_range(validation, model):
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
 
-def plot_bars(datasets, functions, log=False, normalize=False):
+def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
     # TODO: label x and y axes
     # TODO: highlight enzyme
     # TODO: option to normalize based on control
-    cols = 3
+    cols = 4
     rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols)
+    _, axes = plt.subplots(rows, cols, figsize=(8, 4))
     hide_axes = np.ones_like(axes, dtype=bool)
 
     for i, (aa, _) in enumerate(COMPARISONS):
+        i += 1  # skip first ax
         row = i // cols
         col = i % cols
         ax = axes[row, col]
@@ -209,7 +211,7 @@ def plot_bars(datasets, functions, log=False, normalize=False):
         offsets = np.arange(n_datasets) * width - 0.4 + width/2
 
         for i, offset in enumerate(offsets):
-            ax.bar(x + offset, all_conc[i], width)
+            ax.bar(x + offset, all_conc[i], width, bottom=bottom)
 
         if log:
             ax.set_yscale('log')
@@ -230,12 +232,13 @@ def plot_bars(datasets, functions, log=False, normalize=False):
         ax.set_visible(False)
 
 def plot_sub_scatter(validation, model):
-    cols = 3
+    cols = 4
     rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols, figsize=(10, 10))
+    _, axes = plt.subplots(rows, cols, figsize=(8, 4))
     hide_axes = np.ones_like(axes, dtype=bool)
 
     for i, (aa, _) in enumerate(COMPARISONS):
+        i += 1  # skip first ax
         row = i // cols
         col = i % cols
         ax = axes[row, col]
@@ -327,11 +330,11 @@ if __name__ == '__main__':
     save_fig('validation-bar.pdf')
 
     # Comparable bar plot from model output
-    plot_bars([model], [get_model], log=True)
+    plot_bars([model], [get_model], log=True, bottom=1e-2)
     save_fig('model-bar.pdf')
 
     # Side by side bar plot with validation and model data
-    plot_bars([validation, model], [get_validation, get_model], log=True)
+    plot_bars([validation, model], [get_validation, get_model], log=True, bottom=1e-2)
     save_fig('side-by-side-bar.pdf')
 
     # Side by side bar plot with validation and model data

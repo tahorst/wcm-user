@@ -241,4 +241,3 @@ if __name__ == '__main__':
     # plot(ppgpp_aa, std=False, label='Minimal higher ppGpp', variants=range(5, 8), options=PPGPP_OPTIONS)
     # plot(ppgpp_aa, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=PPGPP_OPTIONS)
     # plot(ppgpp_aa, std=False, label='Rich higher ppGpp', variants=range(12, 17), options=PPGPP_OPTIONS)
-

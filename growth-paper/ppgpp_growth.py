@@ -16,9 +16,8 @@ SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
 SENSITIVITY_DIR = 'ppGpp_sensitivity_-_no_mechanistic_transport'
 LIMITATIONS_LOW_DIR = 'ppGpp_limitations_-_low_ppGpp'
 LIMITATIONS_HIGH_DIR = 'ppGpp_limitations_-_high_ppGpp'
-# TODO: update these dirs
-RIBOSOME_LIMITATIONS_INHIBITION_DIR = 'ppGpp_limitations_with_split_rRNA_rProtein_at_high_ppGpp_-_updated'
-RIBOSOME_LIMITATIONS_NO_INHIBITION_DIR = 'ppGpp_limitations_with_split_rRNA_rProtein_at_high_ppGpp,_no_translation_inhibition_-_updated'
+RIBOSOME_LIMITATIONS_INHIBITION_DIR = 'ppGpp_limitations_with_ribosomes_at_high_ppGpp'
+RIBOSOME_LIMITATIONS_NO_INHIBITION_DIR = 'ppGpp_limitations_with_ribosomes_at_high_ppGpp,_no_ppGpp_translation_inhibition'
 FILE_PATH = 'plotOut/{}.tsv'
 
 # Output paths
@@ -56,10 +55,10 @@ def plot_data(data):
     y = list(data.values())
     x = np.arange(len(y))
 
-    plt.figure()
+    plt.figure(figsize=(4, 4))
     plt.bar(x, y)
 
-    plt.xticks(x, labels, rotation=45)
+    plt.xticks(x, labels, rotation=45, ha='right')
     plt.ylabel('Growth rate (1/hr)')
 
     # Remove axes borders
@@ -84,22 +83,24 @@ if __name__ == '__main__':
     ribosome_limit_no_inhibition = load_data(RIBOSOME_LIMITATIONS_NO_INHIBITION_DIR)
 
     # Compile data to plot
+    growth_key = GROWTH_HEADER + MEAN_HEADER
     low_data = {
-        'Control': sensitivity[4][GROWTH_HEADER + MEAN_HEADER],
-        'Low ppGpp': limitations_low[0][GROWTH_HEADER + MEAN_HEADER],
-        # 'Decrease enzymes': limitations_low[20][GROWTH_HEADER + MEAN_HEADER],
-        'Increase enzymes': limitations_low[25][GROWTH_HEADER + MEAN_HEADER],
-        # 'Decrease ribosomes': limitations_low[35][GROWTH_HEADER + MEAN_HEADER],
-        'Increase ribosomes': limitations_low[30][GROWTH_HEADER + MEAN_HEADER],
+        'Control': sensitivity[4][growth_key],
+        'Low ppGpp': limitations_low[0][growth_key],
+        # 'Decrease enzymes': limitations_low[20][growth_key],
+        'Increase enzymes': limitations_low[25][growth_key],
+        # 'Decrease ribosomes': limitations_low[35][growth_key],
+        'Increase ribosomes': limitations_low[30][growth_key],
         }
     high_data = {
-        'Control': sensitivity[4][GROWTH_HEADER + MEAN_HEADER],
-        'High ppGpp': limitations_high[74][GROWTH_HEADER + MEAN_HEADER],
-        # 'Decrease enzymes': limitations_high[94][GROWTH_HEADER + MEAN_HEADER],
-        'Increase enzymes': limitations_high[99][GROWTH_HEADER + MEAN_HEADER],
-        # 'Decrease ribosomes': limitations_high[103][GROWTH_HEADER + MEAN_HEADER],  # TODO: run with low rRNA?
-        'Increase ribosomes': ribosome_limit_inhibition[45][GROWTH_HEADER + MEAN_HEADER],
-        'Increase ribosomes,\nno GTPase inhibition': ribosome_limit_no_inhibition[45][GROWTH_HEADER + MEAN_HEADER],
+        'Control': sensitivity[4][growth_key],
+        'High ppGpp': limitations_high[74][growth_key],
+        # 'Decrease enzymes': limitations_high[94][growth_key],
+        'Increase enzymes': limitations_high[99][growth_key],
+        # 'Decrease ribosomes': limitations_high[103][growth_key],  # TODO: run with low rRNA?
+        'Increase ribosomes': ribosome_limit_inhibition[45][growth_key],
+        'No GTPase inhibition': ribosome_limit_no_inhibition[32][growth_key],
+        'Increase ribosomes,\nno GTPase inhibition': ribosome_limit_no_inhibition[45][growth_key],
         }
 
     # Plot low ppGpp sim results

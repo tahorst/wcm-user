@@ -69,6 +69,7 @@ def parse_args():
     parser.add_argument('--sherlock', action='store_true')
     parser.add_argument('--local', action='store_true')
     parser.add_argument('--copy', action='store_true')
+    parser.add_argument('--dry', action='store_true')
     return parser.parse_args()
 
 def run_analysis(args):
@@ -81,11 +82,13 @@ def run_analysis(args):
                     label = f'-o {label}'
                 cmd = f'python runscripts/manual/analysis{script}.py {path} -p {plot} {label} {options}'
                 print(cmd)
-                results.append(pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None)))
+                if not args.dry:
+                    results.append(pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None)))
             if not sherlock and args.local:
                 cmd = f'{path}{script}'
                 print(cmd)
-                results.append(pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None)))
+                if not args.dry:
+                    results.append(pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None)))
     pool.close()
     pool.join()
 
@@ -100,7 +103,8 @@ def copy_results():
             dest_dir = os.path.join(COMPILED_PATH, f'fig-{fig}')
             if not os.path.exists(dest_dir):
                 print(f'*** Creating {dest_dir}')
-                os.makedirs(dest_dir)
+                if not args.dry:
+                    os.makedirs(dest_dir)
 
             for out_label in out_labels:
                 if sherlock:
@@ -113,7 +117,8 @@ def copy_results():
 
                 if os.path.exists(src) and os.path.isfile(src):
                     print(f'Copying from {src} to {dest}')
-                    shutil.copy2(src, dest)
+                    if not args.dry:
+                        shutil.copy2(src, dest)
                 else:
                     print(f'*** Warning for {fig}{panel}: {src} is not a file')
 

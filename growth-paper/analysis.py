@@ -3,7 +3,6 @@
 Run from wcEcoli directory on sherlock or locally to get correct paths to output and scripts.
 
 TODO:
-    - add option to copy output files to a central dir
     - remove dupes
 """
 
@@ -35,12 +34,12 @@ ANALYSIS = [
     (3, 'a', True, 'out/20220120.184812__ppGpp_sensitivity_-_no_mechanistic_transport/', 'Variant', 'growth_trajectory', '', '--generation-path-range 2 8', '', []),
     (3, 'a', False, 'user/growth-paper/', 'growth_rp_plot.py', '', '', '', '', ['ppgpp-combined-growth-rp']),
     (3, 'bcde', True, 'out/20220120.184812__ppGpp_sensitivity_-_no_mechanistic_transport/', 'Variant', 'ppgpp_conc', '2+gen-minimal-', '--variant-path-range 0 10 --generation-path-range 2 8', 'plotOut', ['', '_output', '_capacity', '_excess']),
-    (3, 'fg', True, 'out/20220120.184812__ppGpp_sensitivity_-_no_mechanistic_transport/', 'Variant', 'growth_trajectory', '2+gen', '--generation-path-range 2 8', '', []),
-    (3, 'f', True, 'out/20220117.215105__ppGpp_limitations_-_low_ppGpp/', 'Variant', 'growth_trajectory', '2+gen', '--generation-path-range 2 8', '', []),
+    (3, 'fg', True, 'out/20220120.184812__ppGpp_sensitivity_-_no_mechanistic_transport/', 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'f', True, 'out/20220117.215105__ppGpp_limitations_-_low_ppGpp/', 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
     (3, 'f', False, 'user/growth-paper/', 'ppgpp_growth.py', '', '', '', '', ['low-ppgpp']),
-    (3, 'g', True, 'out/20220120.060837__ppGpp_limitations_-_high_ppGpp/', 'Variant', 'growth_trajectory', '2+gen', '--generation-path-range 2 8', '', []),
-    (3, 'g', True, 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp/', 'Variant', 'growth_trajectory', '2+gen', '--generation-path-range 2 8', '', []),
-    (3, 'g', True, 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp,_no_ppGpp_translation_inhibition/', 'Variant', 'growth_trajectory', '2+gen', '--generation-path-range 2 8', '', []),
+    (3, 'g', True, 'out/20220120.060837__ppGpp_limitations_-_high_ppGpp/', 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'g', True, 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp/', 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'g', True, 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp,_no_ppGpp_translation_inhibition/', 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
     (3, 'g', False, 'user/growth-paper/', 'ppgpp_growth.py', '', '', '', '', ['high-ppgpp']),
     (4, 'a', False, 'user/growth-paper/remove-aa-inhib/', 'conc_ki.py', '', '', '', '', ['side-by-side-bar']),
     (4, 'b', False, 'user/growth-paper/remove-aa-inhib/', 'conc_ki.py', '', '', '', '', ['aa-ki-prediction']),

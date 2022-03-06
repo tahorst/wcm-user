@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 """
 Run from wcEcoli directory on sherlock or locally to get correct paths to output and scripts.
-
-TODO:
-    - remove dupes
 """
 
 import argparse
@@ -73,7 +70,7 @@ def parse_args():
 
 def run_analysis(args):
     pool = parallelization.pool(num_processes=args.cpus)
-    results = []
+    results = {}
     for (fig, panel, sherlock, path, script, plot, label, options, *_) in ANALYSIS:
         if (args.fig == fig or args.fig is None) and (args.panel is None or args.panel in panel):
             if sherlock and args.sherlock:
@@ -81,18 +78,18 @@ def run_analysis(args):
                     label = f'-o {label}'
                 cmd = f'python runscripts/manual/analysis{script}.py {path} -p {plot} {label} {options}'
                 print(cmd)
-                if not args.dry:
-                    results.append(pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None)))
+                if not args.dry and cmd not in results:
+                    results[cmd] = pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None))
             if not sherlock and args.local:
                 cmd = f'{path}{script}'
                 print(cmd)
-                if not args.dry:
-                    results.append(pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None)))
+                if not args.dry and cmd not in results:
+                    results[cmd] = pool.apply_async(fp.run_cmdline, (cmd,), kwds=dict(timeout=None))
     pool.close()
     pool.join()
 
     # Check for errors
-    for result in results:
+    for result in results.values():
         if not result.successful():
             result.get()
 

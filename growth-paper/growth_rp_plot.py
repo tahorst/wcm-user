@@ -20,7 +20,7 @@ BASE_SIM_DIR = 'Conditions_without_regulation_or_charging'
 NEW_C_SOURCE_DIR = 'Conditions_with_regulation'
 ADD_ONE_DIR = 'Add_one_amino_acid_shift'
 REMOVE_ONE_DIR = 'Remove_one_amino_acid_shift'
-PPGPP_DIR = 'ppGpp_sensitivity_-_no_mechanistic_transport'
+PPGPP_DIR = 'ppGpp_sensitivity'
 PPGPP_LIMITATION_LOW_DIR = 'ppGpp_limitations_-_low_ppGpp'
 PPGPP_LIMITATION_HIGH_DIR = 'ppGpp_limitations_-_high_ppGpp'
 NEW_AA_SOURCE_DIR = 'Amino_acid_combinations_in_media'
@@ -37,6 +37,7 @@ OUTPUT_FILE = 'combined-growth-rp.pdf'
 CONTROL_IDX = 19
 GROWTH_HEADER = 'Growth'
 RP_HEADER = 'R/P ratio'
+RPA_HEADER = 'R/(P+A) ratio'
 MEAN_HEADER = ' mean'
 STD_HEADER = ' std'
 
@@ -99,7 +100,7 @@ def load_data(desc, filename='growth_trajectory'):
 
     return data
 
-def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
+def plot(data, variants=None, exclude=None, std=True, label=None, options=None, x_header=RP_HEADER, y_header=GROWTH_HEADER):
     def extract_data(header, data_type):
         return np.array([data[v][header + data_type] for v in variants if v not in exclude])
 
@@ -110,12 +111,12 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None):
     if options is None:
         options = {}
 
-    rp_ratio = extract_data(RP_HEADER, MEAN_HEADER)
-    growth = extract_data(GROWTH_HEADER, MEAN_HEADER)
+    rp_ratio = extract_data(x_header, MEAN_HEADER)
+    growth = extract_data(y_header, MEAN_HEADER)
 
     if std:
-        rp_ratio_std = extract_data(RP_HEADER, STD_HEADER)
-        growth_std = extract_data(GROWTH_HEADER, STD_HEADER)
+        rp_ratio_std = extract_data(x_header, STD_HEADER)
+        growth_std = extract_data(y_header, STD_HEADER)
     else:
         rp_ratio_std = None
         growth_std = None
@@ -157,8 +158,14 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
         options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
 
 def plot_ppgpp():
-    plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(0, 4), options=dict(color=BLUE, **PPGPP_OPTIONS))  # 0, 4 for all
-    plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 10), options=dict(color=ORANGE, **PPGPP_OPTIONS))  # 5, 10 for all
+    plot(ppgpp, std=False, label='Minimal lower ppGpp (with AA)', variants=range(0, 4),
+        options=dict(color=BLUE, **PPGPP_OPTIONS), x_header=RPA_HEADER)  # 0, 4 for all
+    plot(ppgpp, std=False, label='Minimal higher ppGpp (with AA)', variants=range(5, 10),
+        options=dict(color=ORANGE, **PPGPP_OPTIONS), x_header=RPA_HEADER)  # 5, 10 for all
+    plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(0, 4),
+        options=dict(color=BLUE, marker='s', **PPGPP_OPTIONS))  # 0, 4 for all
+    plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 10),
+        options=dict(color=ORANGE, marker='s', **PPGPP_OPTIONS))  # 5, 10 for all
     plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc', options=dict(color='k'))
     plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc', options=FADE_OPTIONS)
     plot(ppgpp, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=FADE_OPTIONS)

@@ -158,26 +158,26 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
         options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
 
 def plot_ppgpp():
-    plot(ppgpp, std=False, label='Minimal lower ppGpp (with AA)', variants=range(0, 4),
+    plot(ppgpp, std=False, label='Minimal ppGpp perturbed\n(protein+AA in ratio)', variants=range(0, 4),
         options=dict(color=BLUE, **PPGPP_OPTIONS), x_header=RPA_HEADER)  # 0, 4 for all
-    plot(ppgpp, std=False, label='Minimal higher ppGpp (with AA)', variants=range(5, 10),
+    plot(ppgpp, std=False, variants=range(5, 10),
         options=dict(color=ORANGE, **PPGPP_OPTIONS), x_header=RPA_HEADER)  # 5, 10 for all
-    plot(ppgpp, std=False, label='Minimal lower ppGpp', variants=range(0, 4),
+    plot(ppgpp, std=False, label='Minimal ppGpp perturbed', variants=range(0, 4),
         options=dict(color=BLUE, marker='s', **PPGPP_OPTIONS))  # 0, 4 for all
-    plot(ppgpp, std=False, label='Minimal higher ppGpp', variants=range(5, 10),
+    plot(ppgpp, std=False, variants=range(5, 10),
         options=dict(color=ORANGE, marker='s', **PPGPP_OPTIONS))  # 5, 10 for all
     plot(add_one, variants=[CONTROL_IDX], label='Minimal + glc', options=dict(color='k'))
     plot(remove_one, variants=[CONTROL_IDX], label='Rich + glc', options=FADE_OPTIONS)
-    plot(ppgpp, std=False, label='Rich lower ppGpp', variants=range(10, 11), options=FADE_OPTIONS)
-    plot(ppgpp, std=False, label='Rich higher ppGpp', variants=range(12, 15), options=FADE_OPTIONS)  # 12, 20 for all
+    plot(ppgpp, std=False, variants=range(10, 11), options=FADE_OPTIONS)
+    plot(ppgpp, std=False, variants=range(12, 15), options=FADE_OPTIONS)  # 12, 20 for all
     # plot(ppgpp_low, std=False, label='Low inhibition enzymes', variants=range(24, 28), options=PPGPP_OPTIONS)  # 19 starts low, 19 failed
     # plot(ppgpp_low, std=False, label='Low inhibition ribosomes', variants=range(33, 37), options=PPGPP_OPTIONS)  # 28 starts low
     # plot(ppgpp_high, std=False, label='High inhibition enzymes', variants=range(98, 102), options=PPGPP_OPTIONS)  # 93 starts low
     # plot(ppgpp_high, std=False, label='High inhibition ribosomes', variants=range(107, 111), options=PPGPP_OPTIONS)  # 102 starts low
 
 def plot_zhu():
-    plt.plot(ZHU_LOW_PPGPP[:, ZHU_RP], ZHU_LOW_PPGPP[:, ZHU_GROWTH], 'X', label='Zhu low', color=BLUE, **PPGPP_OPTIONS)
-    plt.plot(ZHU_HIGH_PPGPP[:, ZHU_RP], ZHU_HIGH_PPGPP[:, ZHU_GROWTH], 'X', label='Zhu high', color=ORANGE, **PPGPP_OPTIONS)
+    plt.plot(ZHU_LOW_PPGPP[:, ZHU_RP], ZHU_LOW_PPGPP[:, ZHU_GROWTH], 'X', label='Lit (Zhu)', color=BLUE, **PPGPP_OPTIONS)
+    plt.plot(ZHU_HIGH_PPGPP[:, ZHU_RP], ZHU_HIGH_PPGPP[:, ZHU_GROWTH], 'X', color=ORANGE, **PPGPP_OPTIONS)
 
 def plot_inhibition():
     plot(inhib_no_ppgpp, variants=range(1, 8), std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
@@ -203,8 +203,8 @@ def format_plot(legend=True):
         plt.legend(fontsize=6, frameon=False)
 
     # Set axes
-    plt.xlabel('RNA/protein mass ratio')
-    plt.ylabel('Growth rate (1/hr)')
+    plt.xlabel('RNA/protein mass ratio', fontsize=8)
+    plt.ylabel('Growth rate (1/hr)', fontsize=8)
     plt.xlim([0, 0.6])
     plt.ylim([0, 2])
 
@@ -212,6 +212,9 @@ def format_plot(legend=True):
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+
+    # ax formatting
+    ax.tick_params(labelsize=8)
 
     plt.tight_layout()
 
@@ -246,7 +249,7 @@ if __name__ == '__main__':
     format_plot(legend=False)
     save_fig('groups-' + OUTPUT_FILE)
 
-    plt.figure(figsize=FIG_SIZE)
+    plt.figure(figsize=(3.2, 3.2))
     plot_ppgpp()
     plot_zhu()
     plot_trends()

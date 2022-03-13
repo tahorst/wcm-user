@@ -49,6 +49,26 @@ DENNIS_BREMER_2021 = np.array([
     [0.5023, 2.07944154167984],
 ])
 
+# Growth rate (1/hr) and RNA/protein from Zhu and Dai. Growth suppression by altered ppGpp. 2019. NAR.
+ZHU_GROWTH = 0
+ZHU_RP = 1
+## Fig 3H SpoT OE
+ZHU_LOW_PPGPP = np.array([
+    [0.841111111111112, 0.241406177962194],
+    [0.557777777777778, 0.330790686952513],
+    [0.518888888888889, 0.34746887966805],
+    [0.44, 0.378337943752882],
+    [0.407777777777778, 0.407450437989857],
+    [0.235555555555556, 0.484156293222684],
+])
+## Fig 2D RelA OE
+ZHU_HIGH_PPGPP = np.array([
+    [0.950099800399202, 0.275764143355069],
+    [0.766467065868263, 0.228071469002285],
+    [0.497005988023952, 0.17593320821044],
+    [0.345309381237525, 0.149870408436854],
+])
+
 ONE_AA_OPTIONS = dict(alpha=0.5, markersize=4)
 PPGPP_OPTIONS = dict(alpha=0.5, markersize=6)
 FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black')
@@ -147,6 +167,10 @@ def plot_ppgpp():
     plot(ppgpp_high, std=False, label='High inhibition enzymes', variants=range(98, 102), options=PPGPP_OPTIONS)  # 93 starts low
     plot(ppgpp_high, std=False, label='High inhibition ribosomes', variants=range(107, 111), options=PPGPP_OPTIONS)  # 102 starts low
 
+def plot_zhu():
+    plt.plot(ZHU_LOW_PPGPP[:, ZHU_RP], ZHU_LOW_PPGPP[:, ZHU_GROWTH], 'X', label='Zhu low', color=BLUE, **PPGPP_OPTIONS)
+    plt.plot(ZHU_HIGH_PPGPP[:, ZHU_RP], ZHU_HIGH_PPGPP[:, ZHU_GROWTH], 'X', label='Zhu high', color=ORANGE, **PPGPP_OPTIONS)
+
 def plot_inhibition():
     plot(inhib_no_ppgpp, variants=range(1, 8), std=False, label='Removed allosteric inhibition without ppGpp', options=PPGPP_OPTIONS)
     plot(inhib, variants=range(1, 8), std=False, label='Removed allosteric inhibition with ppGpp', options=PPGPP_OPTIONS)
@@ -159,7 +183,7 @@ def plot_inhibition():
 
 def plot_trends(all=False):
     options = dict(linewidth=1, alpha=0.5)
-    plt.plot([0.11, 0.52], [0, 2], '--k', **options)  # Dennis and Bremer (dry_mass_composition.tsv)
+    plt.plot([0.11, 0.52], [0, 2], '--k', **options)  # Dennis and Bremer. 1996. (dry_mass_composition.tsv)
 
     if all:
         plt.plot([0.07, 0.49], [0, 2], '--k', **options)  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
@@ -216,6 +240,7 @@ if __name__ == '__main__':
 
     plt.figure(figsize=FIG_SIZE)
     plot_ppgpp()
+    plot_zhu()
     plot_trends()
     format_plot()
     save_fig('ppgpp-' + OUTPUT_FILE)

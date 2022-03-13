@@ -70,9 +70,9 @@ ZHU_HIGH_PPGPP = np.array([
     [0.345309381237525, 0.149870408436854],
 ])
 
-ONE_AA_OPTIONS = dict(alpha=0.5, markersize=4)
-PPGPP_OPTIONS = dict(alpha=0.5, markersize=6)
-FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black')
+ONE_AA_OPTIONS = dict(alpha=0.5, markersize=4, markeredgewidth=0)
+PPGPP_OPTIONS = dict(alpha=0.5, markersize=6, markeredgewidth=0)
+FADE_OPTIONS = dict(alpha=0.2, markersize=4, color='black', markeredgewidth=0)
 
 FIG_SIZE = (4, 4)
 

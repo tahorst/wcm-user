@@ -13,7 +13,7 @@ import numpy as np
 
 # Input paths
 SIM_DIR = '/home/travis/scratch/wcEcoli_out/'
-SENSITIVITY_DIR = 'ppGpp_sensitivity_-_no_mechanistic_transport'
+SENSITIVITY_DIR = 'ppGpp_sensitivity'
 LIMITATIONS_LOW_DIR = 'ppGpp_limitations_-_low_ppGpp'
 LIMITATIONS_HIGH_DIR = 'ppGpp_limitations_-_high_ppGpp'
 RIBOSOME_LIMITATIONS_INHIBITION_DIR = 'ppGpp_limitations_with_ribosomes_at_high_ppGpp'
@@ -26,9 +26,7 @@ OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 GROWTH_HEADER = 'Growth'
-RP_HEADER = 'R/P ratio'
 MEAN_HEADER = ' mean'
-STD_HEADER = ' std'
 
 
 def load_data(desc, filename='2+gen-growth_trajectory'):
@@ -50,19 +48,26 @@ def load_data(desc, filename='2+gen-growth_trajectory'):
 
     return data
 
-def plot_data(data):
-    labels = list(data.keys())
+def plot_data(data, label=True):
     y = list(data.values())
     x = np.arange(len(y))
+    if label:
+        labels = list(data.keys())
+        height = 2
+    else:
+        labels = [''] * len(x)
+        height = 1
 
-    plt.figure(figsize=(4, 4))
-    plt.bar(x, y)
+    plt.figure(figsize=(1 + 0.25 * len(x), height))
+    plt.bar(x, y, color='k', alpha=0.8)
 
-    plt.xticks(x, labels, rotation=45, ha='right')
-    plt.ylabel('Growth rate (1/hr)')
+    plt.xticks(x, labels, rotation=30, ha='right', fontsize=8)
+    plt.ylabel('Growth rate (1/hr)', fontsize=8)
+    plt.ylim([0.4, 0.8])
 
     # Remove axes borders
     ax = plt.gca()
+    ax.tick_params(labelsize=8)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
@@ -98,15 +103,19 @@ if __name__ == '__main__':
         # 'Decrease enzymes': limitations_high[94][growth_key],
         'Increase enzymes': limitations_high[99][growth_key],
         # 'Decrease ribosomes': limitations_high[103][growth_key],  # TODO: run with low rRNA?
-        'Increase ribosomes': ribosome_limit_inhibition[45][growth_key],
+        'Increase ribosomes': ribosome_limit_inhibition[44][growth_key],
         'No GTPase inhibition': ribosome_limit_no_inhibition[32][growth_key],
-        'Increase ribosomes,\nno GTPase inhibition': ribosome_limit_no_inhibition[45][growth_key],
+        'Increase ribosomes,\nno GTPase inhibition': ribosome_limit_no_inhibition[44][growth_key],
         }
 
     # Plot low ppGpp sim results
     plot_data(low_data)
     save_fig('low-ppgpp')
+    plot_data(low_data, label=False)
+    save_fig('low-ppgpp-clean')
 
     # Plot high ppGpp sim results
     plot_data(high_data)
     save_fig('high-ppgpp')
+    plot_data(high_data, label=False)
+    save_fig('high-ppgpp-clean')

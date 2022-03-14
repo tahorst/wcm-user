@@ -90,22 +90,22 @@ if __name__ == '__main__':
     # Compile data to plot
     growth_key = GROWTH_HEADER + MEAN_HEADER
     low_data = {
-        'Control': sensitivity[4][growth_key],
-        'Low ppGpp': limitations_low[0][growth_key],
-        # 'Decrease enzymes': limitations_low[20][growth_key],
-        'Increase enzymes': limitations_low[25][growth_key],
-        # 'Decrease ribosomes': limitations_low[35][growth_key],
-        'Increase ribosomes': limitations_low[30][growth_key],
+        'Control': sensitivity[4][growth_key],  # Optimal conc (50 uM)
+        'Low ppGpp': limitations_low[0][growth_key],  # No modifications (20 uM)
+        # 'Decrease enzymes': limitations_low[20][growth_key],  # 25% decrease
+        'Increase enzymes': limitations_low[25][growth_key],  # 25% increase
+        # 'Decrease ribosomes': limitations_low[29][growth_key],  # 25% decrease
+        'Increase ribosomes': limitations_low[34][growth_key],  # 25% increase
         }
     high_data = {
-        'Control': sensitivity[4][growth_key],
-        'High ppGpp': limitations_high[74][growth_key],
-        # 'Decrease enzymes': limitations_high[94][growth_key],
-        'Increase enzymes': limitations_high[99][growth_key],
-        # 'Decrease ribosomes': limitations_high[103][growth_key],  # TODO: run with low rRNA?
-        'Increase ribosomes': ribosome_limit_inhibition[44][growth_key],
-        'No GTPase inhibition': ribosome_limit_no_inhibition[32][growth_key],
-        'Increase ribosomes,\nno GTPase inhibition': ribosome_limit_no_inhibition[44][growth_key],
+        'Control': sensitivity[4][growth_key],  # Optimal conc (50 uM)
+        'High ppGpp': limitations_high[74][growth_key],  # No modifications (90 uM)
+        # 'Decrease enzymes': limitations_high[94][growth_key],  # 25% decrease
+        'Increase enzymes': limitations_high[99][growth_key],  # 25% increase
+        # 'Decrease ribosomes': limitations_high[103][growth_key],  # 25% decrease, TODO: run with low rRNA?
+        'Increase ribosomes': ribosome_limit_inhibition[44][growth_key],  # 50% increase rProtein, 100% increase rRNA, 45 also works ok (10% rProtein, 50% rRNA)
+        'No GTPase inhibition': ribosome_limit_no_inhibition[32][growth_key],  # No modifications, with no inhibition
+        'Increase ribosomes,\nno GTPase inhibition': ribosome_limit_no_inhibition[44][growth_key],  # 50% increase rProtein, 100% increase rRNA, 45 also works ok (10% rProtein, 50% rRNA)
         }
 
     # Plot low ppGpp sim results

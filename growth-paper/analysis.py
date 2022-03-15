@@ -70,7 +70,7 @@ ANALYSIS = [
     (3, 'g', True, PPGPP_LIMIT_HIGH_RIB_NO_INHIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
     (3, 'g', False, PAPER_DIR, 'ppgpp_growth.py', '', '', '', '', ['high-ppgpp', 'high-ppgpp-clean']),
     (4, 'a', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['side-by-side-bar']),
-    (4, 'b', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['aa-ki-prediction']),
+    (4, 'b', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['aa-ki-prediction', 'aa-ki-prediction-clean']),
     (4, 'c', True, REMOVE_INHIB, 'Cohort', 'growth_time_series', 'wt-', '-v0', 'remove_aa_inhibition_000000/plotOut', ['_fig4_single']),
     (4, 'c', True, REMOVE_INHIB, 'Cohort', 'growth_time_series', 'leuA-', '-v4', 'remove_aa_inhibition_000004/plotOut', ['_fig4_single']),
     (5, '', True, COMBINATIONS, 'Variant', 'growth_trajectory', '', '--generation-path-range 6 25', '', []),

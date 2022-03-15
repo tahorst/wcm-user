@@ -65,11 +65,14 @@ COMPARISONS = [
     ('ARG', 'argA'),
     ('TRP', 'trpE'),
     ('HIS', 'hisG'),
+    ('ILE', 'ilvA'),
     ('LEU', 'leuA'),
     ('THR', 'thrA'),
     ('PRO', 'proB'),
-    ('ILE', 'ilvA'),
     ]
+
+FIG_WIDTH = 7
+FIG_HEIGHT = 2.5
 
 
 def load_validation():
@@ -101,12 +104,12 @@ def get_model(model, aa, enz):
     conc = model[1][AA_IDX[aa], ENZ_IDX[enz], :]
     return control, conc
 
-def plot_ki_prediction(validation, model):
+def plot_ki_prediction(validation, model, show_stats=True):
     # TODO: decide on metric (need to do 1 - metric?)
     # TODO: fit curve to points and drop prediction vline
     cols = 4
     rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols, figsize=(8, 4))
+    _, axes = plt.subplots(rows, cols, figsize=(FIG_WIDTH, FIG_HEIGHT), constrained_layout=True)
     hide_axes = np.ones_like(axes, dtype=bool)
 
     ki_factors = np.array(KI_FACTORS)
@@ -146,17 +149,25 @@ def plot_ki_prediction(validation, model):
 
         ax.set_yscale('log')
 
-        ylabel = f'{aa} conc fold change'
-        ax.set_xlabel(f'Fraction of wildtype inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})', fontsize=6)
-        ax.set_ylabel(ylabel, fontsize=6)
-        ax.tick_params(labelsize=6)
+        # Get proper tick labels (more than one)
+        if ax.get_ylim()[0] > 1:
+            ax.set_ylim([1, ax.get_ylim()[1]])
+        if ax.get_ylim()[1] < 10:
+            ax.set_ylim([ax.get_ylim()[0], 10])
+
+        ylabel = f'{aa}\nfold change'
+        if show_stats:
+            xlabel = f'Fraction of WT inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})'
+            ax.set_xlabel(xlabel, fontsize=8, labelpad=2)
+        ax.set_ylabel(ylabel, fontsize=8, labelpad=2)
+        ax.tick_params(labelsize=8, pad=2)
 
     # Hide unused axes
     for ax in axes[hide_axes]:
         ax.set_visible(False)
 
 def plot_ki_range(validation, model):
-    _, axes = plt.subplots(len(COMPARISONS), 2, figsize=(8, 20))
+    _, axes = plt.subplots(len(COMPARISONS), 2, figsize=(FIG_WIDTH, 20), constrained_layout=True)
     for i, (aa, enz) in enumerate(COMPARISONS):
         val = get_validation(validation, aa, enz)
         wcm = get_model(model, aa, enz)
@@ -168,7 +179,7 @@ def plot_ki_range(validation, model):
         ax.set_yscale('log')
         ax.set_ylabel(f'Normalized {aa} conc to WT')
         ax.set_xticks(x)
-        ax.set_xticklabels(['Val'] + KI_FACTORS, rotation=45, fontsize=6)
+        ax.set_xticklabels(['Val'] + KI_FACTORS, rotation=45, fontsize=8)
 
         ax = axes[i, 1]
         data = [val[0]] + list(val[1]) + [wcm[0]] + list(wcm[1])
@@ -177,7 +188,7 @@ def plot_ki_range(validation, model):
         ax.set_yscale('log')
         ax.set_ylabel(f'{aa} conc')
         ax.set_xticks(x)
-        ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=6)
+        ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=8)
 
 def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
     # TODO: label x and y axes
@@ -185,7 +196,7 @@ def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
     # TODO: option to normalize based on control
     cols = 4
     rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols, figsize=(8, 4))
+    _, axes = plt.subplots(rows, cols, figsize=(FIG_WIDTH, FIG_HEIGHT), constrained_layout=True)
     hide_axes = np.ones_like(axes, dtype=bool)
 
     for i, (aa, _) in enumerate(COMPARISONS):
@@ -223,9 +234,9 @@ def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
             ylabel = f'{aa} conc (mM)'
 
         ax.set_xticks(x)
-        ax.set_xticklabels(['WT'] + ENZYMES, rotation=45, fontsize=6)
-        ax.set_ylabel(ylabel, fontsize=8)
-        ax.tick_params(labelsize=6)
+        ax.set_xticklabels(['WT'] + ENZYMES, rotation=45, fontsize=8)
+        ax.set_ylabel(ylabel, fontsize=8, labelpad=2)
+        ax.tick_params(labelsize=8, pad=2)
 
     # Hide unused axes
     for ax in axes[hide_axes]:
@@ -234,7 +245,7 @@ def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
 def plot_sub_scatter(validation, model):
     cols = 4
     rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols, figsize=(8, 4))
+    _, axes = plt.subplots(rows, cols, figsize=(2*FIG_WIDTH, 2*FIG_HEIGHT), constrained_layout=True)
     hide_axes = np.ones_like(axes, dtype=bool)
 
     for i, (aa, _) in enumerate(COMPARISONS):
@@ -293,7 +304,7 @@ def plot_scatter(ax, validation, model, label='Amino acid', amino_acids=None,
     ax.loglog(val_other, model_other, 'ok', alpha=0.2, markersize=2, label='Other AA')
 
     if legend:
-        ax.legend(fontsize=6, frameon=False)
+        ax.legend(fontsize=8, frameon=False)
 
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
@@ -307,7 +318,6 @@ def plot_scatter(ax, validation, model, label='Amino acid', amino_acids=None,
 
 def save_fig(filename):
     file = os.path.join(OUTPUT_DIR, filename)
-    plt.tight_layout()
     plt.savefig(file)
     plt.close('all')
     print(f'Saved to {file}')
@@ -320,6 +330,8 @@ if __name__ == '__main__':
     # Compare validation data AA increase to level of inhibition reduction in the model
     plot_ki_prediction(validation, model)
     save_fig('aa-ki-prediction.pdf')
+    plot_ki_prediction(validation, model, show_stats=False)
+    save_fig('aa-ki-prediction-clean.pdf')
 
     # Compare validation data to range of KI values produced in the model
     plot_ki_range(validation, model)
@@ -344,6 +356,7 @@ if __name__ == '__main__':
     # Scatter plot between validation and model
     plt.figure()
     plot_scatter(plt.gca(), validation, model)
+    plt.tight_layout()
     save_fig('scatter.pdf')
 
     # Scatter for each amino acid

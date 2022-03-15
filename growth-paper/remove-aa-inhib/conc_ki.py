@@ -149,13 +149,16 @@ def plot_ki_prediction(validation, model, show_stats=True):
 
         ax.set_yscale('log')
 
+        # Consistent x range across amino acids
+        ax.set_xlim([ax.get_xlim()[0], 1])
+
         # Get proper tick labels (more than one)
         if ax.get_ylim()[0] > 1:
             ax.set_ylim([1, ax.get_ylim()[1]])
         if ax.get_ylim()[1] < 10:
             ax.set_ylim([ax.get_ylim()[0], 10])
 
-        ylabel = f'{aa}\nfold change'
+        ylabel = f'{aa} conc\nfold change'
         if show_stats:
             xlabel = f'Fraction of WT inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})'
             ax.set_xlabel(xlabel, fontsize=8, labelpad=2)

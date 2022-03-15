@@ -263,9 +263,9 @@ if __name__ == '__main__':
     save_fig('inhibition-' + OUTPUT_FILE)
 
     # Could also plot regulation with variants 2 and 0
-    plt.figure(figsize=FIG_SIZE)
-    plot(new_aa, variants=[0], options=dict(color=GREEN))
-    plot(new_aa, variants=[3], options=dict(color=ORANGE))
+    plt.figure(figsize=(2.7, 2.7))
+    plot(new_aa, variants=[0], options=dict(color=GREEN, markersize=4))
+    plot(new_aa, variants=[3], options=dict(color=ORANGE, markersize=4))
     plot_trends()
     format_plot(legend=False)
     save_fig('shifts-' + OUTPUT_FILE)

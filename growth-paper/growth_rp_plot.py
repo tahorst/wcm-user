@@ -191,13 +191,13 @@ def plot_inhibition():
 
 def plot_trends(all=False):
     options = dict(linewidth=1, alpha=0.5)
-    plt.plot([0.11, 0.52], [0, 2], '--k', **options)  # Dennis and Bremer. 1996. (dry_mass_composition.tsv)
+    plt.plot([-0.3, 0.93], [-2, 4], '--k', **options)  # Dennis and Bremer. 1996. (dry_mass_composition.tsv)
 
     if all:
-        plt.plot([0.07, 0.49], [0, 2], '--k', **options)  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
+        plt.plot([-0.35, 0.91], [-2, 4], '--k', **options)  # Zhu et al. Growth suppression by altered (p)ppGpp levels... 2019.
         plt.plot(DENNIS_BREMER_2021[:, 0], DENNIS_BREMER_2021[:, 1], 'X', **options)
 
-def format_plot(legend=True):
+def format_plot(legend=True, ylim=(0, 2)):
     # Show legend
     if legend:
         plt.legend(fontsize=6, frameon=False)
@@ -206,7 +206,7 @@ def format_plot(legend=True):
     plt.xlabel('RNA/protein mass ratio', fontsize=8)
     plt.ylabel('Growth rate (1/hr)', fontsize=8)
     plt.xlim([0, 0.6])
-    plt.ylim([0, 2])
+    plt.ylim(ylim)
 
     # Remove axes borders
     ax = plt.gca()
@@ -267,7 +267,7 @@ if __name__ == '__main__':
     plot(new_aa, variants=[0], options=dict(color=GREEN, markersize=4))
     plot(new_aa, variants=[3], options=dict(color=ORANGE, markersize=4))
     plot_trends()
-    format_plot(legend=False)
+    format_plot(legend=False, ylim=[-0.5, 3.5])
     save_fig('shifts-' + OUTPUT_FILE)
 
     # Optional plots

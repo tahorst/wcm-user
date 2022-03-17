@@ -113,6 +113,7 @@ def plot_ki_prediction(validation, model, show_stats=True):
     hide_axes = np.ones_like(axes, dtype=bool)
 
     ki_factors = np.array(KI_FACTORS)
+    inverse_factors = 1 / ki_factors
     for i, ((aa, enz), ki) in enumerate(zip(COMPARISONS, KIS)):
         i += 1  # skip first ax
         row = i // cols
@@ -126,31 +127,26 @@ def plot_ki_prediction(validation, model, show_stats=True):
         val_increase = val[1][0] / val[0]
         wcm_increase = wcm[1] / wcm[0]
 
-        kis = ki * ki_factors
-        fraction_wt = 1 - 1 / (1 + wcm[0] / ki)
-        fraction_inhibited = 1 - 1 / (1 + wcm[0] / kis)
-        reduced_inhibition = fraction_inhibited / fraction_wt
-
         # Original data
-        ax.plot(reduced_inhibition, wcm_increase, 'o', alpha=0.5)
+        ax.plot(inverse_factors, wcm_increase, 'o', alpha=0.5)
 
         # Interp function to calculate expected value based on validation increase
-        x = np.log(wcm_increase)  # Fit in log space for smoother fit
-        interp = interp1d(x, reduced_inhibition)
-        val_match = interp(np.log(val_increase))
-        predicted_fraction_inhibited = val_match * fraction_wt
-        predicted_ki = (1 - predicted_fraction_inhibited) / predicted_fraction_inhibited * wcm[0]
-        val = (1 - 1 / (1 + wcm[0] / predicted_ki)) / fraction_wt
-        y = np.linspace(x.min(), x.max(), 1000)
-        ax.plot(interp(y), np.exp(y))
+        x_interp = np.log(wcm_increase[1:])  # Fit in log space for smoother fit
+        y_interp = np.log(inverse_factors[1:])
+        interp = interp1d(x_interp, y_interp)
+        val_match = np.exp(interp(np.log(val_increase)))
+        predicted_ki = 1 / val_match * ki
+        y_fit = np.linspace(x_interp.min(), x_interp.max(), 1000)
+        ax.plot(np.exp(interp(y_fit)), np.exp(y_fit))
 
         ax.axhline(val_increase, linestyle='--', color='k', linewidth=0.5, alpha=0.5)
         ax.axvline(val_match, linestyle='--', color='k', linewidth=0.5, alpha=0.5)
 
+        ax.set_xscale('symlog', linthreshx=0.01)
         ax.set_yscale('log')
 
         # Consistent x range across amino acids
-        ax.set_xlim([ax.get_xlim()[0], 1])
+        ax.set_xlim([-0.001, 1])
 
         # Get proper tick labels (more than one)
         if ax.get_ylim()[0] > 1:
@@ -160,7 +156,7 @@ def plot_ki_prediction(validation, model, show_stats=True):
 
         ylabel = f'{aa} conc\nfold change'
         if show_stats:
-            xlabel = f'Fraction of WT inhibition\n(predicted KI = {predicted_ki:.2f}, {val=:.2f})'
+            xlabel = f'Fraction of WT inhibition\n({predicted_ki=:.2f}, {val_match=:.2f})'
             ax.set_xlabel(xlabel, fontsize=8, labelpad=2)
         ax.set_ylabel(ylabel, fontsize=8, labelpad=2)
         ax.tick_params(labelsize=8, pad=2)

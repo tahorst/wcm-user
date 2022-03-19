@@ -90,6 +90,9 @@ ANALYSIS = [
     # (6, 'a', True, DOWN_UP_NO_PPGPP_NO_MECH, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig6']),
     # (6, 'b', True, DOWN_UP_NO_MECH, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig6']),
     ]
+SUPPLEMENT = [
+    (2, 'g', True, DOWN_UP, 'Parca', 'aa_synthesis_pathways', '', '', 'kb_plot_out', ['']),  # TODO: this is bumped from main text - find place for it in supp
+    ]
 
 
 def parse_args():
@@ -97,16 +100,22 @@ def parse_args():
     parser.add_argument('-c', '--cpus', type=int, default=1)
     parser.add_argument('-f', '--fig', type=int)
     parser.add_argument('-p', '--panel')
+
     parser.add_argument('--sherlock', action='store_true')
     parser.add_argument('--local', action='store_true')
+
+    parser.add_argument('--supp', action='store_true')
+    parser.add_argument('--no-main', dest='main', action='store_false')
+
     parser.add_argument('--copy', action='store_true')
     parser.add_argument('--dry', action='store_true')
+
     return parser.parse_args()
 
-def run_analysis(args):
+def run_analysis(args, analysis):
     pool = parallelization.pool(num_processes=args.cpus)
     results = {}
-    for (fig, panel, sherlock, path, script, plot, label, options, *_) in ANALYSIS:
+    for (fig, panel, sherlock, path, script, plot, label, options, *_) in analysis:
         if (args.fig == fig or args.fig is None) and (args.panel is None or args.panel in panel):
             if sherlock and args.sherlock:
                 if label:
@@ -128,10 +137,10 @@ def run_analysis(args):
         if not result.successful():
             result.get()
 
-def copy_results():
-    for (fig, panel, sherlock, path, _, plot, label, _, out_path, out_labels) in ANALYSIS:
+def copy_results(analysis, supp_label=''):
+    for (fig, panel, sherlock, path, _, plot, label, _, out_path, out_labels) in analysis:
         if (args.fig == fig or args.fig is None) and (args.panel is None or args.panel in panel):
-            dest_dir = os.path.join(COMPILED_PATH, f'fig-{fig}')
+            dest_dir = os.path.join(COMPILED_PATH, f'fig-{supp_label}{fig}')
             if not os.path.exists(dest_dir):
                 print(f'*** Creating {dest_dir}')
                 if not args.dry:
@@ -158,7 +167,15 @@ if __name__ == '__main__':
     args = parse_args()
 
     if args.local or args.sherlock:
-        run_analysis(args)
+        if args.main:
+            run_analysis(args, ANALYSIS)
+
+        if args.supp:
+            run_analysis(args, SUPPLEMENT)
 
     if args.copy:
-        copy_results()
+        if args.main:
+            copy_results(ANALYSIS)
+
+        if args.supp:
+            copy_results(SUPPLEMENT, supp_label='s')

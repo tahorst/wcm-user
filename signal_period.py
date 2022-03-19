@@ -15,12 +15,15 @@ FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 OUTPUT_FILE = os.path.join(FILE_LOCATION, 'period.pdf')
 
 
-def plot(axes, xmax):
+def plot(axes, xmax, taper=False):
     xsampled = 10000
     freq = xmax / xsampled
 
     x = np.linspace(0, xmax, xsampled)
     y = np.sin(0.4 * np.pi * x) + np.sin(2 * np.pi * x) + np.sin(10 * np.pi * x) + np.sin(20 * np.pi * x)  # freq of 0.2, 1, 5, 10
+
+    if taper:
+        y *= signal.cosine(xsampled)
 
     f, Pxx = signal.periodogram(y, fs=1 / freq)
     fft_f = np.fft.fftfreq(xsampled)
@@ -39,10 +42,11 @@ def plot(axes, xmax):
     ax_fft.set_xscale('log')
     ax_fft.legend()
 
-_, axes = plt.subplots(3, 2, figsize=(6, 9))
+_, axes = plt.subplots(3, 3, figsize=(9, 9))
 
 plot(axes[:, 0], 10)
 plot(axes[:, 1], 8)
+plot(axes[:, 2], 8, taper=True)
 
 plt.tight_layout()
 plt.savefig(OUTPUT_FILE)

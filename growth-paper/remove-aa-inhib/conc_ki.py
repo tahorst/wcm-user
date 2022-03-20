@@ -123,7 +123,6 @@ def plot_ki_prediction(validation, model, show_stats=True):
     ki_factors = np.array(KI_FACTORS)
     inverse_factors = 1 / ki_factors
     for i, ((aa, enz), ki) in enumerate(zip(COMPARISONS, KIS)):
-        i += 1  # skip first ax
         row = i // cols
         col = i % cols
         ax = axes[row, col]
@@ -162,12 +161,15 @@ def plot_ki_prediction(validation, model, show_stats=True):
         if ax.get_ylim()[1] < 10:
             ax.set_ylim([ax.get_ylim()[0], 10])
 
-        ylabel = f'{aa} conc\nfold change'
         if show_stats:
-            xlabel = f'Fraction of WT inhibition\n({predicted_ki=:.2f}, {val_match=:.2f})'
+            xlabel = f'Fraction of WT inhibition\n(ki={predicted_ki:.2f}, val={val_match:.2f})'
             ax.set_xlabel(xlabel, fontsize=8, labelpad=2)
-        ax.set_ylabel(ylabel, fontsize=8, labelpad=2)
+            if col == 0:
+                ax.set_ylabel('Conc fold change', fontsize=8, labelpad=2)
+        ax.set_title(aa, fontsize=8, pad=0)
         ax.tick_params(labelsize=8, pad=2)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
     # Hide unused axes
     for ax in axes[hide_axes]:

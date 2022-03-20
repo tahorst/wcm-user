@@ -122,6 +122,7 @@ def plot_ki_prediction(validation, model, show_stats=True):
 
     ki_factors = np.array(KI_FACTORS)
     inverse_factors = 1 / ki_factors
+    predicted_kis = []
     for i, ((aa, enz), ki) in enumerate(zip(COMPARISONS, KIS)):
         row = i // cols
         col = i % cols
@@ -143,6 +144,7 @@ def plot_ki_prediction(validation, model, show_stats=True):
         interp = interp1d(x_interp, y_interp)
         val_match = np.exp(interp(np.log(val_increase)))
         predicted_ki = 1 / val_match * ki
+        predicted_kis.append(predicted_ki)
         y_fit = np.linspace(x_interp.min(), x_interp.max(), 1000)
         ax.plot(np.exp(interp(y_fit)), np.exp(y_fit))
 
@@ -162,7 +164,7 @@ def plot_ki_prediction(validation, model, show_stats=True):
             ax.set_ylim([ax.get_ylim()[0], 10])
 
         if show_stats:
-            xlabel = f'Fraction of WT inhibition\n(ki={predicted_ki:.2f}, val={val_match:.2f})'
+            xlabel = f'Original KI / adjusted KI\n(ki={predicted_ki:.2f}, val={val_match:.2f})'
             ax.set_xlabel(xlabel, fontsize=8, labelpad=2)
             if col == 0:
                 ax.set_ylabel('Conc fold change', fontsize=8, labelpad=2)
@@ -174,6 +176,27 @@ def plot_ki_prediction(validation, model, show_stats=True):
     # Hide unused axes
     for ax in axes[hide_axes]:
         ax.set_visible(False)
+
+    return predicted_kis
+
+def plot_kis(predicted_kis):
+    labels = [c[1] for c in COMPARISONS]
+
+    # Plot bar of predicted KI vs baseline KI
+    plt.figure(figsize=(1.6, 1.4), constrained_layout=True)
+    width = 0.4
+    x = np.arange(len(KIS))
+    plt.bar(x, KIS, width=-width, align='edge')
+    plt.bar(x, predicted_kis, width=width, align='edge')
+    plt.xticks(x, labels, rotation=45, fontsize=8)
+    plt.ylabel('KI (mM)', fontsize=8, labelpad=0)
+
+    ax = plt.gca()
+    ax.tick_params(labelsize=8, pad=2)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    save_fig('kis.pdf')
 
 def plot_ki_range(validation, model):
     _, axes = plt.subplots(len(COMPARISONS), 2, figsize=(FIG_WIDTH, 20), constrained_layout=True)
@@ -342,10 +365,11 @@ if __name__ == '__main__':
     model = load_model()
 
     # Compare validation data AA increase to level of inhibition reduction in the model
-    plot_ki_prediction(validation, model)
+    predicted_kis = plot_ki_prediction(validation, model)
     save_fig('aa-ki-prediction.pdf')
     plot_ki_prediction(validation, model, show_stats=False)
     save_fig('aa-ki-prediction-clean.pdf')
+    plot_kis(predicted_kis)
 
     # Compare validation data to range of KI values produced in the model
     plot_ki_range(validation, model)

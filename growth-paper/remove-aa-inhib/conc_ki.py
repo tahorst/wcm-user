@@ -70,6 +70,14 @@ COMPARISONS = [
     ('THR', 'thrA'),
     ('PRO', 'proB'),
     ]
+BAR_AAS = [
+    ['ARG'],
+    ['TRP'],
+    ['HIS'],
+    ['ILE', 'LEU'],
+    ['THR'],
+    ['PRO'],
+    ]
 
 FIG_WIDTH = 7
 FIG_HEIGHT = 2.5
@@ -189,28 +197,32 @@ def plot_ki_range(validation, model):
         ax.set_xticks(x)
         ax.set_xticklabels(['Val WT', 'Val mutant', 'WCM WT'] + KI_FACTORS, rotation=45, fontsize=8)
 
-def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
+def plot_bars(datasets, functions, log=False, normalize=False, bottom=None, single_first=True):
     # TODO: label x and y axes
     # TODO: highlight enzyme
     # TODO: option to normalize based on control
-    cols = 4
-    rows = int(np.ceil(len(COMPARISONS) / cols))
-    _, axes = plt.subplots(rows, cols, figsize=(FIG_WIDTH, FIG_HEIGHT), constrained_layout=True)
+    cols = 3
+    rows = int(np.ceil(len(BAR_AAS) / cols))
+    _, axes = plt.subplots(rows, cols, figsize=(FIG_WIDTH / 1.4, FIG_HEIGHT), constrained_layout=True)
     hide_axes = np.ones_like(axes, dtype=bool)
 
-    for i, (aa, _) in enumerate(COMPARISONS):
-        i += 1  # skip first ax
+    for i, aas in enumerate(BAR_AAS):
         row = i // cols
         col = i % cols
         ax = axes[row, col]
         hide_axes[row, col] = False
 
         all_conc = []
-        for data, fun in zip(datasets, functions):
-            conc = np.array([fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES])
-            if normalize:
-                conc = np.log10(conc / conc[0])
-            all_conc.append(conc)
+        for j, (data, fun) in enumerate(zip(datasets, functions)):
+            for aa in aas:
+                conc = np.array([fun(data, aa, ENZYMES[0])[0]] + [fun(data, aa, enz)[1][0] for enz in ENZYMES])
+                if normalize:
+                    conc = np.log10(conc / conc[0])
+                all_conc.append(conc)
+
+                if j == 0 and single_first:
+                    break
+
         if len(all_conc) == 0:
             continue
 
@@ -220,22 +232,23 @@ def plot_bars(datasets, functions, log=False, normalize=False, bottom=None):
         width = 0.8 / n_datasets
         offsets = np.arange(n_datasets) * width - 0.4 + width/2
 
-        for i, offset in enumerate(offsets):
-            ax.bar(x + offset, all_conc[i], width, bottom=bottom)
+        for j, offset in enumerate(offsets):
+            ax.bar(x + offset, all_conc[j], width, bottom=bottom)
 
         if log:
             ax.set_yscale('log')
 
         if normalize:
             ax.axhline(0, color='k', linestyle='--', alpha=0.3, linewidth=0.5)
-            ylabel = f'{aa} log10 increase\nover WT'
-        else:
-            ylabel = f'{aa} conc (mM)'
+        if i == 0:
+            ax.set_ylabel('log10 increase\nover WT' if normalize else 'Concentration (mM)', fontsize=8, labelpad=2)
 
         ax.set_xticks(x)
         ax.set_xticklabels(['WT'] + ENZYMES, rotation=45, fontsize=8)
-        ax.set_ylabel(ylabel, fontsize=8, labelpad=2)
+        ax.set_title(', '.join(aas), fontsize=8, pad=0)
         ax.tick_params(labelsize=8, pad=2)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
     # Hide unused axes
     for ax in axes[hide_axes]:
@@ -341,7 +354,7 @@ if __name__ == '__main__':
     save_fig('validation-bar.pdf')
 
     # Comparable bar plot from model output
-    plot_bars([model], [get_model], log=True, bottom=1e-2)
+    plot_bars([model], [get_model], log=True, bottom=1e-2, single_first=False)
     save_fig('model-bar.pdf')
 
     # Side by side bar plot with validation and model data

@@ -101,18 +101,20 @@ def find_params():
             for input_drop in options:
                 switch_wt = switches(wt, input_ma=input_ma, deriv_ma=deriv_ma, input_drop=input_drop)
                 switch_leua = switches(leua, input_ma=input_ma, deriv_ma=deriv_ma, input_drop=input_drop)
-                if switch_wt > 100 and switch_leua > 32 and switch_leua < 40 and input_ma < 600 and deriv_ma < 1200:
+                if switch_wt > 150 and switch_leua > 32 and switch_leua < 40 and input_ma < 600 and deriv_ma < 600 and input_ma * input_drop < 600:
                     print(input_ma, deriv_ma, input_drop, switch_wt, switch_leua)
 
 # find_params()
 
 _, axes = plt.subplots(nrows=6, ncols=4)
 
+fit_params = dict(input_ma=60, deriv_ma=300, input_drop=5)
+
 plot_all(axes[0, :], wt)
 plot_all(axes[1, :], leua)
 plot_all(axes[2, :], wt, splrep=True)
 plot_all(axes[3, :], leua, splrep=True)
-plot_all(axes[4, :], wt, input_ma=600, deriv_ma=600, input_drop=1)
-plot_all(axes[5, :], leua, input_ma=600, deriv_ma=600, input_drop=1)
+plot_all(axes[4, :], wt, **fit_params)
+plot_all(axes[5, :], leua, **fit_params)
 
 plt.savefig(os.path.join(FILE_LOCATION, 'interp.pdf'))

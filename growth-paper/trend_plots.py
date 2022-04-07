@@ -36,7 +36,7 @@ PERTURBATION_SIMS = {
     'Amino_acid_combinations_in_media_without_regulation_or_charging': '',
     'Conditions_without_regulation_or_charging': '',
     'Amino_acid_combinations_in_media_-_no_mechanistic_transport': '',
-    'Remove_amino_acid_inhibition_-_no_ppgpp': '',
+    # 'Remove_amino_acid_inhibition_-_no_ppgpp': '',
     }
 FILE_PATH = 'plotOut/{}{}.tsv'
 
@@ -45,6 +45,12 @@ FILE_LOCATION = os.path.dirname(os.path.realpath(__file__))
 OUTPUT_DIR = os.path.join(FILE_LOCATION, 'out')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 OUTPUT_FILE = 'growth-trends.pdf'
+
+# Cache paths
+CACHE_DIR = os.path.join(FILE_LOCATION, 'cache')
+os.makedirs(CACHE_DIR, exist_ok=True)
+USE_CACHE = True
+SAVE_CACHE = True
 
 ADDED_DATA = {
     'aa / ribosome': lambda data: data['aa_mass'] / data['ribosome_mass'],
@@ -84,14 +90,21 @@ def load_datasets(sims):
 
     return all_data, sorted(all_headers)
 
-def load_data(desc, prepend='', filename='rp_data'):
-    dirs = os.listdir(SIM_DIR)
-    for d in dirs:
-        if d.endswith(desc):
-            path = os.path.join(SIM_DIR, d, FILE_PATH.format(prepend, filename))
-            break
+def load_data(desc, prepend='', filename='rp_data', save_cache=SAVE_CACHE):
+    filepath = FILE_PATH.format(prepend, filename)
+    cached_filepath = os.path.join(CACHE_DIR, f'{desc}-{os.path.basename(filepath)}')
+
+    if USE_CACHE and os.path.exists(cached_filepath):
+        path = cached_filepath
+        save_cache = False  # don't need to save cache if loaded from cache
     else:
-        raise ValueError(f'{desc} not found in sim directory')
+        dirs = os.listdir(SIM_DIR)
+        for d in dirs:
+            if d.endswith(desc):
+                path = os.path.join(SIM_DIR, d, filepath)
+                break
+        else:
+            raise ValueError(f'{desc} not found in sim directory')
 
     data = {}
     with open(path) as f:
@@ -106,6 +119,11 @@ def load_data(desc, prepend='', filename='rp_data'):
         for key, fun in ADDED_DATA.items():
             data[key] = fun(data)
             headers.append(key)
+
+    if save_cache:
+        with open(path) as f:
+            with open(cached_filepath, 'w') as fc:
+                fc.write(f.read())
 
     return data, headers
 

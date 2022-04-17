@@ -12,6 +12,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import stats
 
 
 # Input paths
@@ -141,6 +142,8 @@ def plot(data, variants=None, exclude=None, std=True, label=None, options=None, 
 
     plt.errorbar(rp_ratio, growth, xerr=rp_ratio_std, yerr=growth_std, fmt='o', label=label, linewidth=1, **options)
 
+    return rp_ratio, growth
+
 def plot_conditions(fade=False, grouping=False, options=None, std=True, label=True):
     if fade:
         options = FADE_OPTIONS
@@ -160,20 +163,28 @@ def plot_conditions(fade=False, grouping=False, options=None, std=True, label=Tr
         new_std = False
         label = False
 
-    plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3),
+    original_xy = plot(no_regulation, std=std, label='Original conditions' if label else '', variants=np.arange(3),
         options=original_options)
-    plot(regulation, std=std, label='New carbon sources with growth regulation' if label else '', variants=np.arange(3, 5),
-        options=parameterized_options)
-    plot(add_one, std=std, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation' if label else '',
-        options=parameterized_options)
-    plot(remove_one, std=std, variants=[CONTROL_IDX], label='Rich + glc with growth regulation' if label else '',
-        options=parameterized_options)
-    plot(new_aa, std=new_std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '',
-        options=unparameterized_options)
-    plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation' if label else '',
-        options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
-    plot(remove_one, std=False, exclude=[CONTROL_IDX], label='Remove one AA from rich with growth regulation' if label else '',
-        options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS)
+    new_xy = []
+    new_xy.append(plot(regulation, std=std, label='New carbon sources with growth regulation' if label else '', variants=np.arange(3, 5),
+        options=parameterized_options))
+    new_xy.append(plot(add_one, std=std, variants=[CONTROL_IDX], label='Minimal + glc with growth regulation' if label else '',
+        options=parameterized_options))
+    new_xy.append(plot(remove_one, std=std, variants=[CONTROL_IDX], label='Rich + glc with growth regulation' if label else '',
+        options=parameterized_options))
+    new_xy.append(plot(new_aa, std=new_std, variants=[1, 2], label='New amino acid media with growth regulation' if label else '',
+        options=unparameterized_options))
+    new_xy.append(plot(add_one, std=False, exclude=[CONTROL_IDX], label='Add one AA to minimal with growth regulation' if label else '',
+        options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS))
+    new_xy.append(plot(remove_one, std=False, exclude=[CONTROL_IDX], label='Remove one AA from rich with growth regulation' if label else '',
+        options=unparameterized_options if unparameterized_options else ONE_AA_OPTIONS))
+
+    def print_r2(label, data):
+        r, p = stats.pearsonr(*data)
+        print(f'{label}: r2 = {r**2:.4f} ({p=:.2g})')
+
+    print_r2('original', original_xy)
+    print_r2('new', np.hstack(new_xy))
 
 def plot_ppgpp():
     # Optional RNA / (protein + AA) ratio

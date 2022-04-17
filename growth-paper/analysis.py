@@ -28,15 +28,15 @@ DOWN_UP = 'out/20220306.133934__Long_lead_in_down_and_up_shifts_with_regulation/
 DOWN_UP_NO_REG = 'out/20220308.182935__Long_lead_in_down_and_up_shifts_with_no_regulation/'
 DOWN_UP_NO_AA = 'out/20220307.171936__Long_lead_in_down_and_up_shifts_without_mechanistic_translation_supply/'
 DOWN_UP_NO_PPGPP = 'out/20220307.171901__Long_lead_in_down_and_up_shifts_without_ppGpp_regulation/'
-DOWN_UP_NO_PPGPP_NO_MECH = 'out/20220129.063633__Down_and_up_shifts_without_ppGpp_regulation_-_no_mechanistic_transport/'
-DOWN_UP_NO_MECH = 'out/20220306.134309__Long_lead_in_down_and_up_shifts_with_regulation_-_no_mechanistic_transport/'
+# DOWN_UP_NO_PPGPP_NO_MECH = 'out/20220129.063633__Down_and_up_shifts_without_ppGpp_regulation_-_no_mechanistic_transport/'
+# DOWN_UP_NO_MECH = 'out/20220306.134309__Long_lead_in_down_and_up_shifts_with_regulation_-_no_mechanistic_transport/'
 PPGPP_SENSITIVITY = 'out/20220117.063438__ppGpp_sensitivity'
-PPGPP_SENSITIVITY_NO_MECH = 'out/20220120.184812__ppGpp_sensitivity_-_no_mechanistic_transport/'
+# PPGPP_SENSITIVITY_NO_MECH = 'out/20220120.184812__ppGpp_sensitivity_-_no_mechanistic_transport/'
 PPGPP_LIMIT_LOW = 'out/20220117.215105__ppGpp_limitations_-_low_ppGpp/'
 PPGPP_LIMIT_HIGH = 'out/20220120.060837__ppGpp_limitations_-_high_ppGpp/'
 PPGPP_LIMIT_HIGH_RIB = 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp/'
 PPGPP_LIMIT_HIGH_RIB_NO_INHIB = 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp,_no_ppGpp_translation_inhibition/'
-REMOVE_INHIB = 'out/20220119.081756__Remove_amino_acid_inhibition/'
+REMOVE_INHIB = 'out/20220315.074044__Remove_amino_acid_inhibition_large/'
 
 # Local dirs
 PAPER_DIR = 'user/growth-paper/'
@@ -58,22 +58,22 @@ ANALYSIS = [
     (3, 'a', True, PPGPP_SENSITIVITY, 'Variant', 'growth_trajectory', '', '--generation-path-range 2 8', '', []),
     # (3, 'a', True, PPGPP_SENSITIVITY_NO_MECH, 'Variant', 'growth_trajectory', '', '--generation-path-range 2 8', '', []),
     (3, 'a', False, PAPER_DIR, 'growth_rp_plot.py', '', '', '', '', ['ppgpp-combined-growth-rp']),
-    (3, 'bcde', True, PPGPP_SENSITIVITY, 'Variant', 'ppgpp_conc', '2+gen-minimal-', '--variant-path-range 0 10 --generation-path-range 2 8', 'plotOut', ['_grayscale']),
+    (3, 'bcdefhi', True, PPGPP_SENSITIVITY, 'Variant', 'ppgpp_conc', '2+gen-minimal-', '--variant-path-range 0 10 --generation-path-range 2 8', 'plotOut', ['_grayscale']),
     # (3, 'bcde', True, PPGPP_SENSITIVITY_NO_MECH, 'Variant', 'ppgpp_conc', '2+gen-minimal-', '--variant-path-range 0 10 --generation-path-range 2 8', 'plotOut', ['_grayscale']),
-    (3, 'fg', True, PPGPP_SENSITIVITY, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'gj', True, PPGPP_SENSITIVITY, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
     # (3, 'fg', True, PPGPP_SENSITIVITY_NO_MECH, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
-    (3, 'f', True, PPGPP_LIMIT_LOW, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
-    (3, 'f', False, PAPER_DIR, 'ppgpp_growth.py', '', '', '', '', ['low-ppgpp', 'low-ppgpp-clean']),
-    (3, 'g', True, PPGPP_LIMIT_HIGH, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
-    (3, 'g', True, PPGPP_LIMIT_HIGH_RIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
-    (3, 'g', True, PPGPP_LIMIT_HIGH_RIB_NO_INHIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
-    (3, 'g', False, PAPER_DIR, 'ppgpp_growth.py', '', '', '', '', ['high-ppgpp', 'high-ppgpp-clean']),
+    (3, 'g', True, PPGPP_LIMIT_LOW, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'g', False, PAPER_DIR, 'ppgpp_growth.py', '', '', '', '', ['low-ppgpp', 'low-ppgpp-clean']),
+    (3, 'j', True, PPGPP_LIMIT_HIGH, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'j', True, PPGPP_LIMIT_HIGH_RIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'j', True, PPGPP_LIMIT_HIGH_RIB_NO_INHIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
+    (3, 'j', False, PAPER_DIR, 'ppgpp_growth.py', '', '', '', '', ['high-ppgpp', 'high-ppgpp-clean']),
     (4, 'b', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['side-by-side-bar']),
     (4, 'c', True, REMOVE_INHIB, 'Cohort', 'growth_time_series', 'wt-', '-v0', 'remove_aa_inhibition_000000/plotOut', ['_fig4_single']),
     (4, 'c', True, REMOVE_INHIB, 'Cohort', 'growth_time_series', 'leuA-', '-v4', 'remove_aa_inhibition_000004/plotOut', ['_fig4_single']),
-    # TODO: other amino acid traces
-    (4, 'd', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['aa-ki-prediction', 'aa-ki-prediction-clean']),
-    (4, 'e', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['kis']),
+    (4, 'd', True, REMOVE_INHIB, 'Variant', 'aa_period', '', '', 'plotOut', ['_deriv']),
+    (4, 'e', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['aa-ki-prediction', 'aa-ki-prediction-clean']),
+    (4, 'f', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['kis']),
     (5, 'abc', True, COMBINATIONS, 'Variant', 'growth_trajectory', '', '--generation-path-range 6 25', '', []),
     (5, 'abc', False, PAPER_DIR, 'growth_rp_plot.py', '', '', '', '', ['shifts-combined-growth-rp']),
     (5, 'a', True, DOWN_UP, 'Variant', 'growth_trajectory', '', '', 'plotOut', ['_trimmed']),
@@ -86,13 +86,15 @@ ANALYSIS = [
     (5, 'e', True, DOWN_UP_NO_AA, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig5']),
     (5, 'f', True, DOWN_UP_NO_PPGPP, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig5']),
     # (5, 'f', True, DOWN_UP_NO_PPGPP_NO_MECH, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig5']),
-    (6, 'ac', True, DOWN_UP_NO_PPGPP, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig6']),
-    (6, 'bd', True, DOWN_UP, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig6']),
-    # (6, 'a', True, DOWN_UP_NO_PPGPP_NO_MECH, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig6']),
-    # (6, 'b', True, DOWN_UP_NO_MECH, 'Cohort', 'growth_time_series', '', '', 'timelines_000027/plotOut', ['_fig6']),
+    (5, 'ghi', True, DOWN_UP_NO_PPGPP, 'Cohort', 'growth_time_series', 'no-ppgpp-', '', 'timelines_000027/plotOut', ['_fig6_xlim']),
+    (5, 'ghi', True, DOWN_UP, 'Cohort', 'growth_time_series', 'all-reg-', '', 'timelines_000027/plotOut', ['_fig6_xlim']),
+    # (5, 'ghi', True, DOWN_UP_NO_PPGPP_NO_MECH, 'Cohort', 'growth_time_series', 'no-ppgpp-', '', 'timelines_000027/plotOut', ['_fig6_xlim']),
+    # (5, 'ghi', True, DOWN_UP_NO_MECH, 'Cohort', 'growth_time_series', 'all-reg-', '', 'timelines_000027/plotOut', ['_fig6_xlim']),
     ]
 SUPPLEMENT = [
-    (2, 'g', True, DOWN_UP, 'Parca', 'aa_synthesis_pathways', '', '', 'kb_plot_out', ['']),  # TODO: this is bumped from main text - find place for it in supp
+    (1, 'ab', True, DOWN_UP, 'Parca', 'metabolite_concentrations', '', '', 'kb_plot_out', ['', '_sander']),
+    (2, '', True, DOWN_UP, 'Parca', 'aa_synthesis_pathways', '', '', 'kb_plot_out', ['']),  # TODO: this is bumped from main text - find place for it in supp
+    # TODO: other amino acid traces like 4c?
     ]
 
 

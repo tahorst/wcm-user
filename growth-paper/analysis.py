@@ -36,7 +36,8 @@ PPGPP_LIMIT_LOW = 'out/20220117.215105__ppGpp_limitations_-_low_ppGpp/'
 PPGPP_LIMIT_HIGH = 'out/20220120.060837__ppGpp_limitations_-_high_ppGpp/'
 PPGPP_LIMIT_HIGH_RIB = 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp/'
 PPGPP_LIMIT_HIGH_RIB_NO_INHIB = 'out/20220304.172940__ppGpp_limitations_with_ribosomes_at_high_ppGpp,_no_ppGpp_translation_inhibition/'
-REMOVE_INHIB = 'out/20220315.074044__Remove_amino_acid_inhibition_large/'
+REMOVE_INHIB_LEVELS = 'out/20220119.081756__Remove_amino_acid_inhibition/'
+REMOVE_INHIB_LARGE = 'out/20220315.074044__Remove_amino_acid_inhibition_large/'
 
 # Local dirs
 PAPER_DIR = 'user/growth-paper/'
@@ -68,10 +69,11 @@ ANALYSIS = [
     (3, 'j', True, PPGPP_LIMIT_HIGH_RIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
     (3, 'j', True, PPGPP_LIMIT_HIGH_RIB_NO_INHIB, 'Variant', 'growth_trajectory', '2+gen-', '--generation-path-range 2 8', '', []),
     (3, 'j', False, PAPER_DIR, 'ppgpp_growth.py', '', '', '', '', ['high-ppgpp', 'high-ppgpp-clean']),
+    (4, 'bef', True, REMOVE_INHIB_LEVELS, 'Variant', 'remove_aa_inhibition', '', '', 'plotOut', []),
     (4, 'b', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['side-by-side-bar']),
-    (4, 'c', True, REMOVE_INHIB, 'Cohort', 'growth_time_series', 'wt-', '-v0', 'remove_aa_inhibition_000000/plotOut', ['_fig4_single']),
-    (4, 'c', True, REMOVE_INHIB, 'Cohort', 'growth_time_series', 'leuA-', '-v4', 'remove_aa_inhibition_000004/plotOut', ['_fig4_single']),
-    (4, 'd', True, REMOVE_INHIB, 'Variant', 'aa_period', '', '', 'plotOut', ['_deriv']),
+    (4, 'c', True, REMOVE_INHIB_LARGE, 'Cohort', 'growth_time_series', 'wt-', '-v0', 'remove_aa_inhibition_000000/plotOut', ['_fig4_single']),
+    (4, 'c', True, REMOVE_INHIB_LARGE, 'Cohort', 'growth_time_series', 'leuA-', '-v4', 'remove_aa_inhibition_000004/plotOut', ['_fig4_single']),
+    (4, 'd', True, REMOVE_INHIB_LARGE, 'Variant', 'aa_period', '', '', 'plotOut', ['_deriv']),
     (4, 'e', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['aa-ki-prediction', 'aa-ki-prediction-clean']),
     (4, 'f', False, INHIB_DIR, 'conc_ki.py', '', '', '', '', ['kis']),
     (5, 'abc', True, COMBINATIONS, 'Variant', 'growth_trajectory', '', '--generation-path-range 6 25', '', []),

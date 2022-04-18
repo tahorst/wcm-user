@@ -4,7 +4,8 @@ Compare Sander et al data to output from the model at different effective KI
 values.
 
 Requires data from remove_aa_inhibition variant and saving numpy arrays from the
-variant analysis plot:
+variant analysis plot (original files will have underscores and start with
+remove_aa_inhibition):
     control_conc: remove-inhib-conc-control.npy
     conc: remove-inhib-conc.npy
 """

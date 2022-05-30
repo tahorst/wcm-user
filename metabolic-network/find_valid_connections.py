@@ -24,6 +24,8 @@ if not os.path.exists(OUT_DIR):
 SIM_DATA_FILE = os.path.join(FILE_LOCATION, 'sim_data.cp')
 METABOLITE_FILE = os.path.join(OUT_DIR, 'invalid_metabolites.tsv')
 REACTION_FILE = os.path.join(OUT_DIR, 'invalid_reactions.tsv')
+VALID_MONOMERS_FILE = os.path.join(OUT_DIR, 'valid_monomers.tsv')
+INVALID_MONOMERS_FILE = os.path.join(OUT_DIR, 'invalid_monomers.tsv')
 
 
 def get_boundaries(metabolism, external_state, media=None):
@@ -146,8 +148,48 @@ def prune_reactions(reactions, valid_mets):
 
 	return excluded_rxns
 
+def get_monomers(sim_data, enzymes):
+	# type: (SimulationData, Iterable[str]) -> Set[str]
+	"""
+	Break down complexes into monomers.
+
+	Args:
+		sim_data: simulation data
+		enzymes: enzyme IDs to break to monomers, must include the location tag
+
+	Returns:
+		set of monomers from enzymes and monomers that make up any complexes in enzymes
+	"""
+
+	monomers = [
+		x for x in enzymes
+		if x not in sim_data.process.complexation.complex_names
+		and x not in sim_data.process.equilibrium.complex_name_to_rxn_idx
+		]
+	complexes = [
+		x for x in enzymes
+		if x in sim_data.process.complexation.complex_names
+		or x in sim_data.process.equilibrium.complex_name_to_rxn_idx
+		]
+
+	assert len(monomers) + len(complexes) == len(enzymes)
+
+	for complex in complexes:
+		if complex in sim_data.process.complexation.complex_names:
+			monomers += sim_data.process.complexation.get_monomers(complex)['subunitIds'].tolist()
+		elif complex in sim_data.process.equilibrium.complex_name_to_rxn_idx:
+			for subunit in sim_data.process.equilibrium.get_monomers(complex)['subunitIds'].tolist():
+				if subunit in sim_data.process.complexation.complex_names:
+					monomers += sim_data.process.complexation.get_monomers(subunit)['subunitIds'].tolist()
+				elif subunit in sim_data.process.translation.monomer_data['id']:
+					monomers += [subunit]
+		else:
+			raise ValueError(f'Complex ({complex}) is not in equilibrium or complexation')
+
+	return {m[:-3] for m in monomers}
+
 def save_to_file(path, data, reactants, products):
-	# type: (str, Iterable[Any]) -> None
+	# type: (str, Iterable[Any], Iterable[Any], Iterable[Any]) -> None
 	"""Saves data to a file."""
 
 	print('Saving to {}'.format(path))
@@ -156,6 +198,14 @@ def save_to_file(path, data, reactants, products):
 		writer.writerow(['Label', 'Reactants', 'Products'])
 		for d in sorted(data):
 			writer.writerow([d, reactants.get(d), products.get(d)])
+
+def save_list(path, data):
+	# type: (str, Iterable[str]) -> None
+	"""Saves data to a file."""
+
+	print('Saving to {}'.format(path))
+	with open(path, 'w') as f:
+		f.write('\n'.join(sorted(data)))
 
 
 if __name__ == '__main__':
@@ -197,11 +247,24 @@ if __name__ == '__main__':
 	all_rxns = set(list(rxn_to_reactant) + list(rxn_to_product))
 	excluded_mets = all_mets.difference(valid_mets)
 	valid_rxns = all_rxns.difference(excluded_rxns)
+	all_enzymes = {cat for cat in metabolism.catalyst_ids}
+	valid_enzymes = {
+		enz
+		for rxn in valid_rxns
+		for enz in metabolism.reaction_catalysts.get(rxn, [])
+		}
+	all_monomers = get_monomers(sim_data, all_enzymes)
+	valid_monomers = get_monomers(sim_data, valid_enzymes)
+	invalid_monomers = all_monomers - valid_monomers
 
 	# Print summary
 	print('\t{}/{} metabolites are valid'.format(len(valid_mets), len(all_mets)))
 	print('\t{}/{} reactions are valid'.format(len(valid_rxns), len(all_rxns)))
+	print('\t{}/{} enzymes are valid'.format(len(valid_enzymes), len(all_enzymes)))
+	print('\t{}/{} enzyme monomers are valid'.format(len(valid_monomers), len(all_monomers)))
 
 	# Save output to files
 	save_to_file(METABOLITE_FILE, excluded_mets, reactant_to_rxn, product_to_rxn)
 	save_to_file(REACTION_FILE, excluded_rxns, rxn_to_reactant, rxn_to_product)
+	save_list(VALID_MONOMERS_FILE, valid_monomers)
+	save_list(INVALID_MONOMERS_FILE, invalid_monomers)

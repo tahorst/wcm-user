@@ -99,9 +99,9 @@ def load_validation():
 
     return data
 
-def load_model():
-    control = np.load(MODEL_DATA + '-control.npy')
-    conc = np.load(MODEL_DATA + '.npy')
+def load_model(appended=''):
+    control = np.load(f'{MODEL_DATA}-control{appended}.npy')
+    conc = np.load(f'{MODEL_DATA}{appended}.npy')
     return control, conc
 
 def get_validation(validation, aa, enz):
@@ -360,10 +360,25 @@ def save_fig(filename):
     plt.close('all')
     print(f'Saved to {file}')
 
+def save_model_table(mean, var, filename='model.tsv'):
+    file = os.path.join(OUTPUT_DIR, filename)
+    with open(file, 'w') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(['Amino acid', 'Wildtype'] + ENZYMES)
+
+        for aa, enz in COMPARISONS:
+            wt_mean = get_model(mean, aa, enz)[0]
+            wt_std = np.sqrt(get_model(var, aa, enz)[0])
+            mutant_data = [f'{get_model(mean, aa, mutant)[1][0]:.2g} ({np.sqrt(get_model(var, aa, mutant)[1][0]):.2g})' for mutant in ENZYMES]
+            writer.writerow([aa, f'{wt_mean:.2g} ({wt_std:.2g})'] + mutant_data)
+
+    print(f'Saved to {file}')
+
 
 if __name__ == '__main__':
     validation = load_validation()
     model = load_model()
+    model_var = load_model(appended='-var')
 
     # Compare validation data AA increase to level of inhibition reduction in the model
     predicted_kis = plot_ki_prediction(validation, model)
@@ -401,3 +416,6 @@ if __name__ == '__main__':
     # Scatter for each amino acid
     plot_sub_scatter(validation, model)
     save_fig('sub-scatter.pdf')
+
+    # Table of model concentrations and variance
+    save_model_table(model, model_var)

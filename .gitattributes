@@ -1,0 +1,5 @@
+# Remove cPickle files with .cp extension from the C++ language count on GitHub
+*.cp -linguist-detectable
+
+# Remove files from other sources from the mathematica language count on GitHub
+growth/*.nb -linguist-detectable
